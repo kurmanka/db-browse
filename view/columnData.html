@@ -1,0 +1,29 @@
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <link rel="stylesheet" type="text/css" href="/style.css">
+    </head>
+    <body>
+        <table id = 'colums'>
+            <tr>
+                <% for (var key in columnData[0]) {
+                    if (key != 'parse' && key != '_typeCast') {%>
+                        <td class = 'title'><%=key%></td>
+                    <% }
+                } %>
+            </tr>
+
+            <% for (var i = 0; i < columnData.length; i++) { %>
+                <tr>
+                <% for (var key in columnData[0]) {
+                    if (key != 'parse' && key != '_typeCast') {%>
+                        <td class = 'data'><%=columnData[i][key]%></td>
+                    <% }
+                } %>
+                </tr>
+            <% } %>
+        </table>
+
+        <div id = 'columnCounter'><a><%=columnData.length%> rows</a></div>
+    </body>
+</html>

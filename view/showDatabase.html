@@ -1,0 +1,28 @@
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <link rel="stylesheet" type="text/css" href="/style.css">
+    </head>
+    <body>
+        <div id='database'><b>Database:</b></div>
+        <ul>
+		    <div class = 'type'><b>Postgres: </b></div>
+            <% for (var key in databaseList) {
+			    if (databaseList[key].type == 'postgres') { %>
+                <li>
+                    <a href = "<%=key%>"><%=key%></a><a> (<%=databaseList[key].host%>/<%=databaseList[key].database%>)</a>
+                </li>
+				<% }
+            } %>
+			
+			<div class = 'type'><b>MySql: </b></div>
+            <% for (var key in databaseList) {
+			    if (databaseList[key].type == 'mysql') { %>
+                <li>
+                    <a href = "<%=key%>"><%=key%></a><a> (<%=databaseList[key].host%>/<%=databaseList[key].database%>)</a>
+                </li>
+				<% }
+            } %>
+        </ul>
+    </body>
+</html>

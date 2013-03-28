@@ -1,0 +1,45 @@
+// You can here register the connection to the database, change host and port
+// ID of database must be unique
+
+var listen = {
+    host: '127.0.0.1',
+    port: 8888
+};
+
+var db = {
+    db_id : {
+        type: 'postgres',
+        host : 'localhost',
+        user :  'postgres',
+        password : '12345678',
+        database : 'postgres',
+    },
+
+    db_id1 : {
+        type: 'postgres',
+        host : 'localhost',
+        user :  'postgres',
+        password : '12345678',
+        database : 'test2',
+    },
+
+    db_id3: {
+        type: 'mysql',
+        host : 'localhost',
+        user :  'root',
+        password : '12345678',
+        database : 'node',
+        table_groups : './tableGroups/project1.txt' // optional parameter 
+    },
+
+    db_id4 : {
+        type: 'mysql',
+        host : 'localhost',
+        user :  'root',
+        password : '12345678',
+        database : 'test1',
+    }
+};
+
+exports.db = db;
+exports.listen = listen;

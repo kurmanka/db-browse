@@ -1,0 +1,65 @@
+body {
+    margin: 2em;
+}
+
+TABLE#colums {
+    border:1px solid;
+    border-collapse:collapse;
+    min-width: 500px;
+    margin-top: 20px;
+    }
+
+TABLE#colums  TD, TH {
+        border:1px solid;
+        padding:2px 5px;
+        }
+
+TABLE#indexes {
+    margin-left: 20px;
+}
+
+TABLE#statusT {
+    margin-left: 20px;
+}
+
+#rowsCounter {
+    margin-top: 20px;
+}
+
+#index {
+    margin-top: 20px;
+}
+
+#status {
+    margin-top: 20px;
+}
+
+#columnCounter {
+    margin-top: 20px;
+}
+
+#database {
+    margin-top: 20px;
+}
+
+#groupName {
+    margin-top: 20px;
+    padding-bottom:10px;
+}
+
+.type {
+    margin-top: 20px;
+    padding-bottom:10px;
+}
+
+.title {
+    padding: 0px 15px 0px;
+    font-style: oblique;
+    font-size:1.3em;
+    text-align: center;
+}
+
+.data {
+    padding: 0px 15px 0px;
+    font-size:1.1em;
+}

@@ -1,0 +1,102 @@
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <link rel="stylesheet" type="text/css" href="/style.css">
+    </head>
+    <body>
+
+        <div id = 'tableName'><b>Table "<%=tableName%>"</b></div>
+
+        <table id = 'colums'>
+            <tr>
+                <% for (var key in attrList[0]) {
+                    if (key != 'parse' && key != '_typeCast' && key != 'is_nullable' && key != 'column_default' && key != 'mlength') {%>
+                        <td class = 'title'><%=key%></td>
+                    <% }
+                    if (key == 'column_default') { %>
+                        <td class = 'title'>modifiers</td>
+                    <% }
+                } %>
+            </tr>
+
+            <% var flag = 0; %>
+            <% var firstKey = ''; %>
+            <% for (var i = 0; i < attrList.length; i++) { %>
+                <tr>
+                <% for (var key in attrList[0]) {
+                    if (flag == 0) {
+                       firstKey = key;
+                       flag = 1;
+                    }
+                    if (key != 'parse' && key != '_typeCast' && key != 'is_nullable' && key != 'column_default' && key != 'mlength') {
+                        if (firstKey == key) { %>
+                            <td class = 'data'><a href = <%=path%>/<%=attrList[i][key]%>><%=attrList[i][key]%></a></td>
+                        <% } else {
+                            if (attrList[i].mlength) { %>
+                                <td class = 'data'><%=attrList[i][key]%>(<%=attrList[i].mlength%>)</td>
+                            <% } else { %>
+                                <td class = 'data'><%=attrList[i][key]%></td>
+                            <% }
+                        }
+                    }
+                    if (key == 'column_default' && attrList[i].is_nullable == 'NO') {
+                        if (attrList[i][key]) { %>
+                            <td class = 'data'>not null default <%=attrList[i][key]%></td>
+                        <% }
+                        else { %>
+                            <td class = 'data'>not null</td>
+                        <% }
+                    }
+                    if (key == 'column_default' && attrList[i].is_nullable != 'NO') { %>
+                        <td class = 'data'></td>
+                    <% }
+                } %>
+                </tr>
+            <% } %>
+
+        </table>
+
+        <div id = 'index'><b>Indexes:</b></div>
+
+        <% if (dbType == 'postgres') { %>
+            <table id = 'indexes'>
+                    <% for (var i = 0; i < indexesArr.length; i++) {
+                        if(indexesArr[i].indexdef != '')    {%>
+                            <rt>
+                                <td><%=indexesArr[i].indexdef%></td>
+                            </tr>
+                        <% }
+                    } %>
+            </table>
+        <% } %>
+
+        <% if (dbType == 'mysql') { %>
+            <table id = 'indexes'>
+                <% for (var key in indexesArr[0]) {%>
+                    <% if(key != 'parse' && key != '_typeCast' && indexesArr[0][key] != '')    {%>
+                    <rt>
+                        <td><%=key%>: </td>
+                        <td><%=indexesArr[0][key]%></td>
+                    </tr>
+                    <% } %>
+                <% } %>
+            </table>
+        <% } %>
+
+        <div id = 'status'><b>Status:</b></div>
+
+        <table id = 'statusT'>
+            <% for (var key in statusArr[0]) {%>
+                <% if(key != 'parse' && key != '_typeCast' && statusArr[0][key] != '')    {%>
+                <rt>
+                    <td><%=key%>: </td>
+                    <td><%=statusArr[0][key]%></td>
+                </tr>
+                <% } %>
+            <% } %>
+        </table>
+
+        <div id = 'rowsCounter'><b>Total records: <%=rowsCounter%> </b></div>
+
+    </body>
+</html>
