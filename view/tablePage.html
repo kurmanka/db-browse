@@ -72,15 +72,8 @@
 
         <% if (dbType == 'mysql') { %>
             <table id = 'indexes'>
-                <% for (var key in indexesArr[0]) {%>
-                    <% if(key != 'parse' && key != '_typeCast' && indexesArr[0][key] != '' && key != 'Table') {%>
-                    <rt>
-                        <td><%=key%>: </td>
-                        <% for (var i = 0; i < indexesArr.length; i++) {%>
-                            <td class='paddingText'><%=indexesArr[i][key]%></td>
-                        <% } %>
-                    </tr>
-                    <% } %>
+                <% for (var i = 0; i < indexesArr.length; i++) {%>
+                    <tr><td><%=indexesArr[i]%></td></tr>
                 <% } %>
             </table>
         <% } %>

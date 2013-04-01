@@ -30,8 +30,8 @@ function start(response, connection, pathname, dbType, tableGroupsFile) {
 
 function readFile(fileName, done) {
     var fs = require('fs');
-		
-	if (fileName) {
+
+    if (fileName) {
         fs.open(fileName, "r+", 0644, function(err, file_handle) {
             if (!err) {
                 // read 100 kilobytes from the beginning of the file in ascii
@@ -48,10 +48,10 @@ function readFile(fileName, done) {
                 done(err, '');
             }
         });
-	} else {
-	    console.log('File with groups of tables is absent in the file config.js');
-		done(null, '');	
-	}
+    } else {
+        console.log('File with groups of tables is absent in the file config.js');
+        done(null, '');
+    }
 }
 
 function getArrayOfStrings(tableGroups, done) {

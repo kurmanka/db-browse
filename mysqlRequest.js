@@ -58,12 +58,12 @@ function showTableRequest(response, connection, pathname, table) {
                 },
 
                 function(done){
-                    connection.query('SHOW INDEXES FROM ' + mysql.escapeId(table) + ';', function(err, rows, fields) {
+                    connection.query('show create table ' + mysql.escapeId(table) + ';', function(err, rows, fields) {
                         if (err) {
                             console.log(err);
                         }
 
-                        done(null, rows);
+                        getIndexes(rows, done);
                     });
                 },
 
@@ -89,6 +89,25 @@ function showTableRequest(response, connection, pathname, table) {
             requestHandlers.showError(response, "Table '" + table + "' not found");
         }
     });
+}
+
+function getIndexes(rows, done) {
+    var resultArr = [];
+    var i = 0;
+
+    for (var key in rows[0]) {
+        if (key == 'Create Table') {
+            var text = rows[0][key];
+        }
+    }
+
+    while ( /\s.*KEY.+,*/.exec(text) ) {
+        resultArr[i] = /\s.*KEY.+,*/.exec(text);
+        text = text.replace(/\s.*KEY.+,*/, '');
+        i++;
+    }
+
+    done(null, resultArr);
 }
 
 function showColumnRequest(response, connection, column, table, limit) {

@@ -10,8 +10,7 @@
                 <div id = 'groupName'><b><%=tableGr[i]%></b></div>
             <% }
 
-             else if (index != -1) {
-                tablesList.splice(index,1); %>
+            else if (index != -1) { %>
                 <li><a href = "<%=path%>/<%=tableGr[i]%>"><%=tableGr[i]%></a></li>
             <% }
 
@@ -21,12 +20,14 @@
 
         <% } %>
 
-        <% if (tablesList.length != 0) {
-		    if (tableGr.length != 0) { %>
-                <div id = 'groupName'><b>The Rest</b></div>
-			<% } %>
+        <% if (tableGr.length != 0) { %>
+            <div id = 'groupName'><b>The Rest</b></div>
+        <% } %>
 
-            <% for (var i = 0; i < tablesList.length; i++) { %>
+        <% for (var i = 0; i < tablesList.length; i++) {
+            var index = tableGr.join().search(tablesList[i]);
+
+            if (index == -1) { %>
                 <li><a href = "<%=path%>/<%=tablesList[i]%>"><%=tablesList[i]%></a></li>
             <% }
         } %>
