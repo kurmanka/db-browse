@@ -51,7 +51,7 @@ function showTableRequest(response, connection, pathname, table) {
                 },
 
                 function(done){
-                    connection.query('select count(*) as count FROM ' + table + ';', function(err, result) {
+                    connection.query('select count(*) as count FROM ' + myEscaping(table) + ';', function(err, result) {
                         if (err) {
                             console.log(err);
                         }
@@ -100,7 +100,7 @@ function showColumnRequest(response, connection, column, table, limit) {
             connection.query("SELECT count(*) as countC FROM information_schema.COLUMNS WHERE TABLE_NAME=$1 AND COLUMN_NAME=$2;", [table, column], function(err, result) {
                 if (result.rows[0].countc > 0) {
 
-                    connection.query("select " + column + ", count(*) as count from " + table + " group by " + column + " order by count desc limit " + limit + ";", function(err, result) {
+                    connection.query("select " + myEscaping(column) + ", count(*) as count from " + myEscaping(table) + " group by " + myEscaping(column) + " order by count desc limit " + limit + ";", function(err, result) {
                         if (err) {
                             console.log(err);
                         }
@@ -117,6 +117,12 @@ function showColumnRequest(response, connection, column, table, limit) {
             requestHandlers.showError(response, "Table '" + table + "' not found");
         }
     });
+}
+
+function myEscaping (text) {
+    text = text.replace(/\%20|;|,|\%22|\%27/g, '\\$&');
+
+    return text;
 }
 
 exports.showAllTable = showAllTable;
