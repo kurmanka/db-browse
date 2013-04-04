@@ -65,7 +65,6 @@ function dbConnect(dbId, handle, response, done) {
                 done(null);
             }
         });
-        console.log('!! ' + connectionStatus[dbId].status);
     }
 
     if (connectionStatus[dbId].status == false) {

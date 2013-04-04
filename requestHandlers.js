@@ -59,12 +59,12 @@ function getArrayOfStrings(tableGroups, done) {
     var i = 0;
 
     while (/\S/.exec(tableGroups)) {
-        var temp = /[^\n]+[\n|\r]*/.exec(tableGroups);
+        var temp = /[^\n]+[\n\r]*/.exec(tableGroups);
         if (/\S/.exec(temp)) {
             array[i] = temp.join().replace(/\n|\r/g, '');
             i++;
         }
-        tableGroups = tableGroups.replace(/[^\n]+[\n|\r]*/, '');
+        tableGroups = tableGroups.replace(/[^\n]+[\n\r]*/, '');
     }
 
     done(null, array);
