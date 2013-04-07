@@ -60,7 +60,7 @@ function showTableRequest(response, connection, pathname, table) {
                     });
                 },
 
-                function(done){
+                function(done){ //show indexes
                     connection.query("SELECT indexname, tablespace, indexdef FROM pg_indexes WHERE tablename = $1;", [table], function(err, result) {
                         if (err) {
                             console.log(err);
@@ -70,7 +70,37 @@ function showTableRequest(response, connection, pathname, table) {
                     });
                 },
 
-                function(done){
+                function(done){ //show Foreign-key
+                    connection.query("SELECT conname, pg_catalog.pg_get_constraintdef(r.oid, true) as condef FROM pg_catalog.pg_constraint r WHERE r.conrelid ='" + escape(table) + "'::regclass AND r.contype = 'f';", function(err, result) {
+                        if (err) {
+                            console.log(err);
+                        }
+
+                        done(null, result.rows);
+                    });
+                },
+
+                function(done){ //show Referenced
+                    connection.query("SELECT conname, conrelid::pg_catalog.regclass, pg_catalog.pg_get_constraintdef(c.oid, true) as condef FROM pg_catalog.pg_constraint c WHERE c.confrelid = '" + escape(table) + "'::regclass AND c.contype = 'f';", function(err, result) {
+                        if (err) {
+                            console.log(err);
+                        }
+
+                        done(null, result.rows);
+                    });
+                },
+
+                function(done){ //show Triggers
+                    connection.query("SELECT pg_catalog.pg_get_triggerdef(t.oid) as creating FROM pg_catalog.pg_trigger t WHERE t.tgrelid = '" + escape(table) + "'::regclass AND t.tgconstraint = 0;", function(err, result) {
+                        if (err) {
+                            console.log(err);
+                        }
+
+                        done(null, result.rows);
+                    });
+                },
+
+                function(done){ //show Status
                     connection.query("SELECT * FROM information_schema.tables WHERE table_name = $1;", [table], function(err, result) {
                         if (err) {
                             console.log(err);
@@ -81,7 +111,7 @@ function showTableRequest(response, connection, pathname, table) {
                 }
             ],
             function (err,results) {
-                just.render('tablePage', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], statusArr: results[3], dbType: 'postgres'}, function(error, html) {
+                just.render('tablePage', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], foreignKey: results[3], referenced: results[4], triggers: results[5], statusArr: results[6], dbType: 'postgres'}, function(error, html) {
                     requestHandlers.showPage (response, error, html);
                 });
             }

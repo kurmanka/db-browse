@@ -18,6 +18,18 @@ TABLE#indexes {
     margin-left: 20px;
 }
 
+TABLE#fkeytable {
+    margin-left: 20px;
+}
+
+TABLE#referenced {
+    margin-left: 20px;
+}
+
+TABLE#triggerstable {
+    margin-left: 20px;
+}
+
 TABLE#statusT {
     margin-left: 20px;
 }
@@ -27,6 +39,18 @@ TABLE#statusT {
 }
 
 #index {
+    margin-top: 20px;
+}
+
+#fkey {
+    margin-top: 20px;
+}
+
+#ref {
+    margin-top: 20px;
+}
+
+#triggers {
     margin-top: 20px;
 }
 
