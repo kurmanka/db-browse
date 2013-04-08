@@ -70,19 +70,12 @@ function getArrayOfStrings(tableGroups, done) {
     done(null, array);
 }
 
-function showTable(response, connection, pathname, dbType) {
-    var table = /([^\/]+)$/.exec(pathname)[0];
+function showTable(response, connection, pathname, dbType, table_groups, table) {
     var db = getDbType(dbType);
     db.showTableRequest(response, connection, pathname, table);
 }
 
-function showColumn(response, connection, pathname, dbType) {
-    var column = /([^\/]+)$/.exec(pathname)[0];
-
-    var pathnameTemp = pathname;
-    pathnameTemp = pathnameTemp.replace(/(\/[^\/]+)$/, '');
-    var table = /([^\/]+)$/.exec(pathnameTemp)[0];
-
+function showColumn(response, connection, pathname, dbType, table_groups, table, column) {
     var limit = 20;
 
     var db = getDbType(dbType);
