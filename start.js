@@ -56,7 +56,11 @@ app.post('/login', function(req, res){ //get and check users data
             });
         });
 
-        res.redirect(pathname);
+        if (pathname) {
+            res.redirect(pathname);
+        } else {
+            res.redirect('/');
+        }
     }
 });
 
