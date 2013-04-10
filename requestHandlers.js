@@ -2,9 +2,16 @@ var config = require("./config");
 var JUST = require('just');
 var just = new JUST({ root : './view', useCache : true, ext : '.html' });
 var justStyle = new JUST({ root : './view', useCache : true, ext : '.css' });
+var justJS = new JUST({ root : './view', useCache : true, ext : '.js' });
 var mysql = require('./mysqlRequest.js');
 var postgres = require('./postgresRequest.js');
 var async = require('async');
+
+function login (response, errmsg) {
+    just.render('login',{ errormsg: errmsg}, function(error, html) {
+        showPage (response, error, html);
+    });
+}
 
 function selectDatabase (response) {
     just.render('showDatabase', { databaseList: config.db }, function(error, html) {
@@ -115,10 +122,18 @@ function cssConnect (response) {
     });
 }
 
+function mainConnect (response) {
+    justJS.render('main', {}, function(error, html) {
+        showPage (response, error, html);
+    });
+}
+
 exports.start = start;
+exports.login = login;
 exports.showTable = showTable;
 exports.cssConnect = cssConnect;
 exports.showColumn = showColumn;
 exports.showError = showError;
 exports.showPage = showPage;
 exports.selectDatabase = selectDatabase;
+exports.mainConnect = mainConnect;

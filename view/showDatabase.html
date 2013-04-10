@@ -4,24 +4,27 @@
         <link rel="stylesheet" type="text/css" href="/style.css">
     </head>
     <body>
-        <div id='database'><b>Database:</b></div>
+        <div>
+        <b id='database'>Database:</b>
+        <a href='/logout' id='logout'>Logout<<</a>
+        </div>
         <ul>
-		    <div class = 'type'><b>Postgres: </b></div>
+            <div class = 'type'><b>Postgres: </b></div>
             <% for (var key in databaseList) {
-			    if (databaseList[key].type == 'postgres') { %>
+                if (databaseList[key].type == 'postgres') { %>
                 <li>
                     <a href = "<%=key%>"><%=key%></a><a> (<%=databaseList[key].host%>/<%=databaseList[key].database%>)</a>
                 </li>
-				<% }
+                <% }
             } %>
-			
-			<div class = 'type'><b>MySql: </b></div>
+
+            <div class = 'type'><b>MySql: </b></div>
             <% for (var key in databaseList) {
-			    if (databaseList[key].type == 'mysql') { %>
+                if (databaseList[key].type == 'mysql') { %>
                 <li>
                     <a href = "<%=key%>"><%=key%></a><a> (<%=databaseList[key].host%>/<%=databaseList[key].database%>)</a>
                 </li>
-				<% }
+                <% }
             } %>
         </ul>
     </body>

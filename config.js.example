@@ -29,7 +29,7 @@ var db = {
         user :  'root',
         password : '12345678',
         database : 'node',
-        table_groups : './tableGroups/project1.txt' // optional parameter 
+        table_groups : './tableGroups/project1.txt' // optional parameter
     },
 
     db_id4 : {
@@ -40,6 +40,14 @@ var db = {
         database : 'test1',
     }
 };
+
+exports.authenticate = function (user, pass) { //if you don't waunt to use authentication do not use this function
+    if (user == 'browse' && pass == 'db') { //it's possible to use other criteria to validate a login and a password
+        return true;
+    }
+
+    return false;
+}
 
 exports.db = db;
 exports.listen = listen;

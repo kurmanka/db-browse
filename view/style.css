@@ -34,6 +34,10 @@ TABLE#statusT {
     margin-left: 20px;
 }
 
+#loginform {
+    margin: 20% 0 20% 0;
+}
+
 #rowsCounter {
     margin-top: 20px;
 }
@@ -71,6 +75,10 @@ TABLE#statusT {
     padding-bottom:10px;
 }
 
+#logout{
+    margin-left: 90%;
+}
+
 .type {
     margin-top: 20px;
     padding-bottom:10px;
@@ -90,4 +98,8 @@ TABLE#statusT {
 
 .paddingText {
     padding: 0px 0px 0px 10px;
+}
+
+.error {
+    color: DD0000;
 }

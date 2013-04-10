@@ -9,31 +9,89 @@ var pg = require('pg');
 var express = require("express");
 var app = express();
 
+app.use(express.bodyParser());
+app.use(express.cookieParser());
+//app.use(express.session({ secret: "keyboard cat" }));
+
 var connectionStatus = {};
+
+var loginError = 'This login & password combination is not allowed.';
+var pathname;
+var cooki_name = 'browse_db_login';
 
 http.createServer();
 
 app.get('/', function(req, res){ //run method selectDatabase
-    requestHandlers.selectDatabase(res);
+    pathname = '/';
+    console.log(' ' + req.cookies[cooki_name]);
+    if (config.authenticate && !req.cookies[cooki_name]) {
+        requestHandlers.login(res, '');
+    } else {
+        requestHandlers.selectDatabase(res);
+    }
 });
 
 app.get('/style.css', function(req, res){ //connect to css file
     requestHandlers.cssConnect(res);
 });
 
+app.get('/main.js', function(req, res){ //connect to main.js file(login form)
+    requestHandlers.mainConnect(res);
+});
+
+app.post('/login', function(req, res){ //get and check users data
+    var result = config.authenticate(req.body.user, req.body.pass);
+    if (result == false) {
+        requestHandlers.login(res, loginError);
+    } else {
+        //req.session.regenerate(function(err){
+         //   if (err) {
+        //        console.log(err);
+        //    }
+        //    var sid = req.sessionID;
+
+               res.cookie(cooki_name, 'yes', { //set cookie
+                expires: new Date(Date.now() + 24*60*60000), //keep cookie 24 hours
+                httpOnly: true
+            });
+        //});
+        res.redirect(pathname);
+    }
+});
+
+app.get('/logout', function(req, res){ //logout
+    res.clearCookie(cooki_name);
+    requestHandlers.login(res, '');
+});
+
 app.get('/:dbID', function(req, res){ //run method start
-    var pathname = url.parse(req.url).pathname;
-    checkConnectShowPage(req.params.dbID, res, pathname, requestHandlers.start);
+    pathname = url.parse(req.url).pathname;
+
+    if (config.authenticate && !req.cookies[cooki_name]) {
+        requestHandlers.login(res, '');
+    } else {
+        checkConnectShowPage(req.params.dbID, res, pathname, requestHandlers.start);
+    }
 });
 
 app.get('/:dbID/:table', function(req, res){ //run method showTable
-    var pathname = url.parse(req.url).pathname;
-    checkConnectShowPage(req.params.dbID, res, pathname, requestHandlers.showTable, req.params.table);
+    pathname = url.parse(req.url).pathname;
+
+    if (config.authenticate && !req.cookies[cooki_name]) {
+        requestHandlers.login(res, '');
+    } else {
+        checkConnectShowPage(req.params.dbID, res, pathname, requestHandlers.showTable, req.params.table);
+    }
 });
 
 app.get('/:dbID/:table/:column', function(req, res){ //run method showColumn
-    var pathname = url.parse(req.url).pathname;
-    checkConnectShowPage(req.params.dbID, res, pathname, requestHandlers.showColumn, req.params.table, req.params.column);
+    pathname = url.parse(req.url).pathname;
+
+    if (config.authenticate && !req.cookies[cooki_name]) {
+        requestHandlers.login(res, '');
+    } else {
+        checkConnectShowPage(req.params.dbID, res, pathname, requestHandlers.showColumn, req.params.table, req.params.column);
+    }
 });
 
 app.listen(config.listen.port, config.listen.host);
