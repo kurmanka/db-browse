@@ -11,7 +11,7 @@ var app = express();
 
 app.use(express.bodyParser());
 app.use(express.cookieParser());
-//app.use(express.session({ secret: "keyboard cat" }));
+app.use(express.session({ secret: "keyboard cat" }));
 
 var connectionStatus = {};
 
@@ -23,7 +23,6 @@ http.createServer();
 
 app.get('/', function(req, res){ //run method selectDatabase
     pathname = '/';
-    console.log(' ' + req.cookies[cooki_name]);
     if (config.authenticate && !req.cookies[cooki_name]) {
         requestHandlers.login(res, '');
     } else {
@@ -44,17 +43,19 @@ app.post('/login', function(req, res){ //get and check users data
     if (result == false) {
         requestHandlers.login(res, loginError);
     } else {
-        //req.session.regenerate(function(err){
-         //   if (err) {
-        //        console.log(err);
-        //    }
-        //    var sid = req.sessionID;
+        req.session.regenerate(function(err){
+           if (err) {
+                console.log(err);
+            }
+            req.session.user = req.body.user;
+            var sid = req.sessionID;
 
-               res.cookie(cooki_name, 'yes', { //set cookie
+            res.cookie(cooki_name, sid, { //set cookie
                 expires: new Date(Date.now() + 24*60*60000), //keep cookie 24 hours
                 httpOnly: true
             });
-        //});
+        });
+
         res.redirect(pathname);
     }
 });
