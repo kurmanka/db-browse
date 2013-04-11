@@ -14,7 +14,12 @@ function login (response, errmsg) {
 }
 
 function selectDatabase (response) {
-    just.render('showDatabase', { databaseList: config.db }, function(error, html) {
+    var data = false;
+    if (config.authenticate) {
+        data = true;
+    }
+
+    just.render('showDatabase', { databaseList: config.db, authenticate: data}, function(error, html) {
         showPage (response, error, html);
     });
 }

@@ -23,11 +23,7 @@ http.createServer();
 
 app.get('/', function(req, res){ //run method selectDatabase
     pathname = '/';
-    if ( config.authenticate && req.session.authentication != 'true' && !req.cookies[cooki_name] ) {
-        requestHandlers.login(res, '');
-    } else {
-        requestHandlers.selectDatabase(res);
-    }
+    checkAuthentication(requestHandlers.selectDatabase, req, res);
 });
 
 app.get('/style.css', function(req, res){ //connect to css file
@@ -44,13 +40,8 @@ app.post('/login', function(req, res){ //get and check users data
         requestHandlers.login(res, loginError);
     } else {
         req.session.user = req.body.user;
-        req.session.authentication = 'true';
-        var sid = req.sessionID;
-
-        res.cookie(cooki_name, sid, { //set cookie
-            expires: new Date(Date.now() + 24*60*60000), //keep cookie 24 hours
-            httpOnly: true
-        });
+        req.session.authentication = true;
+        //var sid = req.sessionID;
 
         if (pathname) {
             res.redirect(pathname);
@@ -62,7 +53,7 @@ app.post('/login', function(req, res){ //get and check users data
 
 app.get('/logout', function(req, res){ //logout
     res.clearCookie(cooki_name);
-    req.session.authentication = 'false';
+    req.session.authentication = false;
     req.session.destroy(function(err){
         if(err) {
             console.log(err);
@@ -73,38 +64,23 @@ app.get('/logout', function(req, res){ //logout
 
 app.get('/:dbID', function(req, res){ //run method start
     pathname = url.parse(req.url).pathname;
-
-    if ( config.authenticate && req.session.authentication != 'true' && !req.cookies[cooki_name] ) {
-        requestHandlers.login(res, '');
-    } else {
-        checkConnectShowPage(req.params.dbID, res, pathname, requestHandlers.start);
-    }
+    checkAuthentication(checkConnectShowPage, req, res, req.params.dbID, pathname, requestHandlers.start);
 });
 
 app.get('/:dbID/:table', function(req, res){ //run method showTable
     pathname = url.parse(req.url).pathname;
-
-    if ( config.authenticate && req.session.authentication != 'true' && !req.cookies[cooki_name] ) {
-        requestHandlers.login(res, '');
-    } else {
-        checkConnectShowPage(req.params.dbID, res, pathname, requestHandlers.showTable, req.params.table);
-    }
+    checkAuthentication(checkConnectShowPage, req, res, req.params.dbID, pathname, requestHandlers.showTable, req.params.table);
 });
 
 app.get('/:dbID/:table/:column', function(req, res){ //run method showColumn
     pathname = url.parse(req.url).pathname;
-
-    if ( config.authenticate && req.session.authentication != 'true' && !req.cookies[cooki_name] ) {
-        requestHandlers.login(res, '');
-    } else {
-        checkConnectShowPage(req.params.dbID, res, pathname, requestHandlers.showColumn, req.params.table, req.params.column);
-    }
+    checkAuthentication(checkConnectShowPage, req, res, req.params.dbID, pathname, requestHandlers.showColumn, req.params.table, req.params.column)
 });
 
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. You can open in browse " + config.listen.host + ":" + config.listen.port);
 
-function checkConnectShowPage(dbId, response, pathname, methodRun, table, column) {
+function checkConnectShowPage(response, dbId, pathname, methodRun, table, column) {
     async.waterfall([
         function (done){
             dbConnect(dbId, response, done);
@@ -181,5 +157,13 @@ function makeConnect (dbId, response, done) {
 
     else {
         requestHandlers.showError(response, "The database with id '" +  dbId + "' is absent in the configuration");
+    }
+}
+
+function checkAuthentication(method, req, res, dbID, pathname, methodPageShow, table, column) {
+    if ( config.authenticate && !req.session.authentication ) {
+        requestHandlers.login(res, '');
+    } else {
+        method(res, dbID, pathname, methodPageShow, table, column);
     }
 }

@@ -5,8 +5,10 @@
     </head>
     <body>
         <div>
-        <b id='database'>Database:</b>
-        <a href='/logout' id='logout'>Logout<<</a>
+            <b id='database'>Database:</b>
+            <% if (authenticate) { %>
+               <a href='/logout' id='logout'>Logout<<</a>
+            <% } %>
         </div>
         <ul>
             <div class = 'type'><b>Postgres: </b></div>
