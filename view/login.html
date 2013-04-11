@@ -1,0 +1,25 @@
+<html>
+ <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <link rel="stylesheet" type="text/css" href="/style.css">
+ </head>
+ <body>
+
+<div id='loginpage'>
+<form method="post" action="/login" id="loginform">
+    <div align="center">
+        <p><label for="username">Username:  </label><input type="text" name="user"><br /></p>
+    </div>
+    <div align="center">
+        <p><label for="password">Password:  </label><input type="password" name="pass"><br /></p>
+    </div>
+    <div align="center">
+        <p><input type="submit" value="Login" /></p>
+    </div>
+    <div align="center">
+        <p><%=errormsg%></p>
+    </div>
+</form>
+</div>
+ </body>
+</html>
