@@ -2,6 +2,23 @@ body {
     margin: 2em;
 }
 
+table.light {
+    border: 1px solid #999;
+    border-collapse: collapse;
+}
+
+table.light tr th {
+    border: 1px solid #999;
+    color: #999;
+    font-weight: normal;
+}
+
+table.light tr td {
+    border: 1px solid #999;
+    padding: 2ex;
+}
+
+
 TABLE#colums {
     border:1px solid;
     border-collapse:collapse;

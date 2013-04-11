@@ -5,29 +5,29 @@
     </head>
     <body>
         <div>
-            <b id='database'>Database:</b>
+            <h1 id='database'>Databases:</h1>
             <% if (authenticate) { %>
-               <a href='/logout' id='logout'>Logout<<</a>
+               <a href='/logout' id='logout'>Logout <<</a>
             <% } %>
         </div>
-        <ul>
-            <div class = 'type'><b>Postgres: </b></div>
-            <% for (var key in databaseList) {
-                if (databaseList[key].type == 'postgres') { %>
-                <li>
-                    <a href = "<%=key%>"><%=key%></a><a> (<%=databaseList[key].host%>/<%=databaseList[key].database%>)</a>
-                </li>
-                <% }
-            } %>
 
-            <div class = 'type'><b>MySql: </b></div>
-            <% for (var key in databaseList) {
-                if (databaseList[key].type == 'mysql') { %>
-                <li>
-                    <a href = "<%=key%>"><%=key%></a><a> (<%=databaseList[key].host%>/<%=databaseList[key].database%>)</a>
-                </li>
-                <% }
-            } %>
-        </ul>
+<table class='light'>
+    <tr>
+        <th>id</th>
+        <th>db name and host</th>
+        <th>details</th>
+        <th>type</th>
+    </tr>
+
+    <% for (var key in databaseList) { var d = databaseList[key]; %>
+    <tr>
+        <td><%= key %></td>
+        <td><a href='<%= key %>'><%= d.database %></a> at <%= d.host %></td>
+        <td>user: <%= d.user %></td>
+        <td><%= d.type %></td>
+    </tr>
+    <% } %>
+</table>
+
     </body>
 </html>
