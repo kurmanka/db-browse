@@ -4,8 +4,8 @@
         <link rel="stylesheet" type="text/css" href="/style.css">
     </head>
     <body>
-        <div>
-            <h1 id='database'>Databases:</h1>
+        <div id="database">
+            <b class="title">Databases:</b>
             <% if (authenticate) { %>
                <a href='/logout' id='logout'>Logout <<</a>
             <% } %>
@@ -23,7 +23,7 @@
     <tr>
         <td><%= key %></td>
         <td><a href='<%= key %>'><%= d.database %></a> at <%= d.host %></td>
-        <td>user: <%= d.user 
+        <td>user: <%= d.user
             %><% if (d.table_groups) { %>, grouped<% }%> </td>
         <td><%= d.type %></td>
     </tr>

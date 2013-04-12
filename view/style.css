@@ -72,7 +72,7 @@ TABLE#statusT {
 }
 
 #database {
-    margin-top: 20px;
+    margin: 0px 0px 20px 0px;
 }
 
 #groupName {
@@ -99,4 +99,8 @@ TABLE#statusT {
 
 .error {
     color: DD0000;
+}
+
+.title {
+   font-size: 30px;
 }
