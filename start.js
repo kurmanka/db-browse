@@ -16,13 +16,11 @@ app.use(express.session({ secret: "keyboard cat" }));
 var connectionStatus = {};
 
 var loginError = 'This login & password combination is not allowed.';
-var pathname;
 var cooki_name = 'browse_db_login';
 
 http.createServer();
 
 app.get('/', function(req, res){ //run method selectDatabase
-    pathname = '/';
     checkAuthentication(requestHandlers.selectDatabase, req, res);
 });
 
@@ -34,10 +32,11 @@ app.get('/main.js', function(req, res){ //connect to main.js file(login form)
     requestHandlers.mainConnect(res);
 });
 
-app.post('/login', function(req, res){ //get and check users data
+app.post('/*', function(req, res){ //get and check users data
+    var pathname = url.parse(req.url).pathname;
     var result = config.authenticate(req.body.user, req.body.pass);
     if (result == false) {
-        requestHandlers.login(res, loginError);
+        requestHandlers.login(res, pathname, loginError);
     } else {
         req.session.user = req.body.user;
         req.session.authentication = true;
@@ -59,21 +58,21 @@ app.get('/logout', function(req, res){ //logout
             console.log(err);
         }
    });
-   requestHandlers.login(res, '');
+   requestHandlers.login(res, "/", '');
 });
 
 app.get('/:dbID', function(req, res){ //run method start
-    pathname = url.parse(req.url).pathname;
+    var pathname = url.parse(req.url).pathname;
     checkAuthentication(checkConnectShowPage, req, res, req.params.dbID, pathname, requestHandlers.start);
 });
 
 app.get('/:dbID/:table', function(req, res){ //run method showTable
-    pathname = url.parse(req.url).pathname;
+    var pathname = url.parse(req.url).pathname;
     checkAuthentication(checkConnectShowPage, req, res, req.params.dbID, pathname, requestHandlers.showTable, req.params.table);
 });
 
 app.get('/:dbID/:table/:column', function(req, res){ //run method showColumn
-    pathname = url.parse(req.url).pathname;
+    var pathname = url.parse(req.url).pathname;
     checkAuthentication(checkConnectShowPage, req, res, req.params.dbID, pathname, requestHandlers.showColumn, req.params.table, req.params.column)
 });
 
@@ -162,7 +161,7 @@ function makeConnect (dbId, response, done) {
 
 function checkAuthentication(method, req, res, dbID, pathname, methodPageShow, table, column) {
     if ( config.authenticate && !req.session.authentication ) {
-        requestHandlers.login(res, '');
+        requestHandlers.login(res, pathname, '');
     } else {
         method(res, dbID, pathname, methodPageShow, table, column);
     }

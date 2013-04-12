@@ -7,8 +7,11 @@ var mysql = require('./mysqlRequest.js');
 var postgres = require('./postgresRequest.js');
 var async = require('async');
 
-function login (response, errmsg) {
-    just.render('login',{ errormsg: errmsg}, function(error, html) {
+function login (response, pathname, errmsg) {
+    if (!pathname) {
+        pathname = '/';
+    }
+    just.render('login',{ errormsg: errmsg, path: pathname}, function(error, html) {
         showPage (response, error, html);
     });
 }
