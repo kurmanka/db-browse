@@ -4,11 +4,11 @@
         <link rel="stylesheet" type="text/css" href="/style.css">
     </head>
     <body>
-        <table id = 'colums'>
+        <table class='light'>
             <tr>
                 <% for (var key in columnData[0]) {
                     if (key != 'parse' && key != '_typeCast') {%>
-                        <td class = 'title'><%=key%></td>
+                        <th><%=key%></th>
                     <% }
                 } %>
             </tr>

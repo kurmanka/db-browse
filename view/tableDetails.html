@@ -5,16 +5,16 @@
     </head>
     <body>
 
-        <div id = 'tableName'><b>Table "<%=tableName%>"</b></div>
+        <div id = 'tableName'><h1>Table "<%=tableName%>"</h1></div>
 
-        <table id = 'colums'>
+        <table class='light'>
             <tr>
                 <% for (var key in attrList[0]) {
                     if (key != 'parse' && key != '_typeCast' && key != 'is_nullable' && key != 'column_default' && key != 'mlength') {%>
-                        <td class = 'title'><%=key%></td>
+                        <th><%=key%></th>
                     <% }
                     if (key == 'column_default') { %>
-                        <td class = 'title'>modifiers</td>
+                        <th>modifiers</th>
                     <% }
                 } %>
             </tr>
