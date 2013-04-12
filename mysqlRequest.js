@@ -25,7 +25,7 @@ function showAllTable(response, connection, pathname, tableGroups) {
             }
 
         ], function (err, result) {
-            just.render('start', { tablesList: result, path: pathname, tableGr: tableGroups }, function(error, html) {
+            just.render('tableList', { tablesList: result, path: pathname, tableGr: tableGroups }, function(error, html) {
                 requestHandlers.showPage (response, error, html);
             });
         });
@@ -80,7 +80,7 @@ function showTableRequest(response, connection, pathname, table) {
                 }
             ],
             function (err,results) {
-                just.render('tablePage', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], statusArr: results[3], dbType: 'mysql'}, function(error, html) {
+                just.render('tableDetails', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], statusArr: results[3], dbType: 'mysql'}, function(error, html) {
                    requestHandlers.showPage (response, error, html);
                 });
             }

@@ -24,7 +24,7 @@ function showAllTable(response, connection, pathname, tableGroups) {
             }
 
         ], function (err, res) {
-            just.render('start', { tablesList: res, path: pathname, tableGr: tableGroups }, function(error, html) {
+            just.render('tableList', { tablesList: res, path: pathname, tableGr: tableGroups }, function(error, html) {
                 requestHandlers.showPage (response, error, html);
             });
         });
@@ -111,7 +111,7 @@ function showTableRequest(response, connection, pathname, table) {
                 }
             ],
             function (err,results) {
-                just.render('tablePage', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], foreignKey: results[3], referenced: results[4], triggers: results[5], statusArr: results[6], dbType: 'postgres'}, function(error, html) {
+                just.render('tableDetails', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], foreignKey: results[3], referenced: results[4], triggers: results[5], statusArr: results[6], dbType: 'postgres'}, function(error, html) {
                     requestHandlers.showPage (response, error, html);
                 });
             }

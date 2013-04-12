@@ -22,7 +22,7 @@ function selectDatabase (response) {
         data = true;
     }
 
-    just.render('showDatabase', { databaseList: config.db, authenticate: data}, function(error, html) {
+    just.render('listDatabase', { databaseList: config.db, authenticate: data}, function(error, html) {
         showPage (response, error, html);
     });
 }
@@ -130,12 +130,6 @@ function cssConnect (response) {
     });
 }
 
-function mainConnect (response) {
-    justJS.render('main', {}, function(error, html) {
-        showPage (response, error, html);
-    });
-}
-
 exports.start = start;
 exports.login = login;
 exports.showTable = showTable;
@@ -144,4 +138,3 @@ exports.showColumn = showColumn;
 exports.showError = showError;
 exports.showPage = showPage;
 exports.selectDatabase = selectDatabase;
-exports.mainConnect = mainConnect;
