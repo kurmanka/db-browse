@@ -23,7 +23,8 @@
     <tr>
         <td><%= key %></td>
         <td><a href='<%= key %>'><%= d.database %></a> at <%= d.host %></td>
-        <td>user: <%= d.user %></td>
+        <td>user: <%= d.user 
+            %><% if (d.table_groups) { %>, grouped<% }%> </td>
         <td><%= d.type %></td>
     </tr>
     <% } %>

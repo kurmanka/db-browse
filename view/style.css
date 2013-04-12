@@ -3,18 +3,18 @@ body {
 }
 
 table.light {
-    border: 1px solid #999;
+    border: 1px solid #ccc;
     border-collapse: collapse;
 }
 
 table.light tr th {
-    border: 1px solid #999;
+    border: 1px solid #ccc;
     color: #999;
     font-weight: normal;
 }
 
 table.light tr td {
-    border: 1px solid #999;
+    border: 1px solid #ccc;
     padding: 2ex;
 }
 
