@@ -78,7 +78,7 @@ app.get('/:dbID/:table/:column', function(req, res){ //run method showColumn
 });
 
 app.listen(config.listen.port, config.listen.host);
-console.log("Server has started. You can open in browse " + config.listen.host + ":" + config.listen.port);
+console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
 function checkConnectShowPage(response, dbId, pathname, methodRun, table, column) {
     async.waterfall([
