@@ -1,35 +1,29 @@
-<html>
-    <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <link rel="stylesheet" type="text/css" href="/style.css">
-    </head>
-    <body>
-        <% for (var i = 0; i < tableGr.length; i++) {
-            var index = tablesList.join().search(tableGr[i]);
-            if (/\s/.exec(tableGr[i])) { %>
-                <div id = 'groupName'><b><%=tableGr[i]%></b></div>
-            <% }
+<% this.extend('parent', { title: 'List of tables:' }); %>
 
-            else if (index != -1) { %>
-                <li><a href = "<%=path%>/<%=tableGr[i]%>"><%=tableGr[i]%></a></li>
-            <% }
+<% for (var i = 0; i < tableGr.length; i++) {
+    var index = tablesList.join().search(tableGr[i]);
+    if (/\s/.exec(tableGr[i])) { %>
+        <div id = 'groupName'><b><%=tableGr[i]%></b></div>
+    <% }
 
-            else { %>
-                <li><%=tableGr[i]%></li>
-            <% } %>
+    else if (index != -1) { %>
+        <li><a href = "<%=path%>/<%=tableGr[i]%>"><%=tableGr[i]%></a></li>
+    <% }
 
-        <% } %>
+    else { %>
+        <li><%=tableGr[i]%></li>
+    <% } %>
 
-        <% if (tableGr.length != 0) { %>
-            <div id = 'groupName'><b>The Rest</b></div>
-        <% } %>
+<% } %>
 
-        <% for (var i = 0; i < tablesList.length; i++) {
-            var index = tableGr.join().search(tablesList[i]);
+<% if (tableGr.length != 0) { %>
+    <div id = 'groupName'><b>The Rest</b></div>
+<% } %>
 
-            if (index == -1) { %>
-                <li><a href = "<%=path%>/<%=tablesList[i]%>"><%=tablesList[i]%></a></li>
-            <% }
-        } %>
-    </body>
-</html>
+<% for (var i = 0; i < tablesList.length; i++) {
+    var index = tableGr.join().search(tablesList[i]);
+
+    if (index == -1) { %>
+        <li><a href = "<%=path%>/<%=tablesList[i]%>"><%=tablesList[i]%></a></li>
+    <% }
+} %>

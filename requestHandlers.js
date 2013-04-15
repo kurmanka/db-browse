@@ -7,6 +7,11 @@ var mysql = require('./mysqlRequest.js');
 var postgres = require('./postgresRequest.js');
 var async = require('async');
 
+var authenticate = false;
+if (config.authenticate) {
+    authenticate = true;
+}
+
 function login (response, pathname, errmsg) {
     if (!pathname) {
         pathname = '/';
@@ -17,12 +22,7 @@ function login (response, pathname, errmsg) {
 }
 
 function selectDatabase (response) {
-    var data = false;
-    if (config.authenticate) {
-        data = true;
-    }
-
-    just.render('listDatabase', { databaseList: config.db, authenticate: data}, function(error, html) {
+    just.render('listDatabase', { databaseList: config.db, authenticate: authenticate}, function(error, html) {
         showPage (response, error, html);
     });
 }
@@ -39,7 +39,7 @@ function start(response, connection, pathname, dbType, tableGroupsFile) {
 
     ], function (err, result) {
         var db = getDbType(dbType);
-        db.showAllTable(response, connection, pathname, result);
+        db.showAllTable(response, connection, pathname, authenticate, result);
     });
 }
 
@@ -87,14 +87,14 @@ function getArrayOfStrings(tableGroups, done) {
 
 function showTable(response, connection, pathname, dbType, table_groups, table) {
     var db = getDbType(dbType);
-    db.showTableRequest(response, connection, pathname, table);
+    db.showTableRequest(response, connection, pathname, authenticate, table);
 }
 
 function showColumn(response, connection, pathname, dbType, table_groups, table, column) {
     var limit = 20;
 
     var db = getDbType(dbType);
-    db.showColumnRequest(response, connection, column, table, limit);
+    db.showColumnRequest(response, connection, authenticate, column, table, limit);
 }
 
 function getDbType (dbType) {

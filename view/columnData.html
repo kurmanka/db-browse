@@ -1,29 +1,23 @@
-<html>
-    <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <link rel="stylesheet" type="text/css" href="/style.css">
-    </head>
-    <body>
-        <table class='light'>
-            <tr>
-                <% for (var key in columnData[0]) {
-                    if (key != 'parse' && key != '_typeCast') {%>
-                        <th><%=key%></th>
-                    <% }
-                } %>
-            </tr>
+<% this.extend('parent', { title: 'Values:' }); %>
 
-            <% for (var i = 0; i < columnData.length; i++) { %>
-                <tr>
-                <% for (var key in columnData[0]) {
-                    if (key != 'parse' && key != '_typeCast') {%>
-                        <td class = 'data'><%=columnData[i][key]%></td>
-                    <% }
-                } %>
-                </tr>
-            <% } %>
-        </table>
+<table class='light'>
+    <tr>
+        <% for (var key in columnData[0]) {
+            if (key != 'parse' && key != '_typeCast') {%>
+                <th><%=key%></th>
+            <% }
+        } %>
+    </tr>
 
-        <div id = 'columnCounter'><a><%=columnData.length%> rows</a></div>
-    </body>
-</html>
+    <% for (var i = 0; i < columnData.length; i++) { %>
+    <tr>
+        <% for (var key in columnData[0]) {
+            if (key != 'parse' && key != '_typeCast') {%>
+                <td class = 'data'><%=columnData[i][key]%></td>
+            <% }
+        } %>
+    </tr>
+    <% } %>
+</table>
+
+<div id = 'columnCounter'><a><%=columnData.length%> rows</a></div>

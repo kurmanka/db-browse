@@ -3,7 +3,7 @@ var async = require('async');
 var just = new JUST({ root : './view', useCache : true, ext : '.html' });
 var requestHandlers = require('./requestHandlers');
 
-function showAllTable(response, connection, pathname, tableGroups) {
+function showAllTable(response, connection, pathname, authenticate, tableGroups) {
     connection.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';", function(err, result) {
         if (err) {
             console.log(err);
@@ -24,14 +24,14 @@ function showAllTable(response, connection, pathname, tableGroups) {
             }
 
         ], function (err, res) {
-            just.render('tableList', { tablesList: res, path: pathname, tableGr: tableGroups }, function(error, html) {
+            just.render('tableList', { tablesList: res, path: pathname, tableGr: tableGroups, authenticate: authenticate }, function(error, html) {
                 requestHandlers.showPage (response, error, html);
             });
         });
     });
 }
 
-function showTableRequest(response, connection, pathname, table) {
+function showTableRequest(response, connection, pathname, authenticate, table) {
     connection.query("select count(*) as count from pg_tables where tablename=$1;", [table], function(err, result) {
         if (err) {
             console.log(err);
@@ -111,7 +111,7 @@ function showTableRequest(response, connection, pathname, table) {
                 }
             ],
             function (err,results) {
-                just.render('tableDetails', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], foreignKey: results[3], referenced: results[4], triggers: results[5], statusArr: results[6], dbType: 'postgres'}, function(error, html) {
+                just.render('tableDetails', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], foreignKey: results[3], referenced: results[4], triggers: results[5], statusArr: results[6], dbType: 'postgres', authenticate: authenticate}, function(error, html) {
                     requestHandlers.showPage (response, error, html);
                 });
             }
@@ -123,7 +123,7 @@ function showTableRequest(response, connection, pathname, table) {
     });
 }
 
-function showColumnRequest(response, connection, column, table, limit) {
+function showColumnRequest(response, connection, authenticate, column, table, limit) {
     connection.query("select count(*) as count from pg_tables where tablename=$1" , [table], function(err, result) {
         if (result.rows[0].count > 0) {
 
@@ -135,7 +135,7 @@ function showColumnRequest(response, connection, column, table, limit) {
                             console.log(err);
                         }
 
-                        just.render('columnData', { columnData: result.rows }, function(error, html) {
+                        just.render('columnData', { columnData: result.rows, authenticate: authenticate }, function(error, html) {
                             requestHandlers.showPage (response, error, html);
                         });
                     });

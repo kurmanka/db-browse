@@ -1,15 +1,4 @@
-<html>
-    <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <link rel="stylesheet" type="text/css" href="/style.css">
-    </head>
-    <body>
-        <div id="database">
-            <b class="title">Databases:</b>
-            <% if (authenticate) { %>
-               <a href='/logout' id='logout'>Logout <<</a>
-            <% } %>
-        </div>
+<% this.extend('parent', { title: 'Databases:' }); %>
 
 <table class='light'>
     <tr>
@@ -29,6 +18,3 @@
     </tr>
     <% } %>
 </table>
-
-    </body>
-</html>

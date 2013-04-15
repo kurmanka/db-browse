@@ -1,0 +1,19 @@
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <link rel="stylesheet" type="text/css" href="/style.css">
+    </head>
+    <body>
+        <%if(title != 'login' ) {%>
+            <div id="titleBlok">
+                <b class="title"><%=title%></b>
+                <% if (authenticate) { %>
+                    <a href='/logout' id='logout'>Logout <<</a>
+                <% } %>
+            </div>
+        <% } %>
+
+        <%*%>
+
+    </body>
+</html>

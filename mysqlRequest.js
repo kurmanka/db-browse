@@ -4,7 +4,7 @@ var just = new JUST({ root : './view', useCache : true, ext : '.html' });
 var requestHandlers = require('./requestHandlers');
 var mysql = require('mysql');
 
-function showAllTable(response, connection, pathname, tableGroups) {
+function showAllTable(response, connection, pathname, authenticate, tableGroups) {
     connection.query('SHOW TABLES;', function(err, rows, fields) {
         if (err) {
             console.log(err);
@@ -25,14 +25,14 @@ function showAllTable(response, connection, pathname, tableGroups) {
             }
 
         ], function (err, result) {
-            just.render('tableList', { tablesList: result, path: pathname, tableGr: tableGroups }, function(error, html) {
+            just.render('tableList', { tablesList: result, path: pathname, tableGr: tableGroups, authenticate: authenticate }, function(error, html) {
                 requestHandlers.showPage (response, error, html);
             });
         });
     });
 }
 
-function showTableRequest(response, connection, pathname, table) {
+function showTableRequest(response, connection, pathname, authenticate, table) {
     connection.query("SELECT count(*) as countT FROM information_schema.tables WHERE table_schema = DATABASE() and table_name = ?;", [table], function(err, rows, fields) {
         if (rows[0].countT > 0) {
 
@@ -80,7 +80,7 @@ function showTableRequest(response, connection, pathname, table) {
                 }
             ],
             function (err,results) {
-                just.render('tableDetails', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], statusArr: results[3], dbType: 'mysql'}, function(error, html) {
+                just.render('tableDetails', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], statusArr: results[3], dbType: 'mysql', authenticate: authenticate}, function(error, html) {
                    requestHandlers.showPage (response, error, html);
                 });
             }
@@ -110,7 +110,7 @@ function getIndexes(rows, done) {
     done(null, resultArr);
 }
 
-function showColumnRequest(response, connection, column, table, limit) {
+function showColumnRequest(response, connection, authenticate, column, table, limit) {
     connection.query("SELECT count(*) as countT FROM information_schema.tables WHERE table_schema = DATABASE() and table_name = ?;", [table], function(err, rows, fields) {
         if (rows[0].countT > 0) {
 
@@ -122,7 +122,7 @@ function showColumnRequest(response, connection, column, table, limit) {
                             console.log(err);
                         }
 
-                        just.render('columnData', { columnData: rows }, function(error, html) {
+                        just.render('columnData', { columnData: rows, authenticate: authenticate }, function(error, html) {
                             requestHandlers.showPage (response, error, html);
                         });
                     });

@@ -6,6 +6,8 @@ var listen = {
     port: 8888
 };
 
+var log_dir = "./session";
+
 var db = {
     db_id : {
         type: 'postgres',
@@ -51,3 +53,4 @@ exports.authenticate = function (user, pass) { //if you don't waunt to use authe
 
 exports.db = db;
 exports.listen = listen;
+exports.log_dir = log_dir;

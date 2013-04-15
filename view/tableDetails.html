@@ -1,138 +1,128 @@
-<html>
-    <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-        <link rel="stylesheet" type="text/css" href="/style.css">
-    </head>
-    <body>
+<% this.extend('parent', { title: 'Table "' + tableName + '"' }); %>
 
-        <div id = 'tableName'><h1>Table "<%=tableName%>"</h1></div>
+<table class='light'>
+    <tr>
+        <% for (var key in attrList[0]) {
+            if (key != 'parse' && key != '_typeCast' && key != 'is_nullable' && key != 'column_default' && key != 'mlength') {%>
+                <th><%=key%></th>
+            <% }
+            if (key == 'column_default') { %>
+                <th>modifiers</th>
+            <% }
+        } %>
+    </tr>
 
-        <table class='light'>
-            <tr>
-                <% for (var key in attrList[0]) {
-                    if (key != 'parse' && key != '_typeCast' && key != 'is_nullable' && key != 'column_default' && key != 'mlength') {%>
-                        <th><%=key%></th>
+    <% var flag = 0; %>
+    <% var firstKey = ''; %>
+    <% for (var i = 0; i < attrList.length; i++) { %>
+    <tr>
+        <% for (var key in attrList[0]) {
+            if (flag == 0) {
+                firstKey = key;
+                flag = 1;
+            }
+            if (key != 'parse' && key != '_typeCast' && key != 'is_nullable' && key != 'column_default' && key != 'mlength') {
+                if (firstKey == key) { %>
+                    <td class = 'data'><a href = <%=path%>/<%=attrList[i][key]%>><%=attrList[i][key]%></a></td>
+                <% } else {
+                    if (attrList[i].mlength) { %>
+                        <td class = 'data'><%=attrList[i][key]%>(<%=attrList[i].mlength%>)</td>
+                    <% } else { %>
+                        <td class = 'data'><%=attrList[i][key]%></td>
                     <% }
-                    if (key == 'column_default') { %>
-                        <th>modifiers</th>
-                    <% }
-                } %>
+                }
+            }
+            if (key == 'column_default' && attrList[i].is_nullable == 'NO') {
+                if (attrList[i][key]) { %>
+                    <td class = 'data'>not null default <%=attrList[i][key]%></td>
+                <% }
+                else { %>
+                    <td class = 'data'>not null</td>
+                <% }
+            }
+            if (key == 'column_default' && attrList[i].is_nullable != 'NO') { %>
+                <td class = 'data'></td>
+            <% }
+        } %>
+    </tr>
+    <% } %>
+
+</table>
+
+<% if (indexesArr.length > 0) { %>
+    <div id = 'index'><b>Indexes:</b></div>
+<% } %>
+
+<% if (dbType == 'postgres') { %>
+    <table id = 'indexes'>
+    <% for (var i = 0; i < indexesArr.length; i++) {
+        if(indexesArr[i].indexdef != '')    {%>
+        <rt>
+            <td><%=indexesArr[i].indexdef%></td>
+        </tr>
+        <% }
+    } %>
+    </table>
+
+    <% if (foreignKey.length > 0) { %>
+        <div id = 'fkey'><b>Foreign-key constraints:</b></div>
+    <% } %>
+
+    <table id = 'fkeytable'>
+        <% for (var i = 0; i < foreignKey.length; i++) { %>
+        <rt>
+            <td>"<%=foreignKey[i].conname%>" <%=foreignKey[i].condef%></td>
+        </tr>
+        <% } %>
+    </table>
+
+    <% if (referenced.length > 0) { %>
+        <div id = 'ref'><b>Referenced by:</b></div>
+    <% } %>
+
+    <table id = 'referenced'>
+        <% for (var i = 0; i < referenced.length; i++) { %>
+        <rt>
+            <td>TABLE "<%=referenced[i].conrelid %>" CONSTRAINT "<%=referenced[i].conname%>" <%=referenced[i].condef%></td>
+        </tr>
+        <% } %>
+    </table>
+
+    <% if (triggers.length > 0) { %>
+        <div id = 'triggers'><b>Triggers:</b></div>
+    <% } %>
+
+    <table id = 'triggerstable'>
+        <% for (var i = 0; i < triggers.length; i++) {
+            var trigger = triggers[i].creating.replace(/CREATE TRIGGER/g, ''); %>
+            <rt>
+                <td><%=trigger%></td>
             </tr>
-
-            <% var flag = 0; %>
-            <% var firstKey = ''; %>
-            <% for (var i = 0; i < attrList.length; i++) { %>
-                <tr>
-                <% for (var key in attrList[0]) {
-                    if (flag == 0) {
-                       firstKey = key;
-                       flag = 1;
-                    }
-                    if (key != 'parse' && key != '_typeCast' && key != 'is_nullable' && key != 'column_default' && key != 'mlength') {
-                        if (firstKey == key) { %>
-                            <td class = 'data'><a href = <%=path%>/<%=attrList[i][key]%>><%=attrList[i][key]%></a></td>
-                        <% } else {
-                            if (attrList[i].mlength) { %>
-                                <td class = 'data'><%=attrList[i][key]%>(<%=attrList[i].mlength%>)</td>
-                            <% } else { %>
-                                <td class = 'data'><%=attrList[i][key]%></td>
-                            <% }
-                        }
-                    }
-                    if (key == 'column_default' && attrList[i].is_nullable == 'NO') {
-                        if (attrList[i][key]) { %>
-                            <td class = 'data'>not null default <%=attrList[i][key]%></td>
-                        <% }
-                        else { %>
-                            <td class = 'data'>not null</td>
-                        <% }
-                    }
-                    if (key == 'column_default' && attrList[i].is_nullable != 'NO') { %>
-                        <td class = 'data'></td>
-                    <% }
-                } %>
-                </tr>
-            <% } %>
-
-        </table>
-
-        <% if (indexesArr.length > 0) { %>
-            <div id = 'index'><b>Indexes:</b></div>
         <% } %>
+    </table>
+<% } %>
 
-        <% if (dbType == 'postgres') { %>
-            <table id = 'indexes'>
-                <% for (var i = 0; i < indexesArr.length; i++) {
-                    if(indexesArr[i].indexdef != '')    {%>
-                        <rt>
-                            <td><%=indexesArr[i].indexdef%></td>
-                        </tr>
-                    <% }
-                } %>
-            </table>
-
-            <% if (foreignKey.length > 0) { %>
-                <div id = 'fkey'><b>Foreign-key constraints:</b></div>
-            <% } %>
-
-            <table id = 'fkeytable'>
-                <% for (var i = 0; i < foreignKey.length; i++) { %>
-                    <rt>
-                        <td>"<%=foreignKey[i].conname%>" <%=foreignKey[i].condef%></td>
-                    </tr>
-                <% } %>
-            </table>
-
-            <% if (referenced.length > 0) { %>
-                <div id = 'ref'><b>Referenced by:</b></div>
-            <% } %>
-
-            <table id = 'referenced'>
-                <% for (var i = 0; i < referenced.length; i++) { %>
-                    <rt>
-                        <td>TABLE "<%=referenced[i].conrelid %>" CONSTRAINT "<%=referenced[i].conname%>" <%=referenced[i].condef%></td>
-                    </tr>
-                <% } %>
-            </table>
-
-            <% if (triggers.length > 0) { %>
-                <div id = 'triggers'><b>Triggers:</b></div>
-            <% } %>
-
-            <table id = 'triggerstable'>
-                <% for (var i = 0; i < triggers.length; i++) {
-                    var trigger = triggers[i].creating.replace(/CREATE TRIGGER/g, ''); %>
-                    <rt>
-                        <td><%=trigger%></td>
-                    </tr>
-                <% } %>
-            </table>
+<% if (dbType == 'mysql') { %>
+    <table id = 'indexes'>
+        <% for (var i = 0; i < indexesArr.length; i++) {%>
+            <tr><td><%=indexesArr[i]%></td></tr>
         <% } %>
+    </table>
+<% } %>
 
-        <% if (dbType == 'mysql') { %>
-            <table id = 'indexes'>
-                <% for (var i = 0; i < indexesArr.length; i++) {%>
-                    <tr><td><%=indexesArr[i]%></td></tr>
-                <% } %>
-            </table>
-        <% } %>
+<div id = 'status'><b>Status:</b></div>
 
-        <div id = 'status'><b>Status:</b></div>
-
-        <table id = 'statusT'>
-            <% for (var key in statusArr[0]) {%>
-                <% if(key != 'parse' && key != '_typeCast' && statusArr[0][key] != '' && key != 'TABLE_NAME')    {%>
-                <rt>
-                    <td><%=key%>: </td>
-                    <% for (var i = 0; i < statusArr.length; i++) {%>
-                        <td class='paddingText'><%=statusArr[i][key]%></td>
-                    <% } %>
-                </tr>
-                <% } %>
+<table id = 'statusT'>
+    <% for (var key in statusArr[0]) {%>
+        <% if(key != 'parse' && key != '_typeCast' && statusArr[0][key] != '' && key != 'TABLE_NAME')    {%>
+        <rt>
+            <td><%=key%>: </td>
+            <% for (var i = 0; i < statusArr.length; i++) {%>
+                <td class='paddingText'><%=statusArr[i][key]%></td>
             <% } %>
-        </table>
+        </tr>
+        <% } %>
+    <% } %>
+</table>
 
-        <div id = 'rowsCounter'><b>Total records: <%=rowsCounter%> </b></div>
-
-    </body>
-</html>
+<div id = 'rowsCounter'><b>Total records: <%=rowsCounter%> </b></div>

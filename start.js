@@ -6,22 +6,25 @@ var url = require("url");
 var async = require('async');
 var mysql = require('mysql');
 var pg = require('pg');
+var fs = require("fs");
 var express = require("express");
 var app = express();
 
 app.use(express.bodyParser());
 app.use(express.cookieParser());
+
+var file_handle = fs.openSync(config.log_dir + "/" + getCurrentDate() + ".txt", "a", 0644);
+
 app.use(express.session({ secret: "keyboard cat" }));
 
 var connectionStatus = {};
 
 var loginError = 'This login & password combination is not allowed.';
-var cooki_name = 'browse_db_login';
 
 http.createServer();
 
-app.get('/', function(req, res){ //run method selectDatabase
-    checkAuthentication(requestHandlers.selectDatabase, req, res);
+app.get('/', loadUser, function(req, res){ //run method selectDatabase
+    requestHandlers.selectDatabase(res);
 });
 
 app.get('/style.css', function(req, res){ //connect to css file
@@ -38,9 +41,15 @@ app.post('/*', function(req, res){ //get and check users data
     if (result == false) {
         requestHandlers.login(res, pathname, loginError);
     } else {
-        req.session.user = req.body.user;
         req.session.authentication = true;
-        //var sid = req.sessionID;
+
+        fs.write(file_handle, req.sessionID + "\nuser = " + req.body.user + "\nauthentication = true\n\n", null, 'ascii', function(err, written) {
+            if (err) {
+                console.log(err);
+            } else {
+
+            }
+        });
 
         if (pathname) {
             res.redirect(pathname);
@@ -51,7 +60,6 @@ app.post('/*', function(req, res){ //get and check users data
 });
 
 app.get('/logout', function(req, res){ //logout
-    res.clearCookie(cooki_name);
     req.session.authentication = false;
     req.session.destroy(function(err){
         if(err) {
@@ -61,19 +69,19 @@ app.get('/logout', function(req, res){ //logout
    requestHandlers.login(res, "/", '');
 });
 
-app.get('/:dbID', function(req, res){ //run method start
+app.get('/:dbID', loadUser, function(req, res){ //run method start
     var pathname = url.parse(req.url).pathname;
-    checkAuthentication(checkConnectShowPage, req, res, req.params.dbID, pathname, requestHandlers.start);
+    checkConnectShowPage(res, req.params.dbID, pathname, requestHandlers.start);
 });
 
-app.get('/:dbID/:table', function(req, res){ //run method showTable
+app.get('/:dbID/:table', loadUser, function(req, res){ //run method showTable
     var pathname = url.parse(req.url).pathname;
-    checkAuthentication(checkConnectShowPage, req, res, req.params.dbID, pathname, requestHandlers.showTable, req.params.table);
+    checkConnectShowPage(res, req.params.dbID, pathname, requestHandlers.showTable, req.params.table);
 });
 
-app.get('/:dbID/:table/:column', function(req, res){ //run method showColumn
+app.get('/:dbID/:table/:column', loadUser, function(req, res){ //run method showColumn
     var pathname = url.parse(req.url).pathname;
-    checkAuthentication(checkConnectShowPage, req, res, req.params.dbID, pathname, requestHandlers.showColumn, req.params.table, req.params.column)
+    checkConnectShowPage(res, req.params.dbID, pathname, requestHandlers.showColumn, req.params.table, req.params.column);
 });
 
 app.listen(config.listen.port, config.listen.host);
@@ -159,10 +167,29 @@ function makeConnect (dbId, response, done) {
     }
 }
 
-function checkAuthentication(method, req, res, dbID, pathname, methodPageShow, table, column) {
-    if ( config.authenticate && !req.session.authentication ) {
-        requestHandlers.login(res, pathname, '');
+function getCurrentDate() {
+    var date = new Date();
+
+    var year = date.getYear() + 1900;
+    var month = date.getMonth() +1 ;
+
+    if (month < 10) {
+        month = "0" + month;
+    }
+
+    var day = date.getDate();
+    //var hour = date.getHours();
+    //var min = date.getMinutes();
+
+    //return year + '-' + month + '-' + day + "_" + hour + "-" + min;
+    return year + '-' + month + '-' + day;
+}
+
+function loadUser(req, res, next) {
+    var pathname = url.parse(req.url).pathname;
+    if (req.session.authentication) {
+        next();
     } else {
-        method(res, dbID, pathname, methodPageShow, table, column);
+        requestHandlers.login(res, pathname, '');
     }
 }
