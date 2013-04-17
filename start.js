@@ -13,20 +13,7 @@ var app = express();
 app.use(express.bodyParser());
 app.use(express.cookieParser());
 
-var settings = ('settings');
-var FileStore = require('connect-session-file');
-
-app.use(express.session({
-    secret: "keyboard cat",//settings.cookie_secret,
-    store: new FileStore({
-        path: config.session.path,
-        prefix: config.session.prefix + getCurrentDate() + '-',
-        useAsync: config.session.useAsync,
-        printDebug: config.session.printDebug,
-        reapInterval: config.session.reapInterval,
-        maxAge: config.session.maxAge
-    })
-}));;
+app.use(express.session(config.session_config));
 
 var connectionStatus = {};
 

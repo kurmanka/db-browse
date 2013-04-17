@@ -1,18 +1,22 @@
 // You can here register the connection to the database, change host and port
 // ID of database must be unique
+var FileStore = require('connect-session-file');
 
 var listen = {
     host: '127.0.0.1',
     port: 8888
 };
 
-var    session = {
-    path:    "./session",
-    prefix:    'file-store-',
-    useAsync:    false,
-    printDebug:    false,
-    reapInterva:    -1,
-    maxAge:    600000*3
+var session_config = {
+    secret: "keyboard cat",
+    store: new FileStore({
+        path:    "./session", //storage path
+        prefix:    'file-store-', //filename prefix
+        useAsync:    false, //use asynchronous file operations
+        printDebug:    false, //prints debug output
+        reapInterval:    -1, //interval between removing stale sessions (optional, default: 600000 (10 mins), disable: -1 )
+        maxAge:    600000*3 //maximum age of sessions before removal (30 mins)
+    })
 };
 
 var db = {
@@ -60,4 +64,4 @@ exports.authenticate = function (user, pass) { //if you don't waunt to use authe
 
 exports.db = db;
 exports.listen = listen;
-exports.session = session;
+exports.session_config = session_config;

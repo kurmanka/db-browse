@@ -17,7 +17,6 @@
     "express": "~3.1.1"
   },
   "dependencies": {
-    "setting": "~0.1.0",
     "connect-session-file": "~1.0.4"
   }
 }
