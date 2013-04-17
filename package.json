@@ -15,5 +15,9 @@
     "njst": "~0.2.1",
     "pg": "~0.14.1",
     "express": "~3.1.1"
+  },
+  "dependencies": {
+    "setting": "~0.1.0",
+    "connect-session-file": "~1.0.4"
   }
 }

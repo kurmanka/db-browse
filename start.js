@@ -13,9 +13,20 @@ var app = express();
 app.use(express.bodyParser());
 app.use(express.cookieParser());
 
-var file_handle = fs.openSync(config.log_dir + "/" + getCurrentDate() + ".txt", "a", 0644);
+var settings = ('settings');
+var FileStore = require('connect-session-file');
 
-app.use(express.session({ secret: "keyboard cat" }));
+app.use(express.session({
+    secret: "keyboard cat",//settings.cookie_secret,
+    store: new FileStore({
+        path: config.session.path,
+        prefix: config.session.prefix + getCurrentDate() + '-',
+        useAsync: config.session.useAsync,
+        printDebug: config.session.printDebug,
+        reapInterval: config.session.reapInterval,
+        maxAge: config.session.maxAge
+    })
+}));;
 
 var connectionStatus = {};
 
@@ -42,14 +53,6 @@ app.post('/*', function(req, res){ //get and check users data
         requestHandlers.login(res, pathname, loginError);
     } else {
         req.session.authentication = true;
-
-        fs.write(file_handle, req.sessionID + "\nuser = " + req.body.user + "\nauthentication = true\n\n", null, 'ascii', function(err, written) {
-            if (err) {
-                console.log(err);
-            } else {
-
-            }
-        });
 
         if (pathname) {
             res.redirect(pathname);
