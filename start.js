@@ -13,7 +13,15 @@ var app = express();
 app.use(express.bodyParser());
 app.use(express.cookieParser());
 
+// very simple loging of the incomming requests to console
+// from http://expressjs.com/api.html#app.use
+app.use(function(req, res, next){
+  console.log('%s %s', req.method, req.url);
+  next();
+});
+
 app.use(express.session(config.session_config));
+
 
 var connectionStatus = {};
 
@@ -183,3 +191,4 @@ function loadUser(req, res, next) {
         requestHandlers.login(res, pathname, '');
     }
 }
+
