@@ -136,6 +136,54 @@ function showColumnRequest(response, connection, authenticate, column, table, li
     });
 }
 
+function showValueRequest(response, connection, authenticate, table, column, value, limit) {
+    connection.query("SELECT count(*) as countT FROM information_schema.tables WHERE table_schema = DATABASE() and table_name = ?;", [table], function(err, rows, fields) {
+        if (rows[0].countT > 0) {
+
+            connection.query("SELECT count(*) as countC FROM information_schema.COLUMNS WHERE TABLE_NAME=? AND COLUMN_NAME=?;", [table, column], function(err, rows, fields) {
+                if (rows[0].countC > 0) {
+
+                    async.parallel([
+                        function(done){
+                            connection.query("select * from " + mysql.escapeId(table) + " where " + mysql.escapeId(column) + "=? limit " + limit + ";", [value], function(err, rows, fields) {
+                                if (err) {
+                                    console.log(err);
+                                }
+
+                                done(null, rows);
+                            });
+                        },
+
+                        function(done){
+                            connection.query("select count(*) as count from " + mysql.escapeId(table) + " where " + mysql.escapeId(column) + "=?;", [value], function(err, rows, fields) {
+                                if (err) {
+                                    console.log(err);
+                                }
+
+                                done(null, rows[0].count);
+                            });
+                        }
+                    ],
+                    function (err, results) {
+                        if (results[1] > 0) {
+                            just.render('showValues', { values: results[0], rowsCount: results[1], authenticate: authenticate }, function(error, html) {
+                                requestHandlers.showPage (response, error, html);
+                            });
+                        } else {
+                            requestHandlers.showError(response, "The value '" + value + "' is not present in column '" + column + "'");
+                        }
+                    });
+                } else {
+                    requestHandlers.showError(response, "Column '" + column + "' not found in table '" + table + "'");
+                }
+            });
+        } else {
+            requestHandlers.showError(response, "Table '" + table + "' not found");
+        }
+    });
+}
+
 exports.showAllTable = showAllTable;
 exports.showTableRequest = showTableRequest;
 exports.showColumnRequest = showColumnRequest;
+exports.showValueRequest = showValueRequest;

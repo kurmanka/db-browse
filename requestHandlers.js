@@ -97,6 +97,13 @@ function showColumn(response, connection, pathname, dbType, table_groups, table,
     db.showColumnRequest(response, connection, authenticate, column, table, limit);
 }
 
+function showValue(response, connection, pathname, dbType, table_groups, table, column, value) {
+    var limit = 10;
+
+    var db = getDbType(dbType);
+    db.showValueRequest(response, connection, authenticate, table, column, value, limit);
+}
+
 function getDbType (dbType) {
     var db = mysql;
 
@@ -138,3 +145,4 @@ exports.showColumn = showColumn;
 exports.showError = showError;
 exports.showPage = showPage;
 exports.selectDatabase = selectDatabase;
+exports.showValue = showValue;

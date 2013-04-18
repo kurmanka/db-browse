@@ -149,6 +149,53 @@ function showColumnRequest(response, connection, authenticate, column, table, li
     });
 }
 
+function showValueRequest(response, connection, authenticate, table, column, value, limit) {
+    connection.query("select count(*) as count from pg_tables where tablename=$1" , [table], function(err, result) {
+        if (result.rows[0].count > 0) {
+
+            connection.query("SELECT count(*) as countC FROM information_schema.COLUMNS WHERE TABLE_NAME=$1 AND COLUMN_NAME=$2;", [table, column], function(err, result) {
+                if (result.rows[0].countc > 0) {
+
+                    async.parallel([
+                        function(done){
+                            connection.query("select * from " + escape(table) + " where " + escape(column) + "=$1 limit " + limit + ";", [value], function(err, result) {
+                                if (err) {
+                                    console.log(err);
+                                }
+
+                                done(null, result.rows);
+                            });
+                        },
+
+                        function(done){
+                            connection.query("select count(*) as count from " + escape(table) + " where " + escape(column) + "=$1;", [value], function(err, result) {
+                                if (err) {
+                                    console.log(err);
+                                }
+
+                                done(null, result.rows[0].count);
+                            });
+                        }
+                    ],
+                    function (err, results) {
+                        if (results[1] > 0) {
+                            just.render('showValues', { values: results[0], rowsCount: results[1], authenticate: authenticate }, function(error, html) {
+                                requestHandlers.showPage (response, error, html);
+                            });
+                        } else {
+                            requestHandlers.showError(response, "The value '" + value + "' is not present in column '" + column + "'");
+                        }
+                    });
+                } else {
+                    requestHandlers.showError(response, "Column '" + column + "' not found in table '" + table + "'");
+                }
+            });
+        } else {
+            requestHandlers.showError(response, "Table '" + table + "' not found");
+        }
+    });
+}
+
 function escape (text) {
     text = text.replace(/\%20|;|,|\%22|\%27/g, '\\$&');
 
@@ -158,3 +205,4 @@ function escape (text) {
 exports.showAllTable = showAllTable;
 exports.showTableRequest = showTableRequest;
 exports.showColumnRequest = showColumnRequest;
+exports.showValueRequest = showValueRequest;
