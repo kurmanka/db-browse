@@ -114,12 +114,16 @@ function getDbType (dbType) {
     return db;
 }
 
-function showPage (response, error, html) {
+function showPage (response, error, html, type) {
     if (error) {
         console.log(error);
     }
 
-    response.writeHead(200, {"Content-Type": "text/html"});
+    if (!type) {
+        type = 'html';
+    }
+
+    response.writeHead(200, {"Content-Type": "text/" + type});
     response.write(html);
     response.end();
 }
