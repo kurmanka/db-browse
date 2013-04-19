@@ -1,10 +1,8 @@
-var JUST = require('just');
 var async = require('async');
-var just = new JUST({ root : './view', useCache : true, ext : '.html' });
 var requestHandlers = require('./requestHandlers');
 var mysql = require('mysql');
 
-function showAllTable(response, connection, pathname, authenticate, tableGroups) {
+function showAllTable(connection, doneReturn) {
     connection.query('SHOW TABLES;', function(err, rows, fields) {
         if (err) {
             console.log(err);
@@ -25,14 +23,12 @@ function showAllTable(response, connection, pathname, authenticate, tableGroups)
             }
 
         ], function (err, result) {
-            just.render('tableList', { tablesList: result, path: pathname, tableGr: tableGroups, authenticate: authenticate }, function(error, html) {
-                requestHandlers.showPage (response, error, html);
-            });
+            doneReturn(null, result);
         });
     });
 }
 
-function showTableRequest(response, connection, pathname, authenticate, table) {
+function showTableRequest(connection, table, doneReturn) {
     connection.query("SELECT count(*) as countT FROM information_schema.tables WHERE table_schema = DATABASE() and table_name = ?;", [table], function(err, rows, fields) {
         if (rows[0].countT > 0) {
 
@@ -80,11 +76,8 @@ function showTableRequest(response, connection, pathname, authenticate, table) {
                 }
             ],
             function (err,results) {
-                just.render('tableDetails', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], statusArr: results[3], dbType: 'mysql', authenticate: authenticate}, function(error, html) {
-                   requestHandlers.showPage (response, error, html);
-                });
-            }
-            );
+                doneReturn(null, results);
+            });
         } else {
             requestHandlers.showError(response, "Table '" + table + "' not found");
         }
@@ -110,7 +103,7 @@ function getIndexes(rows, done) {
     done(null, resultArr);
 }
 
-function showColumnRequest(response, connection, authenticate, column, table, limit) {
+function showColumnRequest(connection, column, table, limit, done) {
     connection.query("SELECT count(*) as countT FROM information_schema.tables WHERE table_schema = DATABASE() and table_name = ?;", [table], function(err, rows, fields) {
         if (rows[0].countT > 0) {
 
@@ -122,9 +115,7 @@ function showColumnRequest(response, connection, authenticate, column, table, li
                             console.log(err);
                         }
 
-                        just.render('columnData', { columnData: rows, authenticate: authenticate }, function(error, html) {
-                            requestHandlers.showPage (response, error, html);
-                        });
+                        done(null, rows);
                     });
                 } else {
                     requestHandlers.showError(response, "Column '" + column + "' not found in table '" + table + "'");
@@ -136,7 +127,7 @@ function showColumnRequest(response, connection, authenticate, column, table, li
     });
 }
 
-function showValueRequest(response, connection, authenticate, table, column, value, limit) {
+function showValueRequest(connection, table, column, value, limit, doneReturn) {
     connection.query("SELECT count(*) as countT FROM information_schema.tables WHERE table_schema = DATABASE() and table_name = ?;", [table], function(err, rows, fields) {
         if (rows[0].countT > 0) {
 
@@ -165,13 +156,7 @@ function showValueRequest(response, connection, authenticate, table, column, val
                         }
                     ],
                     function (err, results) {
-                        if (results[1] > 0) {
-                            just.render('showValues', { values: results[0], rowsCount: results[1], authenticate: authenticate }, function(error, html) {
-                                requestHandlers.showPage (response, error, html);
-                            });
-                        } else {
-                            requestHandlers.showError(response, "The value '" + value + "' is not present in column '" + column + "'");
-                        }
+                        doneReturn(null, results);
                     });
                 } else {
                     requestHandlers.showError(response, "Column '" + column + "' not found in table '" + table + "'");
