@@ -82,17 +82,22 @@ app.get('/:dbID/:table/:column', loadUser, function(req, res){ //run method show
     checkConnectShowPage(res, req.params.dbID, pathname, requestHandlers.showColumn, req.params.table, req.params.column);
 });
 
+app.get('/:dbID/:table/:column/:value', loadUser, function(req, res){ //run method showValue
+    var pathname = url.parse(req.url).pathname;
+    checkConnectShowPage(res, req.params.dbID, pathname, requestHandlers.showValue, req.params.table, req.params.column, req.params.value);
+});
+
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
-function checkConnectShowPage(response, dbId, pathname, methodRun, table, column) {
+function checkConnectShowPage(response, dbId, pathname, methodRun, table, column, value) {
     async.waterfall([
         function (done){
             dbConnect(dbId, response, done);
         }
 
     ], function (err) {
-        dataInput(err, dbId, methodRun, response, pathname, table, column);
+        dataInput(err, dbId, methodRun, response, pathname, table, column, value);
     });
 }
 
@@ -120,7 +125,7 @@ function dbConnect(dbId, response, done) {
     }
 }
 
-function dataInput(err, dbId, methodRun, response, pathname, table, column) {
+function dataInput(err, dbId, methodRun, response, pathname, table, column, value) {
     var table_groups = '';
 
     if (err) {
@@ -131,7 +136,7 @@ function dataInput(err, dbId, methodRun, response, pathname, table, column) {
         if (config.db[dbId].table_groups) {
             table_groups = config.db[dbId].table_groups;
         }
-        methodRun(response, connectionStatus[dbId].connection, pathname, config.db[dbId].type, table_groups, table, column);
+        methodRun(response, connectionStatus[dbId].connection, pathname, config.db[dbId].type, table_groups, table, column, value);
     }
 }
 

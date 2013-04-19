@@ -1,0 +1,23 @@
+<% this.extend('parent', { title: 'Result:' }); %>
+
+<table class='light'>
+    <tr>
+        <% for (var key in values[0]) {
+            if (key != 'parse' && key != '_typeCast') {%>
+                <th><%=key%></th>
+            <% }
+        } %>
+    </tr>
+
+    <% for (var i = 0; i < values.length; i++) { %>
+    <tr>
+        <% for (var key in values[0]) {
+            if (key != 'parse' && key != '_typeCast') {%>
+                <td class = 'data'><%=values[i][key]%></td>
+            <% }
+        } %>
+    </tr>
+    <% } %>
+</table>
+
+<div id = 'columnCounter'><a><%=rowsCount%> rows</a></div>

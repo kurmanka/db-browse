@@ -1,10 +1,8 @@
-var JUST = require('just');
 var async = require('async');
-var just = new JUST({ root : './view', useCache : true, ext : '.html' });
 var requestHandlers = require('./requestHandlers');
 var mysql = require('mysql');
 
-function showAllTable(response, connection, pathname, authenticate, tableGroups) {
+function showAllTable(connection, doneReturn) {
     connection.query('SHOW TABLES;', function(err, rows, fields) {
         if (err) {
             console.log(err);
@@ -25,14 +23,12 @@ function showAllTable(response, connection, pathname, authenticate, tableGroups)
             }
 
         ], function (err, result) {
-            just.render('tableList', { tablesList: result, path: pathname, tableGr: tableGroups, authenticate: authenticate }, function(error, html) {
-                requestHandlers.showPage (response, error, html);
-            });
+            doneReturn(null, result);
         });
     });
 }
 
-function showTableRequest(response, connection, pathname, authenticate, table) {
+function showTableRequest(connection, table, doneReturn) {
     connection.query("SELECT count(*) as countT FROM information_schema.tables WHERE table_schema = DATABASE() and table_name = ?;", [table], function(err, rows, fields) {
         if (rows[0].countT > 0) {
 
@@ -80,11 +76,8 @@ function showTableRequest(response, connection, pathname, authenticate, table) {
                 }
             ],
             function (err,results) {
-                just.render('tableDetails', {path: pathname, tableName: table, attrList: results[0], rowsCounter: results[1], indexesArr: results[2], statusArr: results[3], dbType: 'mysql', authenticate: authenticate}, function(error, html) {
-                   requestHandlers.showPage (response, error, html);
-                });
-            }
-            );
+                doneReturn(null, results);
+            });
         } else {
             requestHandlers.showError(response, "Table '" + table + "' not found");
         }
@@ -110,7 +103,7 @@ function getIndexes(rows, done) {
     done(null, resultArr);
 }
 
-function showColumnRequest(response, connection, authenticate, column, table, limit) {
+function showColumnRequest(connection, column, table, limit, done) {
     connection.query("SELECT count(*) as countT FROM information_schema.tables WHERE table_schema = DATABASE() and table_name = ?;", [table], function(err, rows, fields) {
         if (rows[0].countT > 0) {
 
@@ -122,9 +115,48 @@ function showColumnRequest(response, connection, authenticate, column, table, li
                             console.log(err);
                         }
 
-                        just.render('columnData', { columnData: rows, authenticate: authenticate }, function(error, html) {
-                            requestHandlers.showPage (response, error, html);
-                        });
+                        done(null, rows);
+                    });
+                } else {
+                    requestHandlers.showError(response, "Column '" + column + "' not found in table '" + table + "'");
+                }
+            });
+        } else {
+            requestHandlers.showError(response, "Table '" + table + "' not found");
+        }
+    });
+}
+
+function showValueRequest(connection, table, column, value, limit, doneReturn) {
+    connection.query("SELECT count(*) as countT FROM information_schema.tables WHERE table_schema = DATABASE() and table_name = ?;", [table], function(err, rows, fields) {
+        if (rows[0].countT > 0) {
+
+            connection.query("SELECT count(*) as countC FROM information_schema.COLUMNS WHERE TABLE_NAME=? AND COLUMN_NAME=?;", [table, column], function(err, rows, fields) {
+                if (rows[0].countC > 0) {
+
+                    async.parallel([
+                        function(done){
+                            connection.query("select * from " + mysql.escapeId(table) + " where " + mysql.escapeId(column) + "=? limit " + limit + ";", [value], function(err, rows, fields) {
+                                if (err) {
+                                    console.log(err);
+                                }
+
+                                done(null, rows);
+                            });
+                        },
+
+                        function(done){
+                            connection.query("select count(*) as count from " + mysql.escapeId(table) + " where " + mysql.escapeId(column) + "=?;", [value], function(err, rows, fields) {
+                                if (err) {
+                                    console.log(err);
+                                }
+
+                                done(null, rows[0].count);
+                            });
+                        }
+                    ],
+                    function (err, results) {
+                        doneReturn(null, results);
                     });
                 } else {
                     requestHandlers.showError(response, "Column '" + column + "' not found in table '" + table + "'");
@@ -139,3 +171,4 @@ function showColumnRequest(response, connection, authenticate, column, table, li
 exports.showAllTable = showAllTable;
 exports.showTableRequest = showTableRequest;
 exports.showColumnRequest = showColumnRequest;
+exports.showValueRequest = showValueRequest;
