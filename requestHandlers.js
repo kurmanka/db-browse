@@ -1,10 +1,15 @@
 var config = require("./config");
+
+// templating engine
 var JUST = require('just');
-var just = new JUST({ root : './view', useCache : true, ext : '.html' });
-var justStyle = new JUST({ root : './view', useCache : true, ext : '.css' });
-var justJS = new JUST({ root : './view', useCache : true, ext : '.js' });
-var mysql = require('./db_mysql.js');
+var just_usecache = false; // or true
+var just      = new JUST({ root: './view', useCache: just_usecache, ext: '.html' });
+var justStyle = new JUST({ root: './view', useCache: just_usecache, ext: '.css' });
+var justJS    = new JUST({ root: './view', useCache: just_usecache, ext: '.js' });
+
+var mysql    = require('./db_mysql.js');
 var postgres = require('./db_postgres.js');
+
 var async = require('async');
 
 var authenticate = false;

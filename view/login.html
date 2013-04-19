@@ -1,18 +1,24 @@
 <% this.extend('parent', { title: 'login' }); %>
 
-<div id='loginpage'>
-    <form method="post" action=<%=path%> id="loginform">
-        <div align="center">
-            <p><label for="username">Username:  </label><input type="text" name="user"><br /></p>
-        </div>
-        <div align="center">
-            <p><label for="password">Password:  </label><input type="password" name="pass"><br /></p>
-        </div>
-        <div align="center">
-            <p><input type="submit" value="Login" /></p>
-        </div>
-        <div align="center">
-            <p><%=errormsg%></p>
-        </div>
-    </form>
-</div>
+<form method="post" action=<%=path%> id="loginform">
+    <div align="center">
+        <p><%=errormsg%></p>
+        <table>
+            <tr>
+                <td><label for="user">User: </label></td>
+                <td><input type="text" name="user"></td>
+            </tr>
+            <tr>
+                <td><label for="pass">Password: </label></td>
+                <td><input type="password" name="pass"></td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>
+                    <!-- <input class='button' type="submit" value="Login" /> -->
+                    <button type='submit'>Login</button>
+                </td>
+            </tr>
+        </table>
+    </div>
+</form>

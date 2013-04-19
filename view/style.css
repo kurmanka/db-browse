@@ -1,4 +1,16 @@
 body {
+    margin: 0;
+}
+
+#topnav {
+    background: #eee;
+    text-align: right;
+    padding: 1ex;
+    font-size: 90%;
+    border-bottom: 1px solid #ccc;
+}
+
+#content {
     margin: 2em;
 }
 
@@ -10,14 +22,39 @@ table.light {
 
 table.light tr th {
     border: 1px solid #ccc;
+    padding: 4px;
     color: #999;
     font-weight: normal;
+    text-align: left;
 }
 
 table.light tr td {
     border: 1px solid #ccc;
-    padding: 2ex;
+    padding: 4px;
 }
+
+
+#loginform {
+    margin: 20% 0 20% 0;
+}
+
+#loginform table {
+    font-size: 120%;
+}
+
+#loginform input {
+    font-size: 120%;    
+}
+
+#loginform input.button,
+#loginform button[type='submit'] {
+    padding: 8px 4ex;
+    -moz-border-radius: 3px;
+    border-radius: 3px;
+    background: #eee;
+    font-size: 110%;
+}
+
 
 TABLE#indexes {
     margin-left: 20px;
@@ -39,9 +76,7 @@ TABLE#statusT {
     margin-left: 20px;
 }
 
-#loginform {
-    margin: 20% 0 20% 0;
-}
+
 
 #rowsCounter {
     margin-top: 20px;
