@@ -4,16 +4,17 @@
         <link rel="stylesheet" type="text/css" href="/style.css">
     </head>
     <body>
-        <%if(title != 'login' ) {%>
-            <div id="titleBlok">
-                <b class="title"><%=title%></b>
+        <% if (title != 'login' ) {%>
+            <div id='topnav'>
                 <% if (authenticate) { %>
                     <a href='/logout' id='logout'>Logout <<</a>
                 <% } %>
             </div>
         <% } %>
-
+        <div id='content'>
+                <h1><%=title%></h1>
         <%*%>
+        </div>
 
     </body>
 </html>
