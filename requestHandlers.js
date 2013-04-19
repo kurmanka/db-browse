@@ -3,8 +3,8 @@ var JUST = require('just');
 var just = new JUST({ root : './view', useCache : true, ext : '.html' });
 var justStyle = new JUST({ root : './view', useCache : true, ext : '.css' });
 var justJS = new JUST({ root : './view', useCache : true, ext : '.js' });
-var mysql = require('./mysqlRequest.js');
-var postgres = require('./postgresRequest.js');
+var mysql = require('./db_mysql.js');
+var postgres = require('./db_postgres.js');
 var async = require('async');
 
 var authenticate = false;
