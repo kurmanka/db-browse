@@ -160,7 +160,7 @@ function makeConnect (dbId, response, done) {
         });
     }
     else if (c.type == 'postgres') {
-        var conString = "tcp://postgres:" + c.password + "@" + c.host + "/" + c.database;
+        var conString = "tcp://" + c.user + ":" + c.password + "@" + c.host + "/" + c.database;
         connectionStatus[dbId].connection = new pg.Client(conString);
 
         connectionStatus[dbId].connection.connect(function(err) {
