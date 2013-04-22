@@ -50,9 +50,13 @@ function start(response, connection, pathname, dbType, tableGroupsFile) {
         }
 
     ], function (err, result) {
-        just.render('tableList', { tablesList: result, path: pathname, tableGr: tabGr, authenticate: authenticate }, function(error, html) {
-            showPage (response, error, html);
-        });
+	    if (err) {
+		    showError (response, err);
+		} else {
+            just.render('tableList', { tablesList: result, path: pathname, tableGr: tabGr, authenticate: authenticate }, function(error, html) {
+                showPage (response, error, html);
+            });
+		}
     });
 }
 
@@ -107,20 +111,24 @@ function showTable(response, connection, pathname, dbType, table_groups, table) 
         }
 
     ], function (err, results) {
-        var templatesP = {attrList: results[0], rowsCounter: results[1], indexesArr: results[2], foreignKey: results[3], referenced: results[4], triggers: results[5], statusArr: results[6]};
+		if (err) {
+		    showError (response, err);
+		} else {
+            var templatesP = {attrList: results[0], rowsCounter: results[1], indexesArr: results[2], foreignKey: results[3], referenced: results[4], triggers: results[5], statusArr: results[6]};
 
-        if(dbType == 'mysql') {
-            templatesP = {attrList: results[0], rowsCounter: results[1], indexesArr: results[2], statusArr: results[3]};
-        }
+            if(dbType == 'mysql') {
+                templatesP = {attrList: results[0], rowsCounter: results[1], indexesArr: results[2], statusArr: results[3]};
+            }
 
-        templatesP.path = pathname;
-        templatesP.tableName = table;
-        templatesP.dbType = dbType;
-        templatesP.authenticate = authenticate;
+            templatesP.path = pathname;
+            templatesP.tableName = table;
+            templatesP.dbType = dbType;
+            templatesP.authenticate = authenticate;
 
-        just.render('tableDetails', templatesP, function(error, html) {
-            showPage (response, error, html);
-        });
+            just.render('tableDetails', templatesP, function(error, html) {
+                showPage (response, error, html);
+            });
+		}
     });
 }
 
@@ -134,9 +142,13 @@ function showColumn(response, connection, pathname, dbType, table_groups, table,
         }
 
     ], function (err, results) {
-        just.render('columnData', { columnData: results, authenticate: authenticate }, function(error, html) {
-            showPage (response, error, html);
-        });
+		if (err) {
+		    showError (response, err);
+		} else {
+            just.render('columnData', { columnData: results, authenticate: authenticate }, function(error, html) {
+                showPage (response, error, html);
+            });
+		}
     });
 }
 
@@ -148,15 +160,20 @@ function showValue(response, connection, pathname, dbType, table_groups, table, 
             db = getDbType(dbType);
             db.showValueRequest(connection, table, column, value, limit, done);
         }
-
     ], function (err, results) {
-        if (results[1] > 0) {
+	    if (err) {
+		    showError (response, err);
+		}
+		
+        else if (results[1] == 0) {
+		    showError(response, "The value '" + value + "' is not present in column '" + column + "'");
+        }	
+		
+        else {
             just.render('showValues', { values: results[0], rowsCount: results[1], authenticate: authenticate }, function(error, html) {
                 showPage (response, error, html);
             });
-        } else {
-            showError(response, "The value '" + value + "' is not present in column '" + column + "'");
-        }
+        } 
     });
 }
 
