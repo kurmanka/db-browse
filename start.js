@@ -17,7 +17,12 @@ app.use(express.cookieParser());
 // from http://expressjs.com/api.html#app.use
 app.use(function(req, res, next){
   console.log('%s %s', req.method, req.url);
-  next();
+
+  if(req.url == '/favicon.ico') {
+      requestHandlers.showError(res, "Serve 404. Connect to /favicon.ico.");
+  } else {
+      next();
+  }
 });
 
 app.use(express.session(config.session_config));
