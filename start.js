@@ -141,33 +141,35 @@ function dataInput(err, dbId, methodRun, response, pathname, table, column, valu
 }
 
 function makeConnect (dbId, response, done) {
-    console.log("Connect to database " + dbId + "..");
-
-    if (config.db[dbId] && config.db[dbId].type == 'mysql') {
+    console.log("Connect to database " + dbId + " ...");
+    var c = config.db[dbId];
+    if (!c) {
+        requestHandlers.showError(response, "The database with id '" +  dbId + "' is absent in the configuration");
+        return;
+    }
+    if (c.type == 'mysql') {
         connectionStatus[dbId].connection = mysql.createConnection({
-            host     : config.db[dbId].host,
-            user     : config.db[dbId].user,
-            password : config.db[dbId].password,
-            database : config.db[dbId].database,
+            host     : c.host,
+            user     : c.user,
+            password : c.password,
+            database : c.database,
         });
 
         connectionStatus[dbId].connection.connect(function(err) {
             done(err);
         });
     }
-
-    else if (config.db[dbId] && config.db[dbId].type == 'postgres') {
-        var conString = "tcp://postgres:" + config.db[dbId].password + "@" + config.db[dbId].host + "/" + config.db[dbId].database;
+    else if (c.type == 'postgres') {
+        var conString = "tcp://postgres:" + c.password + "@" + c.host + "/" + c.database;
         connectionStatus[dbId].connection = new pg.Client(conString);
 
         connectionStatus[dbId].connection.connect(function(err) {
             done(err);
         });
+    } else {
+        // unsupported db type
     }
 
-    else {
-        requestHandlers.showError(response, "The database with id '" +  dbId + "' is absent in the configuration");
-    }
 }
 
 function getCurrentDate() {
