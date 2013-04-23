@@ -90,7 +90,7 @@ function showTableRequest(connection, table, doneReturn) {
                             doneReturn(err);
                         }
 
-                        done(null, rows);
+                        getIndexes(rows, done);
                     });
                 },
 
