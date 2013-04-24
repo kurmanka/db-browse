@@ -10,9 +10,25 @@
                     <a href='/logout' id='logout'>Logout <<</a>
                 <% } %>
             </div>
+
+            <p class='breadcrumbs'>
+                <% if (breadcrumbs_path) {
+                    breadcrumbs_path = breadcrumbs_path.replace(/\/[^\/]*$/, ''); %>
+                    <a href = "/">Home</a>
+                    <% global_ref = "" %>
+                    <% while (breadcrumbs_path) { %>
+                        <a>/</a>
+                        <% ref = /\/[^\/]+/.exec(breadcrumbs_path); %>
+                        <% global_ref = global_ref + ref; %>
+                        <% breadcrumbs_path = breadcrumbs_path.replace(/\/[^\/]+/, ''); %>
+                        <% ref_name = /[^\/]+/.exec(ref); %>
+                        <a href = <%=global_ref%> > <%=ref_name%> </a>
+                    <% } %>
+                <% } %>
+            </p>
         <% } %>
         <div id='content'>
-                <h1><%=title%></h1>
+            <h1><%=title%></h1>
         <%*%>
         </div>
 

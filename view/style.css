@@ -4,8 +4,8 @@ body {
 
 #topnav {
     background: #eee;
-    text-align: right;
     padding: 1ex;
+    text-align: right;
     font-size: 90%;
     border-bottom: 1px solid #ccc;
 }
@@ -43,7 +43,7 @@ table.light tr td {
 }
 
 #loginform input {
-    font-size: 120%;    
+    font-size: 120%;
 }
 
 #loginform input.button,
@@ -75,8 +75,6 @@ TABLE#triggerstable {
 TABLE#statusT {
     margin-left: 20px;
 }
-
-
 
 #rowsCounter {
     margin-top: 20px;
@@ -116,7 +114,7 @@ TABLE#statusT {
 }
 
 #logout{
-    margin-left: 80%;
+
 }
 
 .type {
@@ -138,4 +136,8 @@ TABLE#statusT {
 
 .title {
    font-size: 30px;
+}
+
+.breadcrumbs {
+    margin-left: 2em;
 }
