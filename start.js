@@ -73,35 +73,33 @@ app.get('/logout', function(req, res){ //logout
 });
 
 app.get('/:dbID', loadUser, function(req, res){ //run method start
-    var pathname = url.parse(req.url).pathname;
-    checkConnectShowPage(res, req.params.dbID, pathname, requestHandlers.start);
+    checkConnectShowPage(res, req, req.params.dbID, requestHandlers.start);
 });
 
 app.get('/:dbID/:table', loadUser, function(req, res){ //run method showTable
-    var pathname = url.parse(req.url).pathname;
-    checkConnectShowPage(res, req.params.dbID, pathname, requestHandlers.showTable, req.params.table);
+    checkConnectShowPage(res, req, req.params.dbID, requestHandlers.showTable, req.params.table);
 });
 
 app.get('/:dbID/:table/:column', loadUser, function(req, res){ //run method showColumn
-    var pathname = url.parse(req.url).pathname;
-    checkConnectShowPage(res, req.params.dbID, pathname, requestHandlers.showColumn, req.params.table, req.params.column);
+    checkConnectShowPage(res, req, req.params.dbID, requestHandlers.showColumn, req.params.table, req.params.column);
 });
 
 app.get('/:dbID/:table/:column/:value', loadUser, function(req, res){ //run method showValue
-    var pathname = url.parse(req.url).pathname;
-    checkConnectShowPage(res, req.params.dbID, pathname, requestHandlers.showValue, req.params.table, req.params.column, req.params.value);
+    checkConnectShowPage(res, req, req.params.dbID, requestHandlers.showValue, req.params.table, req.params.column, req.params.value);
 });
 
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
-function checkConnectShowPage(response, dbId, pathname, methodRun, table, column, value) {
+function checkConnectShowPage(response, req, dbId, methodRun, table, column, value) {    
     async.waterfall([
         function (done){
             dbConnect(dbId, response, done);
         }
 
     ], function (err) {
+	    var pathname = url.parse(req.url).pathname;
+		pathname = pathname.replace(/\/$/, '');
         dataInput(err, dbId, methodRun, response, pathname, table, column, value);
     });
 }
