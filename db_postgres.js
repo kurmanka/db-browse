@@ -65,77 +65,46 @@ function showTableRequest(connection, table, doneReturn) {
             async.parallel([
                 function(done){
                     connection.query("SELECT column_name as Column, data_type as Type, character_maximum_length as mLength, column_default, is_nullable FROM information_schema.columns WHERE table_name=$1;", [table], function(err, result) {
-                        if (err) {
-                            doneReturn(err);
-                        }
-
-                        done(null, result.rows);
+                        done(err, result.rows);
                    });
                 },
 
                 function(done){
                     connection.query('select count(*) as count FROM ' + escape(table) + ';', function(err, result) {
-                        if (err) {
-                            doneReturn(err);
-                        }
-
-                        done(null, result.rows[0].count);
+                        done(err, result.rows[0].count);
                     });
                 },
 
                 function(done){ //show indexes
                     connection.query("SELECT indexname, tablespace, indexdef FROM pg_indexes WHERE tablename = $1;", [table], function(err, result) {
-                        if (err) {
-                            doneReturn(err);
-                        }
-
-                        done(null, result.rows);
+                        done(err, result.rows);
                     });
                 },
 
                 function(done){ //show Foreign-key
                     connection.query("SELECT conname, pg_catalog.pg_get_constraintdef(r.oid, true) as condef FROM pg_catalog.pg_constraint r WHERE r.conrelid ='" + escape(table) + "'::regclass AND r.contype = 'f';", function(err, result) {
-                        if (err) {
-                            doneReturn(err);
-                        }
-
-                        done(null, result.rows);
+                        done(err, result.rows);
                     });
                 },
 
                 function(done){ //show Referenced
                     connection.query("SELECT conname, conrelid::pg_catalog.regclass, pg_catalog.pg_get_constraintdef(c.oid, true) as condef FROM pg_catalog.pg_constraint c WHERE c.confrelid = '" + escape(table) + "'::regclass AND c.contype = 'f';", function(err, result) {
-                        if (err) {
-                            doneReturn(err);
-                        }
-
-                        done(null, result.rows);
+                        done(err, result.rows);
                     });
                 },
 
                 function(done){ //show Triggers
                     connection.query("SELECT pg_catalog.pg_get_triggerdef(t.oid) as creating FROM pg_catalog.pg_trigger t WHERE t.tgrelid = '" + escape(table) + "'::regclass AND t.tgconstraint = 0;", function(err, result) {
-                        if (err) {
-                            doneReturn(err);
-                        }
-
-                        done(null, result.rows);
+                        done(err, result.rows);
                     });
                 },
 
                 function(done){ //show Status
                     connection.query("SELECT * FROM information_schema.tables WHERE table_name = $1;", [table], function(err, result) {
-                        if (err) {
-                            doneReturn(err);
-                        }
-
-                        done(null, result.rows);
+                        done(err, result.rows);
                     });
                 }
-            ],
-            function (err, results) {
-                doneReturn(null, results);
-            });
+            ], doneReturn);
         }
     ]);
 }
@@ -172,27 +141,16 @@ function showValueRequest(connection, table, column, value, limit, doneReturn) {
             async.parallel([
                 function(done){
                     connection.query("select * from " + escape(table) + " where " + escape(column) + "=$1 limit " + limit + ";", [value], function(err, result) {
-                        if (err) {
-                            doneReturn(err);
-                        }
-
-                        done(null, result.rows);
+                        done(err, result.rows);
                     });
                 },
 
                 function(done){
                     connection.query("select count(*) as count from " + escape(table) + " where " + escape(column) + "=$1;", [value], function(err, result) {
-                        if (err) {
-                            doneReturn(err);
-                        }
-
-                        done(null, result.rows[0].count);
+                        done(err, result.rows[0].count);
                     });
                 }
-            ],
-            function (err, results) {
-                doneReturn(err, results);
-            });
+            ], doneReturn);
         }
     ]);
 }
