@@ -194,6 +194,8 @@ function getCurrentDate() {
 }
 
 function loadUser(req, res, next) {
+    if (!config.authenticate) { return next(); }
+    
     var pathname = url.parse(req.url).pathname;
     if (req.session.authentication) {
         next();
