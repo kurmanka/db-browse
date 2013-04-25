@@ -1,12 +1,12 @@
 var requestHandlers = require("./requestHandlers");
 var config = require("./config");
 
-var http = require("http");
 var url = require("url");
 var async = require('async');
 var mysql = require('mysql');
 var pg = require('pg');
 var fs = require("fs");
+
 var express = require("express");
 var app = express();
 
@@ -31,8 +31,6 @@ app.use(express.session(config.session_config));
 var connectionStatus = {};
 
 var loginError = 'This login & password combination is not allowed.';
-
-http.createServer();
 
 app.get('/', loadUser, function(req, res){ //run method selectDatabase
     requestHandlers.selectDatabase(res);
