@@ -16,17 +16,19 @@ app.use(express.cookieParser());
 // very simple loging of the incomming requests to console
 // from http://expressjs.com/api.html#app.use
 app.use(function(req, res, next){
-  console.log('%s %s', req.method, req.url);
 
   if(req.url == '/favicon.ico') {
       requestHandlers.showError(res, "Serve 404. Connect to /favicon.ico.");
   } else {
-      next();
+    console.log('%s %s', req.method, req.url);
+    next();
   }
 });
 
+// logging with response time
+app.use(express.logger('tiny'));
+// sessions
 app.use(express.session(config.session_config));
-
 
 var connectionStatus = {};
 
@@ -193,7 +195,7 @@ function getCurrentDate() {
 
 function loadUser(req, res, next) {
     if (!config.authenticate) { return next(); }
-    
+
     var pathname = url.parse(req.url).pathname;
     if (req.session.authentication) {
         next();
