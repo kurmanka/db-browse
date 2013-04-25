@@ -55,6 +55,13 @@ function objectCheck(connection, doneReturn, done, table, column) {
     });
 }
 
+function rowsCounter(connection, table, done) {
+    connection.query('select count(*) as count FROM ' + escape(table) + ';', function(err, result) {
+//        setTimeout( function() { done(err, result.rows[0].count); }, 10000);
+        done(err, result.rows[0].count);
+    });
+}
+
 function showTableRequest(connection, table, doneReturn) {
     async.waterfall([
         function (done){
@@ -67,12 +74,6 @@ function showTableRequest(connection, table, doneReturn) {
                     connection.query("SELECT column_name as Column, data_type as Type, character_maximum_length as mLength, column_default, is_nullable FROM information_schema.columns WHERE table_name=$1;", [table], function(err, result) {
                         done(err, result.rows);
                    });
-                },
-
-                function(done){
-                    connection.query('select count(*) as count FROM ' + escape(table) + ';', function(err, result) {
-                        done(err, result.rows[0].count);
-                    });
                 },
 
                 function(done){ //show indexes
@@ -127,7 +128,7 @@ function showColumnRequest(connection, column, table, limit, doneReturn) {
     ]);
 }
 
-function showValueRequest(connection, table, column, value, limit, doneReturn) {
+function showValueRequest(connection, table, column, value, doneReturn) {
     async.waterfall([
         function (done){
             objectCheck(connection, doneReturn, done, table);
@@ -138,19 +139,9 @@ function showValueRequest(connection, table, column, value, limit, doneReturn) {
         },
 
         function (done){
-            async.parallel([
-                function(done){
-                    connection.query("select * from " + escape(table) + " where " + escape(column) + "=$1 limit " + limit + ";", [value], function(err, result) {
-                        done(err, result.rows);
-                    });
-                },
-
-                function(done){
-                    connection.query("select count(*) as count from " + escape(table) + " where " + escape(column) + "=$1;", [value], function(err, result) {
-                        done(err, result.rows[0].count);
-                    });
-                }
-            ], doneReturn);
+            connection.query("select * from " + escape(table) + " where " + escape(column) + "=$1;", [value], function(err, result) {
+                doneReturn(err, result.rows);
+            });
         }
     ]);
 }
@@ -165,3 +156,4 @@ exports.showAllTable = showAllTable;
 exports.showTableRequest = showTableRequest;
 exports.showColumnRequest = showColumnRequest;
 exports.showValueRequest = showValueRequest;
+exports.rowsCounter = rowsCounter;

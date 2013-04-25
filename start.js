@@ -175,24 +175,6 @@ function makeConnect (dbId, response, done) {
 
 }
 
-function getCurrentDate() {
-    var date = new Date();
-
-    var year = date.getYear() + 1900;
-    var month = date.getMonth() +1 ;
-
-    if (month < 10) {
-        month = "0" + month;
-    }
-
-    var day = date.getDate();
-    //var hour = date.getHours();
-    //var min = date.getMinutes();
-
-    //return year + '-' + month + '-' + day + "_" + hour + "-" + min;
-    return year + '-' + month + '-' + day;
-}
-
 function loadUser(req, res, next) {
     var pathname = url.parse(req.url).pathname;
     if (req.session.authentication) {

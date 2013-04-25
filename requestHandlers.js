@@ -114,10 +114,10 @@ function showTable(response, connection, pathname, dbType, table_groups, table) 
         if (err) {
             showError (response, err);
         } else {
-            var templatesP = {attrList: results[0], rowsCounter: results[1], indexesArr: results[2], foreignKey: results[3], referenced: results[4], triggers: results[5], statusArr: results[6]};
+            var templatesP = {attrList: results[0], indexesArr: results[1], foreignKey: results[2], referenced: results[3], triggers: results[4], statusArr: results[5]};
 
             if(dbType == 'mysql') {
-                templatesP = {attrList: results[0], rowsCounter: results[1], indexesArr: results[2], statusArr: results[3]};
+                templatesP = {attrList: results[0], indexesArr: results[1], statusArr: results[2]};
             }
 
             templatesP.path = pathname;
@@ -126,7 +126,37 @@ function showTable(response, connection, pathname, dbType, table_groups, table) 
             templatesP.authenticate = authenticate;
 
             just.render('tableDetails', templatesP, function(error, html) {
-                showPage (response, error, html);
+                showPageTotalRecords(response, error, html, db, connection, table);
+            });
+        }
+    });
+}
+
+function showPageTotalRecords (response, error, html, db, connection, table) {
+async.waterfall([
+    function (done) {
+        if (error) {
+            console.log(error);
+        }
+        response.writeHead(200, {"Content-Type": "text/html"});
+        response.write(html);
+        done(null);
+    },
+
+    function (done) {
+        db.rowsCounter(connection, table, done);
+    }
+
+    ], function (err, counter) {
+        if (err) {
+            showError (response, err);
+        } else {
+            just.render('totalRecords', {rowsCounter: counter}, function(error, html_counter) {
+                if (err) {
+                    console.log(err);
+                }
+                response.write(html_counter);
+                response.end();
             });
         }
     });
@@ -158,19 +188,19 @@ function showValue(response, connection, pathname, dbType, table_groups, table, 
     async.waterfall([
         function (done){
             db = getDbType(dbType);
-            db.showValueRequest(connection, table, column, value, limit, done);
+            db.showValueRequest(connection, table, column, value, done);
         }
     ], function (err, results) {
         if (err) {
             showError (response, err);
         }
 
-        else if (results[1] == 0) {
+        else if (results == 0) {
             showError(response, "The value '" + value + "' is not present in column '" + column + "'");
         }
 
         else {
-            just.render('showValues', { values: results[0], rowsCount: results[1], authenticate: authenticate, path: pathname }, function(error, html) {
+            just.render('showValues', { values: results, limit: limit, authenticate: authenticate, path: pathname }, function(error, html) {
                 showPage (response, error, html);
             });
         }
@@ -198,6 +228,7 @@ function showPage (response, error, html, type) {
 
     response.writeHead(200, {"Content-Type": "text/" + type});
     response.write(html);
+
     response.end();
 }
 
