@@ -57,7 +57,7 @@
     <table id = 'indexes'>
     <% for (var i = 0; i < indexesArr.length; i++) {
         if(indexesArr[i].indexdef != '')    {%>
-        <rt>
+        <tr>
             <td><%=indexesArr[i].indexdef%></td>
         </tr>
         <% }
@@ -70,7 +70,7 @@
 
     <table id = 'fkeytable'>
         <% for (var i = 0; i < foreignKey.length; i++) { %>
-        <rt>
+        <tr>
             <td>"<%=foreignKey[i].conname%>" <%=foreignKey[i].condef%></td>
         </tr>
         <% } %>
@@ -82,7 +82,7 @@
 
     <table id = 'referenced'>
         <% for (var i = 0; i < referenced.length; i++) { %>
-        <rt>
+        <tr>
             <td>TABLE "<%=referenced[i].conrelid %>" CONSTRAINT "<%=referenced[i].conname%>" <%=referenced[i].condef%></td>
         </tr>
         <% } %>
@@ -95,7 +95,7 @@
     <table id = 'triggerstable'>
         <% for (var i = 0; i < triggers.length; i++) {
             var trigger = triggers[i].creating.replace(/CREATE TRIGGER/g, ''); %>
-            <rt>
+            <tr>
                 <td><%=trigger%></td>
             </tr>
         <% } %>
@@ -115,7 +115,7 @@
 <table id = 'statusT'>
     <% for (var key in statusArr[0]) {%>
         <% if(key != 'parse' && key != '_typeCast' && statusArr[0][key] != '' && key != 'TABLE_NAME')    {%>
-        <rt>
+        <tr>
             <td><%=key%>: </td>
             <% for (var i = 0; i < statusArr.length; i++) {%>
                 <td class='paddingText'><%=statusArr[i][key]%></td>
