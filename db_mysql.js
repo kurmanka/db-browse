@@ -48,12 +48,18 @@ function objectCheck(connection, doneReturn, done, table, column) {
 
         else if(rows[0].count == 0) {
             doneReturn(select.err);
-			err = select.err;
+            err = select.err;
         }
 
         else {
             done(null);
         }
+    });
+}
+
+function rowsCounter(connection, table, done) {
+    connection.query('select count(*) as count FROM ' + mysql.escapeId(table) + ';', function(err, rows, fields) {
+        done(err, rows[0].count);
     });
 }
 
@@ -72,17 +78,7 @@ function showTableRequest(connection, table, doneReturn) {
                 },
 
                 function(done){
-                    connection.query('select count(*) as count FROM ' + mysql.escapeId(table) + ';', function(err, rows, fields) {
-                        done(err, rows[0].count);
-                    });
-                },
-
-                function(done){
                     connection.query('show create table ' + mysql.escapeId(table) + ';', function(err, rows, fields) {
-                        //if (err) {
-                        //    doneReturn(err);
-                        //}
-
                         getIndexes(rows, done);
                     });
                 },
@@ -136,7 +132,7 @@ function showColumnRequest(connection, column, table, limit, doneReturn) {
     ]);
 }
 
-function showValueRequest(connection, table, column, value, limit, doneReturn) {
+function showValueRequest(connection, table, column, value, doneReturn) {
     async.waterfall([
         function (done){
             objectCheck(connection, doneReturn, done, table);
@@ -147,19 +143,9 @@ function showValueRequest(connection, table, column, value, limit, doneReturn) {
         },
 
         function (done){
-            async.parallel([
-                function(done){
-                    connection.query("select * from " + mysql.escapeId(table) + " where " + mysql.escapeId(column) + "=? limit " + limit + ";", [value], function(err, rows, fields) {
-                        done(err, rows);
-                    });
-                },
-
-                function(done){
-                    connection.query("select count(*) as count from " + mysql.escapeId(table) + " where " + mysql.escapeId(column) + "=?;", [value], function(err, rows, fields) {
-                        done(err, rows[0].count);
-                    });
-                }
-            ], doneReturn);
+            connection.query("select * from " + mysql.escapeId(table) + " where " + mysql.escapeId(column) + "=?;", [value], function(err, rows, fields) {
+                doneReturn(err, rows);
+            });
         }
     ]);
 }
@@ -168,3 +154,4 @@ exports.showAllTable = showAllTable;
 exports.showTableRequest = showTableRequest;
 exports.showColumnRequest = showColumnRequest;
 exports.showValueRequest = showValueRequest;
+exports.rowsCounter = rowsCounter;
