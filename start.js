@@ -1,12 +1,12 @@
 var requestHandlers = require("./requestHandlers");
 var config = require("./config");
 
-var http = require("http");
 var url = require("url");
 var async = require('async');
 var mysql = require('mysql');
 var pg = require('pg');
 var fs = require("fs");
+
 var express = require("express");
 var app = express();
 
@@ -16,23 +16,23 @@ app.use(express.cookieParser());
 // very simple loging of the incomming requests to console
 // from http://expressjs.com/api.html#app.use
 app.use(function(req, res, next){
-  console.log('%s %s', req.method, req.url);
 
   if(req.url == '/favicon.ico') {
       requestHandlers.showError(res, "Serve 404. Connect to /favicon.ico.");
   } else {
-      next();
+    console.log('%s %s', req.method, req.url);
+    next();
   }
 });
 
+// logging with response time
+app.use(express.logger('tiny'));
+// sessions
 app.use(express.session(config.session_config));
-
 
 var connectionStatus = {};
 
 var loginError = 'This login & password combination is not allowed.';
-
-http.createServer();
 
 app.get('/', loadUser, function(req, res){ //run method selectDatabase
     requestHandlers.selectDatabase(res);
@@ -176,6 +176,8 @@ function makeConnect (dbId, response, done) {
 }
 
 function loadUser(req, res, next) {
+    if (!config.authenticate) { return next(); }
+
     var pathname = url.parse(req.url).pathname;
     if (req.session.authentication) {
         next();
