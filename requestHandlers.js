@@ -51,7 +51,7 @@ function start(response, connection, pathname, dbType, tableGroupsFile) {
 
     ], function (err, result) {
         if (err) {
-            showError (response, err);
+            showError (response, err, pathname);
         } else {
             just.render('tableList', { tablesList: result, path: pathname, tableGr: tabGr, authenticate: authenticate }, function(error, html) {
                 showPage (response, error, html);
@@ -112,7 +112,7 @@ function showTable(response, connection, pathname, dbType, table_groups, table) 
 
     ], function (err, results) {
         if (err) {
-            showError (response, err);
+            showError (response, err, pathname);
         } else {
             var templatesP = {attrList: results[0], indexesArr: results[1], foreignKey: results[2], referenced: results[3], triggers: results[4], statusArr: results[5]};
 
@@ -149,7 +149,7 @@ async.waterfall([
 
     ], function (err, counter) {
         if (err) {
-            showError (response, err);
+            showError (response, err, pathname);
         } else {
             just.render('totalRecords', {rowsCounter: counter}, function(error, html_counter) {
                 if (err) {
@@ -173,7 +173,7 @@ function showColumn(response, connection, pathname, dbType, table_groups, table,
 
     ], function (err, results) {
         if (err) {
-            showError (response, err);
+            showError (response, err, pathname);
         } else {
             just.render('columnData', { columnData: results, authenticate: authenticate, path: pathname }, function(error, html) {
                 showPage (response, error, html);
@@ -192,11 +192,11 @@ function showValue(response, connection, pathname, dbType, table_groups, table, 
         }
     ], function (err, results) {
         if (err) {
-            showError (response, err);
+            showError (response, err, pathname);
         }
 
         else if (results == 0) {
-            showError(response, "The value '" + value + "' is not present in column '" + column + "'");
+            showError(response, "The value '" + value + "' is not present in column '" + column + "'", pathname);
         }
 
         else {
@@ -232,11 +232,17 @@ function showPage (response, error, html, type) {
     response.end();
 }
 
-function showError (response, msg) {
-    console.log(msg);
-    response.writeHead(404, {"Content-Type": "text/html"});
-    response.write("404 Status. " + msg);
-    response.end();
+function showError (response, msg, pathname) {
+    just.render('errMsg', { authenticate: authenticate, path: pathname, msg: msg }, function(error, html) {
+        if (error) {
+            console.log(error);
+        }
+
+        console.log(msg);
+        response.writeHead(404, {"Content-Type": "text/html"});
+        response.write(html);
+        response.end();
+    });
 }
 
 function cssConnect (response) {
