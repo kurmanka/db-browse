@@ -18,7 +18,7 @@ app.use(express.cookieParser());
 app.use(function(req, res, next){
 
   if(req.url == '/favicon.ico') {
-      requestHandlers.showError(res, "Serve 404. Connect to /favicon.ico.");
+      requestHandlers.showError(res, "Serve 404. Connect to /favicon.ico.", req.url);
   } else {
     console.log('%s %s', req.method, req.url);
     next();
@@ -91,15 +91,15 @@ app.get('/:dbID/:table/:column/:value', loadUser, function(req, res){ //run meth
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
-function checkConnectShowPage(response, req, dbId, methodRun, table, column, value) {    
+function checkConnectShowPage(response, req, dbId, methodRun, table, column, value) {
     async.waterfall([
         function (done){
             dbConnect(dbId, response, done);
         }
 
     ], function (err) {
-	    var pathname = url.parse(req.url).pathname;
-		pathname = pathname.replace(/\/$/, '');
+        var pathname = url.parse(req.url).pathname;
+        pathname = pathname.replace(/\/$/, '');
         dataInput(err, dbId, methodRun, response, pathname, table, column, value);
     });
 }
@@ -133,7 +133,7 @@ function dataInput(err, dbId, methodRun, response, pathname, table, column, valu
 
     if (err) {
         connectionStatus[dbId].status = false;
-        requestHandlers.showError(response, "Error connecting to the database with id '" + dbId + "'. " + err);
+        requestHandlers.showError(response, "Error connecting to the database with id '" + dbId + "'. " + err, pathname);
     } else {
         connectionStatus[dbId].status = true;
         if (config.db[dbId].table_groups) {
@@ -147,7 +147,7 @@ function makeConnect (dbId, response, done) {
     console.log("Connect to database " + dbId + " ...");
     var c = config.db[dbId];
     if (!c) {
-        requestHandlers.showError(response, "The database with id '" +  dbId + "' is absent in the configuration");
+        requestHandlers.showError(response, "The database with id '" +  dbId + "' is absent in the configuration", pathname);
         return;
     }
     if (c.type == 'mysql') {
