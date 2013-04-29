@@ -247,7 +247,7 @@ function showError (response, msg, pathname) {
 
 function cssConnect (response) {
     justStyle.render('style', {}, function(error, html) {
-        showPage (response, error, html);
+        showPage (response, error, html, 'css');
     });
 }
 
