@@ -1,0 +1,28 @@
+<% this.extend('parent', { title: 'SQL', breadcrumbs_path: path }); %>
+
+<div class='sql'><a> <%=sql%> </a></div>
+
+<% if (results.length > 0) { %>
+    <table class='light'>
+        <tr>
+            <% for (var key in results[0]) {
+                if (key != 'parse' && key != '_typeCast') {%>
+                    <th><%=key%></th>
+                <% }
+            } %>
+        </tr>
+
+        <% for (var i = 0; i < results.length; i++) { %>
+        <tr>
+            <% for (var key in results[0]) {
+                if (key != 'parse' && key != '_typeCast') { %>
+                    <td class = 'data'><%=results[i][key]%></td>
+                <% }
+            } %>
+        </tr>
+        <% } %>
+
+    </table>
+<% } else { %>
+    <a> 0 rows </a>
+<% } %>

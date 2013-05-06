@@ -53,7 +53,7 @@ function start(response, connection, pathname, dbType, tableGroupsFile) {
         if (err) {
             showError (response, err, pathname);
         } else {
-            just.render('tableList', { tablesList: result, path: pathname, tableGr: tabGr, authenticate: authenticate }, function(error, html) {
+            just.render('tableList', { tablesList: result, path: pathname, tableGr: tabGr, authenticate: authenticate, path_sql: pathname + ":sql"}, function(error, html) {
                 showPage (response, error, html);
             });
         }
@@ -251,6 +251,35 @@ function cssConnect (response) {
     });
 }
 
+function sqlRequest(response, connection, dbType, sql, pathname) {
+    async.waterfall([
+        function (done){
+            if ( /ALTER|create|drop/i.exec(sql) ) {
+                 showError (response, "Request '" + sql + "' can not be executed", pathname);
+            } else {
+                done(null);
+            }
+        },
+
+        function (done){
+            pathname = pathname.replace(/\:/, '/');
+            var db = getDbType(dbType);
+            db.getSQL(connection, sql, done);
+        }
+
+    ], function (err, results) {
+        if (err) {
+            showError (response, err, pathname);
+        }
+
+        else {
+            just.render('showSqlRequest', { authenticate: authenticate, path: pathname, sql: sql, results: results }, function(error, html) {
+                showPage (response, error, html);
+            });
+        }
+    });
+}
+
 exports.start = start;
 exports.login = login;
 exports.showTable = showTable;
@@ -259,3 +288,4 @@ exports.showColumn = showColumn;
 exports.showError = showError;
 exports.selectDatabase = selectDatabase;
 exports.showValue = showValue;
+exports.sqlRequest = sqlRequest;

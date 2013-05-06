@@ -46,6 +46,17 @@ app.get('/main.js', function(req, res){ //connect to main.js file(login form)
     requestHandlers.mainConnect(res);
 });
 
+app.post('/:dbId\:sql', function(req, res){
+    var pathname = url.parse(req.url).pathname;
+    var dbId = pathname.replace(/\:sql|\//g, '');
+
+    if (req.body.sql) {
+        requestHandlers.sqlRequest(res, connectionStatus[dbId].connection, config.db[dbId].type, req.body.sql, pathname);
+    } else {
+        res.redirect('/' + dbId);
+    }
+});
+
 app.post('/*', function(req, res){ //get and check users data
     var pathname = url.parse(req.url).pathname;
     var result = config.authenticate(req.body.user, req.body.pass);
