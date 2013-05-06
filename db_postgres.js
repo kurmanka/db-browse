@@ -146,6 +146,20 @@ function showValueRequest(connection, table, column, value, doneReturn) {
     ]);
 }
 
+function getSQL (connection, sql, doneReturn){
+    connection.query(sql, function(err, result) {
+        if (err) {
+            err = err + " in request '" + sql + "'";
+        }
+
+        if (result) {
+            doneReturn(err, result.rows);
+        } else {
+            doneReturn(err);
+        }
+    });
+}
+
 function escape (text) {
     text = text.replace(/\%20|;|,|\%22|\%27/g, '\\$&');
 
@@ -157,3 +171,4 @@ exports.showTableRequest = showTableRequest;
 exports.showColumnRequest = showColumnRequest;
 exports.showValueRequest = showValueRequest;
 exports.rowsCounter = rowsCounter;
+exports.getSQL = getSQL;

@@ -150,8 +150,19 @@ function showValueRequest(connection, table, column, value, doneReturn) {
     ]);
 }
 
+function getSQL (connection, sql, doneReturn){
+    connection.query(sql, function(err, rows, fields) {
+        if (err) {
+            err = err + " in request '" + sql + "'";
+        }
+
+        doneReturn(err, rows);
+    });
+}
+
 exports.showAllTable = showAllTable;
 exports.showTableRequest = showTableRequest;
 exports.showColumnRequest = showColumnRequest;
 exports.showValueRequest = showValueRequest;
 exports.rowsCounter = rowsCounter;
+exports.getSQL = getSQL;

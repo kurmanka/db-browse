@@ -137,3 +137,29 @@ TABLE#statusT {
 .breadcrumbs {
     margin-left: 2em;
 }
+
+div.name {
+    margin-top: 40px;
+}
+
+div.sql {
+    margin-top: 10px;
+}
+
+div.submit {
+    margin-top: 10px;
+}
+
+input[name='name'] {
+    width: 270px;
+    margin-right: 10px;
+}
+
+textarea[name='sql'] {
+    width: 540px;
+    height: 220px;
+}
+
+.sql {
+    margin: 0px 0px 20px 0px;
+}
