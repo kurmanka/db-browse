@@ -9,6 +9,7 @@ var justJS    = new JUST({ root: './view', useCache: just_usecache, ext: '.js' }
 
 var mysql    = require('./db_mysql.js');
 var postgres = require('./db_postgres.js');
+var sqlite = require('./sqliteDB.js');
 
 var async = require('async');
 
@@ -251,7 +252,7 @@ function cssConnect (response) {
     });
 }
 
-function sqlRequest(response, connection, dbType, sql, pathname) {
+function sqlRequest(response, connection, dbType, sql, pathname, dbId, reqName, user) {
     async.waterfall([
         function (done){
             if ( /ALTER|create|drop/i.exec(sql) ) {
@@ -270,11 +271,22 @@ function sqlRequest(response, connection, dbType, sql, pathname) {
     ], function (err, results) {
         if (err) {
             showError (response, err, pathname);
-        }
+        } else {
+            async.parallel([
+                function(done){
+                    sqlite.saveRequest(sql, dbId, reqName, user, done);
+                },
 
-        else {
-            just.render('showSqlRequest', { authenticate: authenticate, path: pathname, sql: sql, results: results }, function(error, html) {
-                showPage (response, error, html);
+                function(done){
+                    just.render('showSqlRequest', { authenticate: authenticate, path: pathname, sql: sql, results: results }, function(error, html) {
+                        showPage (response, error, html);
+                        done(null);
+                    });
+                }
+            ], function (err, results) {
+                if (err) {
+                    showError(response, err, pathname);
+                }
             });
         }
     });

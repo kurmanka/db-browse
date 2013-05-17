@@ -47,11 +47,10 @@ app.get('/main.js', function(req, res){ //connect to main.js file(login form)
 });
 
 app.post(/^\/(\w+):sql$/, function(req, res){
-    var pathname = url.parse(req.url).pathname;
     var dbId = req.params[0];
 
     if (req.body.sql) {
-        requestHandlers.sqlRequest(res, connectionStatus[dbId].connection, config.db[dbId].type, req.body.sql, pathname);
+        checkConnectShowPage(res, req, dbId, requestHandlers.sqlRequest, '', '', '', req.body.sql, req.body.name, req.session.user);
     } else {
         res.redirect('/' + dbId);
     }
@@ -64,6 +63,7 @@ app.post('/*', function(req, res){ //get and check users data
         requestHandlers.login(res, pathname, loginError);
     } else {
         req.session.authentication = true;
+        req.session.user = req.body.user;
 
         if (pathname) {
             res.redirect(pathname);
@@ -102,7 +102,7 @@ app.get('/:dbID/:table/:column/:value', loadUser, function(req, res){ //run meth
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
-function checkConnectShowPage(response, req, dbId, methodRun, table, column, value) {
+function checkConnectShowPage(response, req, dbId, methodRun, table, column, value, sql, sqlName, user) {
     async.waterfall([
         function (done){
             dbConnect(dbId, response, done);
@@ -111,7 +111,7 @@ function checkConnectShowPage(response, req, dbId, methodRun, table, column, val
     ], function (err) {
         var pathname = url.parse(req.url).pathname;
         pathname = pathname.replace(/\/$/, '');
-        dataInput(err, dbId, methodRun, response, pathname, table, column, value);
+        dataInput(err, dbId, methodRun, response, pathname, table, column, value, sql, sqlName, user);
     });
 }
 
@@ -139,7 +139,7 @@ function dbConnect(dbId, response, done) {
     }
 }
 
-function dataInput(err, dbId, methodRun, response, pathname, table, column, value) {
+function dataInput(err, dbId, methodRun, response, pathname, table, column, value, sql, sqlName, user) {
     var table_groups = '';
 
     if (err) {
@@ -150,7 +150,12 @@ function dataInput(err, dbId, methodRun, response, pathname, table, column, valu
         if (config.db[dbId].table_groups) {
             table_groups = config.db[dbId].table_groups;
         }
-        methodRun(response, connectionStatus[dbId].connection, pathname, config.db[dbId].type, table_groups, table, column, value);
+
+        if (sql) {
+            methodRun(response, connectionStatus[dbId].connection, config.db[dbId].type, sql, pathname, dbId, sqlName, user);
+        } else {
+            methodRun(response, connectionStatus[dbId].connection, pathname, config.db[dbId].type, table_groups, table, column, value);
+        }
     }
 }
 
@@ -196,4 +201,3 @@ function loadUser(req, res, next) {
         requestHandlers.login(res, pathname, '');
     }
 }
-
