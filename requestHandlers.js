@@ -292,6 +292,42 @@ function sqlRequest(response, connection, dbType, sql, pathname, dbId, reqName, 
     });
 }
 
+function sqlHistory (response) {
+    var limit = 20;
+
+    async.waterfall([
+        function (done){
+            sqlite.history(done);
+        }
+
+    ], function (err, results) {
+        if (err) {
+            showError (response, err, pathname);
+        } else {
+            just.render('sqlHistory', { values: results, limit: limit, authenticate: authenticate}, function(error, html) {
+                showPage (response, error, html);
+            });
+        }
+    });
+}
+
+function sqlDetails (response, sqlId) {
+    async.waterfall([
+        function (done){
+            sqlite.details(done, sqlId);
+        }
+
+    ], function (err, results) {
+        if (err) {
+            showError (response, err, pathname);
+        } else {
+            just.render('sqlDetails', { values: results, authenticate: authenticate, sqlId: sqlId, databaseList: config.db}, function(error, html) {
+                showPage (response, error, html);
+            });
+        }
+    });
+}
+
 exports.start = start;
 exports.login = login;
 exports.showTable = showTable;
@@ -301,3 +337,5 @@ exports.showError = showError;
 exports.selectDatabase = selectDatabase;
 exports.showValue = showValue;
 exports.sqlRequest = sqlRequest;
+exports.sqlHistory  = sqlHistory;
+exports.sqlDetails  = sqlDetails;

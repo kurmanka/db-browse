@@ -33,6 +33,13 @@ table.light tr td {
     padding: 4px;
 }
 
+table.details td{
+    padding: 0px 20px 5px 0px;
+}
+
+#sqlname {
+    min-width: 460px;
+}
 
 #loginform {
     margin: 20% 0 20% 0;
@@ -113,6 +120,10 @@ TABLE#statusT {
     padding-bottom:10px;
 }
 
+#history {
+    margin-top: 20px;
+}
+
 .type {
     margin-top: 20px;
     padding-bottom:10px;
@@ -158,6 +169,23 @@ input[name='name'] {
 textarea[name='sql'] {
     width: 540px;
     height: 220px;
+}
+
+textarea[name='comment'] {
+    width: 540px;
+    height: 60px;
+}
+
+#comment {
+    margin: 10px 0px 10px 0px;
+}
+
+#remove {
+    margin-left: 310px;
+}
+
+#save {
+    margin-left: 20px;
 }
 
 .sql {

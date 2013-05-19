@@ -46,7 +46,7 @@ app.get('/main.js', function(req, res){ //connect to main.js file(login form)
     requestHandlers.mainConnect(res);
 });
 
-app.post(/^\/(\w+):sql$/, function(req, res){
+app.post(/^\/(\w+):sql$/, function(req, res){ //select to sqlite db
     var dbId = req.params[0];
 
     if (req.body.sql) {
@@ -71,6 +71,16 @@ app.post('/*', function(req, res){ //get and check users data
             res.redirect('/');
         }
     }
+});
+
+app.get(/(\/\:sql)$/, function(req, res){ //History of previous SQL
+    requestHandlers.sqlHistory(res);
+});
+
+app.get(/\/\:sql\/\d+/, function(req, res){ //Sql details page-form
+    var pathname = url.parse(req.url).pathname;
+    var sqlId = /(\d+)$/.exec(pathname);
+    requestHandlers.sqlDetails(res, sqlId[0]);
 });
 
 app.get('/logout', function(req, res){ //logout

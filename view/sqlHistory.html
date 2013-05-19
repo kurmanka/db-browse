@@ -1,0 +1,25 @@
+<% this.extend('parent', { title: "History of previous SQL", breadcrumbs_path: "/" }); %>
+
+<table class='light'>
+    <tr>
+        <% for (var key in values[0]) {
+            if (key != 'id') { %>
+                <th><%=key%></th>
+            <% }
+        } %>
+    </tr>
+
+    <% for (var i = 0; i < Math.min(values.length, limit); i++) { %>
+    <tr>
+        <% for (var key in values[0]) {
+            if (key != 'id') {
+                if (key == 'sql') { %>
+                    <td class = 'data'><a href="/:sql/<%=values[i].id%>"><%=values[i][key]%></a></td>
+                <% } else { %>
+                    <td class = 'data'><%=values[i][key]%></td>
+                <% }
+            }
+        } %>
+    </tr>
+    <% } %>
+</table>

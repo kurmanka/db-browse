@@ -1,9 +1,11 @@
 var sqlite = require('sqlite3').verbose();
 var async = require('async');
 
+var connectStatus = {};
+var db;
+
 function saveRequest(sql, dbId, reqName, user, doneReturn) {
     sql = sql.replace(/;/g, '');
-    var db = new sqlite.Database('usersRequests.sqlite.sqlite');
     var created_at = getCurrentDate();
     var last_used = getCurrentDate();
     var newId = 1;
@@ -11,7 +13,7 @@ function saveRequest(sql, dbId, reqName, user, doneReturn) {
 
     async.waterfall([
         function(done){
-            dbCheck(db, done);
+            connectCheck(done);
         },
 
         function(done){
@@ -41,6 +43,16 @@ function saveRequest(sql, dbId, reqName, user, doneReturn) {
     });
 }
 
+function connectCheck(done) {
+    if (!connectStatus.db) {
+        connectStatus.db = new sqlite.Database('usersRequests.sqlite');
+        db = connectStatus.db;
+        dbCheck(db, done);
+    } else {
+        done(null);
+    }
+}
+
 function dbCheck(db, done) {
     db.serialize(function() {
         db.run("CREATE TABLE IF NOT EXISTS sql (id INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL , sql TEXT NOT NULL , name VARCHAR, comment TEXT, dbid VARCHAR NOT NULL , created_by VARCHAR NOT NULL , created_at DATETIME NOT NULL , used_times INTEGER NOT NULL  DEFAULT 0, last_used DATETIME NOT NULL )");
@@ -66,4 +78,47 @@ function getCurrentDate() {
     //return year + '-' + month + '-' + day;
 }
 
+function history(doneReturn) {
+    var sqlArray = [];
+    var rowsCounter;
+
+    async.waterfall([
+        function(done){
+            connectCheck(done);
+        },
+
+        function(done){
+            db.each("SELECT count(*) as counter FROM sql", function(err, row) {
+                rowsCounter = row.counter;
+                done(err);
+            });
+        },
+
+        function(done){
+            db.each("SELECT id, name, substr(sql, 1, 120) as sql, comment, dbid, created_by, last_used FROM sql order by used_times desc", function(err, row) {
+                sqlArray.push(row);
+                if (sqlArray.length == rowsCounter) {
+                    doneReturn(err, sqlArray);
+                }
+            });
+        }
+    ]);
+}
+
+function details(doneReturn, sqlId) {
+    async.waterfall([
+        function(done){
+            connectCheck(done);
+        },
+
+        function(done){
+            db.each("SELECT * FROM sql where id = " + sqlId, function(err, row) {
+                doneReturn(err, row);
+            });
+        }
+    ]);
+}
+
 exports.saveRequest = saveRequest;
+exports.history = history;
+exports.details = details;

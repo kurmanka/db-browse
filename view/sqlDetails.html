@@ -1,0 +1,54 @@
+<% this.extend('parent', { title: "Sql details page-form", breadcrumbs_path: "/:sql/sqlId" }); %>
+
+<form method="post" name="sql_details" action='/<%=values.dbid%>:sql'>
+
+<table class='details'>
+    <tr>
+        <td>id</td>
+        <td><%=values.id%></td>
+    </tr>
+    <tr>
+        <td>name</td>
+        <td><input type='text' id='sqlname' name='name' value = <%=values.name%>></td>
+    </tr>
+    <tr>
+        <td>database</td>
+        <td>
+           <SELECT name="db">
+               <OPTION VALUE=<%=values.dbid%> SELECTED><%=values.dbid%></OPTION>
+               <% for(var key in databaseList) {
+                   if (key != values.dbid) { %>
+                       <OPTION VALUE='<%=key%>'><%=key%></OPTION>
+                   <% }
+               } %>
+            </SELECT>
+        </td>
+    </tr>
+</table>
+
+<div><textarea name='sql'><%=values.sql%></textarea></div>
+
+<div id='comment'><textarea name='comment'>comment...</textarea></div>
+
+<table class='details'>
+    <tr>
+        <td>created:</td>
+        <td><%=values.created_at%></td>
+    </tr>
+    <tr>
+        <td>times used:</td>
+        <td><%=values.used_times%></td>
+    </tr>
+    <tr>
+        <td>last used:</td>
+        <td><%=values.last_used%></td>
+    </tr>
+</table>
+
+<div class='submit'>
+    <button type='submit' id='run'>Execute</button>
+    <button type='submit' id='save'>Save</button>
+    <button type='submit' id='remove'>Remove</button>
+</div>
+
+</form>
