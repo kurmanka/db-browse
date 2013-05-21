@@ -4,12 +4,14 @@ var async = require('async');
 var connectStatus = {};
 var db;
 
-function saveRequest(sql, dbId, reqName, user, doneReturn) {
+function saveRequest(sql, dbId, reqName, user, comment, doneReturn) {
     sql = sql.replace(/;/g, '');
-    var created_at = getCurrentDate();
+    var created_at = getCurrentDate();;
     var last_used = getCurrentDate();
     var newId = 1;
     var used_timeNew = 1;
+    var commentNew = comment;
+    var nameNew = reqName;
 
     async.waterfall([
         function(done){
@@ -26,10 +28,16 @@ function saveRequest(sql, dbId, reqName, user, doneReturn) {
         },
 
         function(done){
-            db.each("SELECT max(used_times) as ut, id FROM sql WHERE sql = '" + sql + "'", function(err, row) {
+            db.each("SELECT max(used_times) as ut, id, comment, name, created_at FROM sql WHERE sql = '" + sql + "'", function(err, row) {
                 if (row.ut) {
                     used_timeNew = parseInt(row.ut) + 1;
+                    created_at = row.created_at;
                     newId = row.id;
+                    if (!commentNew) {
+                        commentNew = row.comment;
+                    } if (!nameNew) {
+                        nameNew = row.name;
+                    }
                     db.each("delete FROM sql WHERE sql = '" + sql + "'", function(err, row) {});
                 }
                 done(err);
@@ -37,11 +45,47 @@ function saveRequest(sql, dbId, reqName, user, doneReturn) {
         }
     ], function (err) {
         var stmt = db.prepare("INSERT INTO sql VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        stmt.run(newId, sql, reqName, '', dbId, user, created_at, used_timeNew, last_used);
+        stmt.run(newId, sql, nameNew, commentNew, dbId, user, created_at, used_timeNew, last_used);
         stmt.finalize();
         doneReturn(err);
     });
 }
+
+function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, type) {
+    sql = sql.replace(/;/g, '');
+    var created_at;
+    var last_used;
+    var used_time;
+
+    async.waterfall([
+        function(done){
+            connectCheck(done);
+        },
+
+        function(done){
+            db.each("SELECT max(used_times) as ut, id, comment, name, created_at, last_used FROM sql WHERE id = " + sqlId, function(err, row) {
+                if (row.id) {
+                    created_at = row.created_at;
+                    if (type == 'save') {
+                        used_time = row.ut;
+                        last_used = row.last_used;
+                    } else {
+                        used_time = parseInt(row.ut) + 1;
+                        last_used = getCurrentDate();
+                    }
+                    db.each("delete FROM sql WHERE id = " + sqlId, function(err, row) {});
+                }
+                done(err);
+            });
+        }
+    ], function (err) {
+        var stmt = db.prepare("INSERT INTO sql VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        stmt.run(sqlId, sql, reqName, comment, dbId, user, created_at, used_time, last_used);
+        stmt.finalize();
+        doneReturn(err);
+    });
+}
+
 
 function connectCheck(done) {
     if (!connectStatus.db) {
@@ -90,7 +134,11 @@ function history(doneReturn) {
         function(done){
             db.each("SELECT count(*) as counter FROM sql", function(err, row) {
                 rowsCounter = row.counter;
-                done(err);
+                if (rowsCounter == 0) {
+                    doneReturn(err);
+                } else {
+                    done(err);
+                }
             });
         },
 
@@ -119,6 +167,21 @@ function details(doneReturn, sqlId) {
     ]);
 }
 
+function remove(sqlId, doneReturn) {
+    async.waterfall([
+        function(done){
+            connectCheck(done);
+        },
+
+        function(done){
+            db.each("delete FROM sql WHERE id = " + sqlId, function(err, row) {});
+            doneReturn(null);
+        }
+    ]);
+}
+
 exports.saveRequest = saveRequest;
 exports.history = history;
 exports.details = details;
+exports.changeRequest = changeRequest;
+exports.remove = remove;

@@ -1,6 +1,6 @@
 <% this.extend('parent', { title: "Sql details page-form", breadcrumbs_path: "/:sql/sqlId" }); %>
 
-<form method="post" name="sql_details" action='/<%=values.dbid%>:sql'>
+<form method="post" name="sql_details" action='/<%=values.dbid%>:sql/<%=sqlId%>'>
 
 <table class='details'>
     <tr>
@@ -28,7 +28,8 @@
 
 <div><textarea name='sql'><%=values.sql%></textarea></div>
 
-<div id='comment'><textarea name='comment'>comment...</textarea></div>
+<%var comment = values.comment || 'comment...'%>
+<div id='comment'><textarea name='comment'><%=comment%></textarea></div>
 
 <table class='details'>
     <tr>
@@ -46,9 +47,9 @@
 </table>
 
 <div class='submit'>
-    <button type='submit' id='run'>Execute</button>
-    <button type='submit' id='save'>Save</button>
-    <button type='submit' id='remove'>Remove</button>
+    <input type='submit' name='run' value='Execute'>
+    <input type='submit' name='run' value='Save' id='save'>
+    <input type='submit' name='run' value='Remove' id='remove'>
 </div>
 
 </form>

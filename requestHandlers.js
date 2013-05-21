@@ -234,7 +234,7 @@ function showPage (response, error, html, type) {
 }
 
 function showError (response, msg, pathname) {
-    just.render('errMsg', { authenticate: authenticate, path: pathname, msg: msg }, function(error, html) {
+    just.render('msg', { breadcrumbs_path: pathname, title: "404 Status", authenticate: authenticate, msg: msg }, function(error, html) {
         if (error) {
             console.log(error);
         }
@@ -252,7 +252,13 @@ function cssConnect (response) {
     });
 }
 
-function sqlRequest(response, connection, dbType, sql, pathname, dbId, reqName, user) {
+function sqlRequest(response, connection, dbType, sql, pathname, dbId, reqName, user, comment, path_breadcrumbs, sqlId) {
+   var path = pathname.replace(/\:/, '/');;
+   var type = '';
+   if(path_breadcrumbs) {
+       path = path_breadcrumbs;
+       type='total change';
+   }
     async.waterfall([
         function (done){
             if ( /ALTER|create|drop/i.exec(sql) ) {
@@ -263,7 +269,6 @@ function sqlRequest(response, connection, dbType, sql, pathname, dbId, reqName, 
         },
 
         function (done){
-            pathname = pathname.replace(/\:/, '/');
             var db = getDbType(dbType);
             db.getSQL(connection, sql, done);
         }
@@ -274,11 +279,15 @@ function sqlRequest(response, connection, dbType, sql, pathname, dbId, reqName, 
         } else {
             async.parallel([
                 function(done){
-                    sqlite.saveRequest(sql, dbId, reqName, user, done);
+                    if (sqlId) {
+                        sqlite.changeRequest(sql, dbId, reqName, user, comment, done, sqlId, 'execute');
+                    } else {
+                        sqlite.saveRequest(sql, dbId, reqName, user, comment, done);
+                    }
                 },
 
                 function(done){
-                    just.render('showSqlRequest', { authenticate: authenticate, path: pathname, sql: sql, results: results }, function(error, html) {
+                    just.render('showSqlRequest', { authenticate: authenticate, path: path, sql: sql, results: results }, function(error, html) {
                         showPage (response, error, html);
                         done(null);
                     });
@@ -328,6 +337,44 @@ function sqlDetails (response, sqlId) {
     });
 }
 
+function sqlSave (response, sql, reqName, comment, dbId, user, sqlId, type) {
+    var bc_path = '/' + dbId + '/:sql/' + sqlId + '/saved';
+
+    async.waterfall([
+        function (done){
+            sqlite.changeRequest(sql, dbId, reqName, user, comment, done, sqlId, 'save');
+        }
+
+    ], function (err, results) {
+        if (err) {
+            showError (response, err, bc_path);
+        } else {
+            just.render('msg', { breadcrumbs_path: bc_path, title: 'Saving status', msg: 'Saving was successful!', authenticate: authenticate}, function(error, html) {
+                showPage (response, error, html);
+            });
+        }
+    });
+}
+
+function sqlRemove (response, sqlId, dbId) {
+    var bc_path = '/' + dbId + '/:sql/' + sqlId;
+
+    async.waterfall([
+        function (done){
+            sqlite.remove(sqlId, done);
+        }
+
+    ], function (err, results) {
+        if (err) {
+            showError (response, err, bc_path);
+        } else {
+            just.render('msg', { breadcrumbs_path: bc_path, title: 'Removing status', msg: 'Removing was successful!', authenticate: authenticate}, function(error, html) {
+                showPage (response, error, html);
+            });
+        }
+    });
+}
+
 exports.start = start;
 exports.login = login;
 exports.showTable = showTable;
@@ -339,3 +386,5 @@ exports.showValue = showValue;
 exports.sqlRequest = sqlRequest;
 exports.sqlHistory  = sqlHistory;
 exports.sqlDetails  = sqlDetails;
+exports.sqlSave = sqlSave;
+exports.sqlRemove = sqlRemove;

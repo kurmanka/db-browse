@@ -46,13 +46,37 @@ app.get('/main.js', function(req, res){ //connect to main.js file(login form)
     requestHandlers.mainConnect(res);
 });
 
-app.post(/^\/(\w+):sql$/, function(req, res){ //select to sqlite db
+app.post(/^\/(\w+):sql\/*(\d)*/, loadUser, function(req, res){ //select to sqlite db
     var dbId = req.params[0];
+    if (req.body.db) {
+        dbId = req.body.db;
+    }
+    var sqlId = req.params[1];
+    var comment = req.body.comment;
+    if(comment == 'comment...'){
+        comment = '';
+    }
 
     if (req.body.sql) {
-        checkConnectShowPage(res, req, dbId, requestHandlers.sqlRequest, '', '', '', req.body.sql, req.body.name, req.session.user);
+        if (req.body.run == 'Execute') {
+            var path_breadcrumbs = '/' + dbId + '/:sql/' + sqlId + '/show';
+            checkConnectShowPage(res, req, dbId, requestHandlers.sqlRequest, '', '', '', req.body.sql, req.body.name, req.session.user, comment, path_breadcrumbs, sqlId);
+        }
+        else if (req.body.run == 'Save'){
+            requestHandlers.sqlSave(res, req.body.sql, req.body.name, comment, dbId, req.session.user, sqlId);
+        }
+        else if (req.body.run == 'Remove'){
+            requestHandlers.sqlRemove(res, sqlId, dbId);
+        }
+        else {
+            checkConnectShowPage(res, req, dbId, requestHandlers.sqlRequest, '', '', '', req.body.sql, req.body.name, req.session.user);
+        }
     } else {
-        res.redirect('/' + dbId);
+        if (req.body.run) {
+            res.redirect('/:sql/' + sqlId);
+        } else {
+            res.redirect('/' + dbId);
+        }
     }
 });
 
@@ -73,11 +97,11 @@ app.post('/*', function(req, res){ //get and check users data
     }
 });
 
-app.get(/(\/\:sql)$/, function(req, res){ //History of previous SQL
+app.get(/(\/\:sql)$/, loadUser, function(req, res){ //History of previous SQL
     requestHandlers.sqlHistory(res);
 });
 
-app.get(/\/\:sql\/\d+/, function(req, res){ //Sql details page-form
+app.get(/\/\:sql\/\d+/, loadUser, function(req, res){ //Sql details page-form
     var pathname = url.parse(req.url).pathname;
     var sqlId = /(\d+)$/.exec(pathname);
     requestHandlers.sqlDetails(res, sqlId[0]);
@@ -112,20 +136,21 @@ app.get('/:dbID/:table/:column/:value', loadUser, function(req, res){ //run meth
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
-function checkConnectShowPage(response, req, dbId, methodRun, table, column, value, sql, sqlName, user) {
+function checkConnectShowPage(response, req, dbId, methodRun, table, column, value, sql, sqlName, user, comment, path_breadcrumbs, sqlId) {
+    var pathname = url.parse(req.url).pathname;
+    pathname = pathname.replace(/\/$/, '');
+
     async.waterfall([
         function (done){
-            dbConnect(dbId, response, done);
+            dbConnect(dbId, response, done, pathname);
         }
 
     ], function (err) {
-        var pathname = url.parse(req.url).pathname;
-        pathname = pathname.replace(/\/$/, '');
-        dataInput(err, dbId, methodRun, response, pathname, table, column, value, sql, sqlName, user);
+        dataInput(err, dbId, methodRun, response, pathname, table, column, value, sql, sqlName, user, comment, path_breadcrumbs, sqlId);
     });
 }
 
-function dbConnect(dbId, response, done) {
+function dbConnect(dbId, response, done, pathname) {
     if (!connectionStatus[dbId]) {
         connectionStatus[dbId] = {
             status: false,
@@ -137,7 +162,7 @@ function dbConnect(dbId, response, done) {
         connectionStatus[dbId].connection.query("SELECT NOW();", function(err, rows, fields) {
             if (err) {
                 connectionStatus[dbId].status = false;
-                makeConnect (dbId, response, done);
+                makeConnect (dbId, response, done, pathname);
             } else {
                 done(null);
             }
@@ -145,11 +170,11 @@ function dbConnect(dbId, response, done) {
     }
 
     if (connectionStatus[dbId].status == false) {
-        makeConnect (dbId, response, done);
+        makeConnect (dbId, response, done, pathname);
     }
 }
 
-function dataInput(err, dbId, methodRun, response, pathname, table, column, value, sql, sqlName, user) {
+function dataInput(err, dbId, methodRun, response, pathname, table, column, value, sql, sqlName, user, comment, path_breadcrumbs, sqlId) {
     var table_groups = '';
 
     if (err) {
@@ -162,14 +187,14 @@ function dataInput(err, dbId, methodRun, response, pathname, table, column, valu
         }
 
         if (sql) {
-            methodRun(response, connectionStatus[dbId].connection, config.db[dbId].type, sql, pathname, dbId, sqlName, user);
+            methodRun(response, connectionStatus[dbId].connection, config.db[dbId].type, sql, pathname, dbId, sqlName, user, comment, path_breadcrumbs, sqlId);
         } else {
             methodRun(response, connectionStatus[dbId].connection, pathname, config.db[dbId].type, table_groups, table, column, value);
         }
     }
 }
 
-function makeConnect (dbId, response, done) {
+function makeConnect (dbId, response, done, pathname) {
     console.log("Connect to database " + dbId + " ...");
     var c = config.db[dbId];
     if (!c) {
@@ -205,6 +230,9 @@ function loadUser(req, res, next) {
     if (!config.authenticate) { return next(); }
 
     var pathname = url.parse(req.url).pathname;
+    if ( /^\/(\w+):sql\/*(\d)*/.exec(pathname) ) {
+        pathname = '/';
+    }
     if (req.session.authentication) {
         next();
     } else {
