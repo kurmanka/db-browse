@@ -23,6 +23,9 @@
                         <% global_ref = global_ref + ref; %>
                         <% breadcrumbs_path = breadcrumbs_path.replace(/\/[^\/]+/, ''); %>
                         <% ref_name = /[^\/]+/.exec(ref); %>
+                        <% if ( /\:sql/.exec(ref_name) ) {
+                            ref_name = 'SQL';
+                        } %>
                         <a href = <%=global_ref%> > <%=ref_name%> </a>
                     <% } %>
                 <% } %>

@@ -17,6 +17,7 @@
     "express": "~3.1.1"
   },
   "dependencies": {
-    "connect-session-file": "~1.0.4"
+    "connect-session-file": "~1.0.4",
+    "sqlite3": "~2.1.7"
   }
 }
