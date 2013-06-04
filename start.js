@@ -214,8 +214,13 @@ function makeConnect (dbId, response, done, pathname) {
         });
     }
     else if (c.type == 'postgres') {
-        var conString = "tcp://" + c.user + ":" + c.password + "@" + c.host + "/" + c.database;
-        connectionStatus[dbId].connection = new pg.Client(conString);
+        connectionStatus[dbId].connection = new pg.Client({
+            host     : c.host,
+            user     : c.user,
+            password : c.password,
+            database : c.database,
+            port     : c.port
+        });
 
         connectionStatus[dbId].connection.connect(function(err) {
             done(err);
