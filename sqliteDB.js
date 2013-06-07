@@ -64,7 +64,7 @@ function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, typ
         function(done){
             db.each(
                 "SELECT max(used_times) as ut, id, comment, name, created_at, last_used "
-                "FROM sql WHERE id=?", sqlId, function(err, row) {
+                +"FROM sql WHERE id=?", sqlId, function(err, row) {
                 if (row.id) {
                     created_at = row.created_at;
                     if (type == 'save') {
