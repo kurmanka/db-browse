@@ -233,8 +233,12 @@ function showPage (response, error, html, type) {
     response.end();
 }
 
-function showError (response, msg, pathname) {
-    just.render('msg', { breadcrumbs_path: pathname, title: "404 Status", authenticate: authenticate, msg: msg }, function(error, html) {
+function showError (req, response, msg) {
+    var pathname = req._pathname; 
+    just.render('msg', { breadcrumbs_path: pathname, 
+            title: "404 Status", 
+            authenticate: authenticate, 
+            msg: msg }, function(error, html) {
         if (error) {
             console.log(error);
         }

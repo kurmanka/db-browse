@@ -13,12 +13,15 @@ var app = express();
 app.use(express.bodyParser());
 app.use(express.cookieParser());
 
+// make req._pathname available everywhere 
+app.use(prepare_pathname);
+
 // very simple loging of the incomming requests to console
 // from http://expressjs.com/api.html#app.use
 app.use(function(req, res, next){
 
   if(req.url == '/favicon.ico') {
-      requestHandlers.showError(res, "Serve 404. Connect to /favicon.ico.", req.url);
+      requestHandlers.showError(req, res, "Serve 404. Connect to /favicon.ico.");
   } else {
     console.log('%s %s', req.method, req.url);
     next();
@@ -117,9 +120,10 @@ app.get('/logout', function(req, res){ //logout
    requestHandlers.login(res, "/", '');
 });
 
-app.get('/:dbID', loadUser, function(req, res){ //run method start
-    checkConnectShowPage(res, req, req.params.dbID, requestHandlers.start);
-});
+app.get('/:dbID', loadUser, 
+    prepare_dbconnection,
+    requestHandlers.start
+);
 
 app.get('/:dbID/:table', loadUser, function(req, res){ //run method showTable
     checkConnectShowPage(res, req, req.params.dbID, requestHandlers.showTable, req.params.table);
@@ -135,6 +139,92 @@ app.get('/:dbID/:table/:column/:value', loadUser, function(req, res){ //run meth
 
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
+
+// two lines in checkConnectShowPage() did this
+function prepare_pathname( req, res, next ) {
+    var pathname = url.parse(req.url).pathname;
+    req._pathname = pathname.replace(/\/$/, '');
+    next();
+}
+
+// replacement for dbConnect()
+function prepare_dbconnection( req, res, next ) {
+    var dbId = req.params.dbID;
+    req.dbconfig = config.db[dbId];
+
+    var done = function (err) {
+        if (err) {
+            // handle the error
+            requestHandlers.showError(req, res,
+                "Error connecting to the database with id '" + dbId + "'. " + err );
+
+        } else {
+            // save connection into request
+            req.dbconnection = connectionStatus[dbId].connection;
+            // call next handler
+            next();
+        }
+    };
+
+    if (!req.dbconfig) {
+        return requestHandlers.showError(req, res,
+            "No such database: " + dbId + ".");
+    }
+
+    if (!connectionStatus[dbId]) {
+        connectionStatus[dbId] = {
+            status: false,
+            connection: '',
+        }
+    }
+
+    if (connectionStatus[dbId].status == true) {
+        connectionStatus[dbId].connection.query("SELECT NOW()", function(err, rows, fields) {
+            if (err) {
+                // reconnect
+                connectionStatus[dbId].status = false;
+                db_connect(req, dbId, done);
+            } else {
+                return done();
+            }
+        });
+    }
+
+    if (connectionStatus[dbId].status == false) {
+        db_connect(req, dbId, done);
+    }
+}
+
+
+// replacement for makeConnect()
+function db_connect( req, dbId, done ) {
+    console.log("Connect to database " + dbId + " ...");
+    var c = req.dbconfig;
+    if (!c) {
+        done( "The database with id '" +  dbId + "' is absent in the configuration" );
+        return;
+    }
+    if (c.type == 'mysql') {
+        connectionStatus[dbId].connection = mysql.createConnection({
+            host     : c.host,
+            user     : c.user,
+            password : c.password,
+            database : c.database,
+        });
+
+        connectionStatus[dbId].connection.connect(done);
+
+    } else if (c.type == 'postgres') {
+        var conString = "tcp://" + c.user + ":" + c.password + "@" + c.host + "/" + c.database;
+        connectionStatus[dbId].connection = new pg.Client(conString);
+        connectionStatus[dbId].connection.connect(done);
+
+    } else {
+        // unsupported db type
+    }
+
+}
+
 
 function checkConnectShowPage(response, req, dbId, methodRun, table, column, value, sql, sqlName, user, comment, path_breadcrumbs, sqlId) {
     var pathname = url.parse(req.url).pathname;
