@@ -5,7 +5,6 @@ var connectStatus = {};
 var db;
 
 function saveRequest(sql, dbId, reqName, user, comment, doneReturn) {
-    sql = sql.replace(/;/g, '');
     var created_at = getCurrentDate();;
     var last_used = getCurrentDate();
     var newId = 1;
@@ -14,9 +13,7 @@ function saveRequest(sql, dbId, reqName, user, comment, doneReturn) {
     var nameNew = reqName;
 
     async.waterfall([
-        function(done){
-            connectCheck(done);
-        },
+        connectCheck,
 
         function(done){
             db.each("SELECT max(id) AS id FROM sql", function(err, row) {
@@ -28,8 +25,11 @@ function saveRequest(sql, dbId, reqName, user, comment, doneReturn) {
         },
 
         function(done){
-            db.each("SELECT max(used_times) as ut, id, comment, name, created_at FROM sql WHERE sql = '" + sql + "'", function(err, row) {
-                if (row.ut) {
+            db.each(
+                "SELECT max(used_times) as ut, id, comment, name, created_at " 
+                + " FROM sql WHERE sql=?", sql, 
+                function(err, row) {
+                if (row && row.ut) {
                     used_timeNew = parseInt(row.ut) + 1;
                     created_at = row.created_at;
                     newId = row.id;
@@ -38,7 +38,7 @@ function saveRequest(sql, dbId, reqName, user, comment, doneReturn) {
                     } if (!nameNew) {
                         nameNew = row.name;
                     }
-                    db.each("delete FROM sql WHERE sql = '" + sql + "'", function(err, row) {});
+                    db.run("delete FROM sql WHERE sql=?", sql);
                 }
                 done(err);
             });
@@ -52,7 +52,6 @@ function saveRequest(sql, dbId, reqName, user, comment, doneReturn) {
 }
 
 function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, type) {
-    sql = sql.replace(/;/g, '');
     var created_at;
     var last_used;
     var used_time;
@@ -63,7 +62,9 @@ function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, typ
         },
 
         function(done){
-            db.each("SELECT max(used_times) as ut, id, comment, name, created_at, last_used FROM sql WHERE id = " + sqlId, function(err, row) {
+            db.each(
+                "SELECT max(used_times) as ut, id, comment, name, created_at, last_used "
+                "FROM sql WHERE id=?", sqlId, function(err, row) {
                 if (row.id) {
                     created_at = row.created_at;
                     if (type == 'save') {
@@ -73,7 +74,7 @@ function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, typ
                         used_time = parseInt(row.ut) + 1;
                         last_used = getCurrentDate();
                     }
-                    db.each("delete FROM sql WHERE id = " + sqlId, function(err, row) {});
+                    db.run("delete FROM sql WHERE id=?", sqlId );
                 }
                 done(err);
             });
@@ -99,7 +100,16 @@ function connectCheck(done) {
 
 function dbCheck(db, done) {
     db.serialize(function() {
-        db.run("CREATE TABLE IF NOT EXISTS sql (id INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL , sql TEXT NOT NULL , name VARCHAR, comment TEXT, dbid VARCHAR NOT NULL , created_by VARCHAR NOT NULL , created_at DATETIME NOT NULL , used_times INTEGER NOT NULL  DEFAULT 0, last_used DATETIME NOT NULL )");
+        db.run("CREATE TABLE IF NOT EXISTS sql "
+                +"(id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+                +" sql TEXT NOT NULL, "
+                +" name VARCHAR, "
+                +" comment TEXT, "
+                +" dbid VARCHAR NOT NULL,"
+                +" created_by VARCHAR NOT NULL,"
+                +" created_at DATETIME NOT NULL,"
+                +" used_times INTEGER NOT NULL DEFAULT 0,"
+                +" last_used DATETIME NOT NULL )");
         done(null);
     });
 }
@@ -155,27 +165,18 @@ function history(doneReturn) {
 
 function details(doneReturn, sqlId) {
     async.waterfall([
+        connectCheck,
         function(done){
-            connectCheck(done);
-        },
-
-        function(done){
-            db.each("SELECT * FROM sql where id = " + sqlId, function(err, row) {
-                doneReturn(err, row);
-            });
+            db.each("SELECT * FROM sql where id=?", sqlId, doneReturn);
         }
     ]);
 }
 
 function remove(sqlId, doneReturn) {
     async.waterfall([
+        connectCheck,
         function(done){
-            connectCheck(done);
-        },
-
-        function(done){
-            db.each("delete FROM sql WHERE id = " + sqlId, function(err, row) {});
-            doneReturn(null);
+            db.run("delete FROM sql WHERE id=?", sqlId, doneReturn);
         }
     ]);
 }
