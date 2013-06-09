@@ -13,9 +13,6 @@ var app = express();
 app.use(express.bodyParser());
 app.use(express.cookieParser());
 
-// make req._pathname available everywhere 
-app.use(prepare_pathname);
-
 // very simple loging of the incomming requests to console
 // from http://expressjs.com/api.html#app.use
 app.use(function(req, res, next){
@@ -37,48 +34,42 @@ var connectionStatus = {};
 
 var loginError = 'This login & password combination is not allowed.';
 
-app.get('/', loadUser, function(req, res){ //run method selectDatabase
-    requestHandlers.selectDatabase(res);
-});
+var middleware = [loadUser, prepare_dbconnection, parameters_determination];
 
-app.get('/style.css', function(req, res){ //connect to css file
-    requestHandlers.cssConnect(res);
-});
+app.get('/', loadUser, requestHandlers.selectDatabase); //run method selectDatabase
 
-app.get('/main.js', function(req, res){ //connect to main.js file(login form)
-    requestHandlers.mainConnect(res);
-});
+app.get('/style.css', requestHandlers.cssConnect); //connect to css file
 
-app.post(/^\/(\w+):sql\/*(\d)*/, loadUser, function(req, res){ //select to sqlite db
-    var dbId = req.params[0];
+app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sqlite db
+    req.params.dbId = req.params[0];
     if (req.body.db) {
-        dbId = req.body.db;
+        req.params.dbId = req.body.db;
     }
-    var sqlId = req.params[1];
-    var comment = req.body.comment;
-    if(comment == 'comment...'){
-        comment = '';
+
+    req.params.sqlId = req.params[1];
+    if(req.body.comment == 'comment...'){
+        req.body.comment = '';
     }
 
     if (req.body.sql) {
         if (req.body.run == 'Execute') {
-            var path_breadcrumbs = '/' + dbId + '/:sql/' + sqlId + '/show';
-            checkConnectShowPage(res, req, dbId, requestHandlers.sqlRequest, '', '', '', req.body.sql, req.body.name, req.session.user, comment, path_breadcrumbs, sqlId);
+            req.params.path_breadcrumbs = '/' + req.params.dbId + '/:sql/' + req.params.sqlId + '/show';
+            requestHandlers.sqlRequest(req, res);
         }
         else if (req.body.run == 'Save'){
-            requestHandlers.sqlSave(res, req.body.sql, req.body.name, comment, dbId, req.session.user, sqlId);
+            requestHandlers.sqlSave(req, res);
         }
         else if (req.body.run == 'Remove'){
-            requestHandlers.sqlRemove(res, sqlId, dbId);
+            requestHandlers.sqlRemove(req, res);
         }
         else {
-            checkConnectShowPage(res, req, dbId, requestHandlers.sqlRequest, '', '', '', req.body.sql, req.body.name, req.session.user);
+            requestHandlers.sqlRequest(req, res);
         }
     } else {
         if (req.body.run) {
-            res.redirect('/:sql/' + sqlId);
+            res.redirect('/:sql/' + req.params.sqlId);
         } else {
-            res.redirect('/' + dbId);
+            res.redirect('/' + req.params.dbId);
         }
     }
 });
@@ -120,35 +111,37 @@ app.get('/logout', function(req, res){ //logout
    requestHandlers.login(res, "/", '');
 });
 
-app.get('/:dbID', loadUser, 
-    prepare_dbconnection,
-    requestHandlers.start
-);
+function parameters_determination(req, res, next) {
+    req.params.connect = connectionStatus[req.params.dbID].connection;
 
-app.get('/:dbID/:table', loadUser, function(req, res){ //run method showTable
-    checkConnectShowPage(res, req, req.params.dbID, requestHandlers.showTable, req.params.table);
-});
+    var pathname = url.parse(req.url).pathname;
+    req.params.path = pathname.replace(/\/$/, '');
 
-app.get('/:dbID/:table/:column', loadUser, function(req, res){ //run method showColumn
-    checkConnectShowPage(res, req, req.params.dbID, requestHandlers.showColumn, req.params.table, req.params.column);
-});
+    req.params.dbType = config.db[req.params.dbID].type;
 
-app.get('/:dbID/:table/:column/:value', loadUser, function(req, res){ //run method showValue
-    checkConnectShowPage(res, req, req.params.dbID, requestHandlers.showValue, req.params.table, req.params.column, req.params.value);
-});
+    if (config.db[req.params.dbID].table_groups) {
+        req.params.groups = config.db[req.params.dbID].table_groups;
+    }
+
+    next();
+}
+
+app.get('/:dbID', middleware, requestHandlers.start); //run method start
+
+app.get('/:dbID/:table', middleware, requestHandlers.showTable);//run method showTable
+
+app.get('/:dbID/:table/:column', middleware, requestHandlers.showColumn); //run method showColumn
+
+app.get('/:dbID/:table/:column/:value', middleware, requestHandlers.showValue); //run method showValue
 
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
-// two lines in checkConnectShowPage() did this
-function prepare_pathname( req, res, next ) {
-    var pathname = url.parse(req.url).pathname;
-    req._pathname = pathname.replace(/\/$/, '');
-    next();
-}
-
-// replacement for dbConnect()
 function prepare_dbconnection( req, res, next ) {
+    if (!req.params.dbID) {
+        req.params.dbID = req.body.db || req.params[0];
+    }
+
     var dbId = req.params.dbID;
     req.dbconfig = config.db[dbId];
 
@@ -195,8 +188,6 @@ function prepare_dbconnection( req, res, next ) {
     }
 }
 
-
-// replacement for makeConnect()
 function db_connect( req, dbId, done ) {
     console.log("Connect to database " + dbId + " ...");
     var c = req.dbconfig;
@@ -219,102 +210,6 @@ function db_connect( req, dbId, done ) {
         connectionStatus[dbId].connection = new pg.Client(conString);
         connectionStatus[dbId].connection.connect(done);
 
-    } else {
-        // unsupported db type
-    }
-
-}
-
-
-function checkConnectShowPage(response, req, dbId, methodRun, table, column, value, sql, sqlName, user, comment, path_breadcrumbs, sqlId) {
-    var pathname = url.parse(req.url).pathname;
-    pathname = pathname.replace(/\/$/, '');
-
-    async.waterfall([
-        function (done){
-            dbConnect(dbId, response, done, pathname);
-        }
-
-    ], function (err) {
-        dataInput(err, dbId, methodRun, response, pathname, table, column, value, sql, sqlName, user, comment, path_breadcrumbs, sqlId);
-    });
-}
-
-function dbConnect(dbId, response, done, pathname) {
-    if (!connectionStatus[dbId]) {
-        connectionStatus[dbId] = {
-            status: false,
-            connection: '',
-        }
-    }
-
-    if (connectionStatus[dbId].status == true) {
-        connectionStatus[dbId].connection.query("SELECT NOW();", function(err, rows, fields) {
-            if (err) {
-                connectionStatus[dbId].status = false;
-                makeConnect (dbId, response, done, pathname);
-            } else {
-                done(null);
-            }
-        });
-    }
-
-    if (connectionStatus[dbId].status == false) {
-        makeConnect (dbId, response, done, pathname);
-    }
-}
-
-function dataInput(err, dbId, methodRun, response, pathname, table, column, value, sql, sqlName, user, comment, path_breadcrumbs, sqlId) {
-    var table_groups = '';
-
-    if (err) {
-        connectionStatus[dbId].status = false;
-        requestHandlers.showError(response, "Error connecting to the database with id '" + dbId + "'. " + err, pathname);
-    } else {
-        connectionStatus[dbId].status = true;
-        if (config.db[dbId].table_groups) {
-            table_groups = config.db[dbId].table_groups;
-        }
-
-        if (sql) {
-            methodRun(response, connectionStatus[dbId].connection, config.db[dbId].type, sql, pathname, dbId, sqlName, user, comment, path_breadcrumbs, sqlId);
-        } else {
-            methodRun(response, connectionStatus[dbId].connection, pathname, config.db[dbId].type, table_groups, table, column, value);
-        }
-    }
-}
-
-function makeConnect (dbId, response, done, pathname) {
-    console.log("Connect to database " + dbId + " ...");
-    var c = config.db[dbId];
-    if (!c) {
-        requestHandlers.showError(response, "The database with id '" +  dbId + "' is absent in the configuration", pathname);
-        return;
-    }
-    if (c.type == 'mysql') {
-        connectionStatus[dbId].connection = mysql.createConnection({
-            host     : c.host,
-            user     : c.user,
-            password : c.password,
-            database : c.database,
-        });
-
-        connectionStatus[dbId].connection.connect(function(err) {
-            done(err);
-        });
-    }
-    else if (c.type == 'postgres') {
-        connectionStatus[dbId].connection = new pg.Client({
-            host     : c.host,
-            user     : c.user,
-            password : c.password,
-            database : c.database,
-            port     : c.port
-        });
-
-        connectionStatus[dbId].connection.connect(function(err) {
-            done(err);
-        });
     } else {
         // unsupported db type
     }

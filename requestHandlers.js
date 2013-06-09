@@ -13,9 +13,28 @@ var sqlite = require('./sqliteDB.js');
 
 var async = require('async');
 
+var connection, pathname, dbType, tableGroupsFile, table, column, value, sql, dbId, reqName, user, comment,    path_breadcrumbs, sqlId;
+
 var authenticate = false;
 if (config.authenticate) {
     authenticate = true;
+}
+
+function changing_parameters(req) {
+    connection = req.params.connect;
+    pathname = req.params.path;
+    dbType = req.params.dbType;
+    tableGroupsFile = req.params.groups || '';
+    table = req.params.table;
+    column = req.params.column;
+    value = req.params.value;
+    sql = req.body.sql;
+    dbId = req.params.dbId;
+    reqName = req.body.name;
+    user = req.session.user;
+    comment = req.body.comment;
+    path_breadcrumbs = req.params.path_breadcrumbs;
+    sqlId = req.params.sqlId;
 }
 
 function login (response, pathname, errmsg) {
@@ -27,13 +46,15 @@ function login (response, pathname, errmsg) {
     });
 }
 
-function selectDatabase (response) {
+function selectDatabase (req, res) {
     just.render('listDatabase', { databaseList: config.db, authenticate: authenticate}, function(error, html) {
-        showPage (response, error, html);
+        showPage (res, error, html);
     });
 }
 
-function start(response, connection, pathname, dbType, tableGroupsFile) {
+function start(req, res) {
+    changing_parameters(req);
+
     var tabGr = [];
     async.waterfall([
         function (done){
@@ -52,10 +73,10 @@ function start(response, connection, pathname, dbType, tableGroupsFile) {
 
     ], function (err, result) {
         if (err) {
-            showError (response, err, pathname);
+            showError (res, err, pathname);
         } else {
             just.render('tableList', { tablesList: result, path: pathname, tableGr: tabGr, authenticate: authenticate, path_sql: pathname + ":sql"}, function(error, html) {
-                showPage (response, error, html);
+                showPage (res, error, html);
             });
         }
     });
@@ -103,8 +124,10 @@ function getArrayOfStrings(tableGroups, done) {
     done(null, array);
 }
 
-function showTable(response, connection, pathname, dbType, table_groups, table) {
+function showTable(req, res) {
     var db;
+    changing_parameters(req);
+
     async.waterfall([
         function (done){
             db = getDbType(dbType);
@@ -113,7 +136,7 @@ function showTable(response, connection, pathname, dbType, table_groups, table) 
 
     ], function (err, results) {
         if (err) {
-            showError (response, err, pathname);
+            showError (res, err, pathname);
         } else {
             var templatesP = {attrList: results[0], indexesArr: results[1], foreignKey: results[2], referenced: results[3], triggers: results[4], statusArr: results[5]};
 
@@ -127,7 +150,7 @@ function showTable(response, connection, pathname, dbType, table_groups, table) 
             templatesP.authenticate = authenticate;
 
             just.render('tableDetails', templatesP, function(error, html) {
-                showPageTotalRecords(response, error, html, db, connection, table);
+                showPageTotalRecords(res, error, html, db, connection, table);
             });
         }
     });
@@ -163,9 +186,11 @@ async.waterfall([
     });
 }
 
-function showColumn(response, connection, pathname, dbType, table_groups, table, column) {
+function showColumn(req, res) {
     var limit = 20;
     var db;
+    changing_parameters(req);
+
     async.waterfall([
         function (done){
             db = getDbType(dbType);
@@ -174,18 +199,20 @@ function showColumn(response, connection, pathname, dbType, table_groups, table,
 
     ], function (err, results) {
         if (err) {
-            showError (response, err, pathname);
+            showError (res, err, pathname);
         } else {
             just.render('columnData', { columnData: results, authenticate: authenticate, path: pathname }, function(error, html) {
-                showPage (response, error, html);
+                showPage (res, error, html);
             });
         }
     });
 }
 
-function showValue(response, connection, pathname, dbType, table_groups, table, column, value) {
+function showValue(req, res) {
     var limit = 10;
     var db;
+    changing_parameters(req);
+
     async.waterfall([
         function (done){
             db = getDbType(dbType);
@@ -193,16 +220,16 @@ function showValue(response, connection, pathname, dbType, table_groups, table, 
         }
     ], function (err, results) {
         if (err) {
-            showError (response, err, pathname);
+            showError (res, err, pathname);
         }
 
         else if (results == 0) {
-            showError(response, "The value '" + value + "' is not present in column '" + column + "'", pathname);
+            showError(res, "The value '" + value + "' is not present in column '" + column + "'", pathname);
         }
 
         else {
             just.render('showValues', { values: results, limit: limit, authenticate: authenticate, path: pathname }, function(error, html) {
-                showPage (response, error, html);
+                showPage (res, error, html);
             });
         }
     });
@@ -234,10 +261,10 @@ function showPage (response, error, html, type) {
 }
 
 function showError (req, response, msg) {
-    var pathname = req._pathname; 
-    just.render('msg', { breadcrumbs_path: pathname, 
-            title: "404 Status", 
-            authenticate: authenticate, 
+    var pathname = req._pathname;
+    just.render('msg', { breadcrumbs_path: pathname,
+            title: "404 Status",
+            authenticate: authenticate,
             msg: msg }, function(error, html) {
         if (error) {
             console.log(error);
@@ -250,15 +277,17 @@ function showError (req, response, msg) {
     });
 }
 
-function cssConnect (response) {
+function cssConnect (req, res) {
     justStyle.render('style', {}, function(error, html) {
-        showPage (response, error, html, 'css');
+        showPage (res, error, html, 'css');
     });
 }
 
-function sqlRequest(response, connection, dbType, sql, pathname, dbId, reqName, user, comment, path_breadcrumbs, sqlId) {
-   var path = pathname.replace(/\:/, '/');;
+function sqlRequest(req, res) {
+   changing_parameters(req);
+   var path = pathname.replace(/\:/, '/');
    var type = '';
+
    if(path_breadcrumbs) {
        path = path_breadcrumbs;
        type='total change';
@@ -266,7 +295,7 @@ function sqlRequest(response, connection, dbType, sql, pathname, dbId, reqName, 
     async.waterfall([
         function (done){
             if ( /ALTER|create|drop/i.exec(sql) ) {
-                 showError (response, "Request '" + sql + "' can not be executed", pathname);
+                 showError (res, "Request '" + sql + "' can not be executed", pathname);
             } else {
                 done(null);
             }
@@ -279,7 +308,7 @@ function sqlRequest(response, connection, dbType, sql, pathname, dbId, reqName, 
 
     ], function (err, results) {
         if (err) {
-            showError (response, err, pathname);
+            showError (res, err, pathname);
         } else {
             async.parallel([
                 function(done){
@@ -292,13 +321,13 @@ function sqlRequest(response, connection, dbType, sql, pathname, dbId, reqName, 
 
                 function(done){
                     just.render('showSqlRequest', { authenticate: authenticate, path: path, sql: sql, results: results }, function(error, html) {
-                        showPage (response, error, html);
+                        showPage (res, error, html);
                         done(null);
                     });
                 }
             ], function (err, results) {
                 if (err) {
-                    showError(response, err, pathname);
+                    showError(res, err, pathname);
                 }
             });
         }
@@ -341,7 +370,8 @@ function sqlDetails (response, sqlId) {
     });
 }
 
-function sqlSave (response, sql, reqName, comment, dbId, user, sqlId, type) {
+function sqlSave (req, res) {
+    changing_parameters(req);
     var bc_path = '/' + dbId + '/:sql/' + sqlId + '/saved';
 
     async.waterfall([
@@ -351,16 +381,17 @@ function sqlSave (response, sql, reqName, comment, dbId, user, sqlId, type) {
 
     ], function (err, results) {
         if (err) {
-            showError (response, err, bc_path);
+            showError (res, err, bc_path);
         } else {
             just.render('msg', { breadcrumbs_path: bc_path, title: 'Saving status', msg: 'Saving was successful!', authenticate: authenticate}, function(error, html) {
-                showPage (response, error, html);
+                showPage (res, error, html);
             });
         }
     });
 }
 
-function sqlRemove (response, sqlId, dbId) {
+function sqlRemove (req, res) {
+    changing_parameters(req);
     var bc_path = '/' + dbId + '/:sql/' + sqlId;
 
     async.waterfall([
@@ -370,10 +401,10 @@ function sqlRemove (response, sqlId, dbId) {
 
     ], function (err, results) {
         if (err) {
-            showError (response, err, bc_path);
+            showError (res, err, bc_path);
         } else {
             just.render('msg', { breadcrumbs_path: bc_path, title: 'Removing status', msg: 'Removing was successful!', authenticate: authenticate}, function(error, html) {
-                showPage (response, error, html);
+                showPage (res, error, html);
             });
         }
     });
