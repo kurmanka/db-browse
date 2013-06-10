@@ -38,22 +38,26 @@ function set_variables(req) {
     sqlId           = req.params.sqlId;
 }
 
+function respond(res, template, data) {
+    just.render( template, data, 
+                 function(error, html) {
+                    showPage(res, error, html);
+                 });
+}
+
+
+
+
 function login (response, pathname, errmsg) {
     if (!pathname) {
         pathname = '/';
     }
-    just.render('login',{ errormsg: errmsg, path: pathname}, function(error, html) {
-        showPage (response, error, html);
-    });
+    respond( response, 'login', { errormsg: errmsg, path: pathname} );
 }
 
 function selectDatabase (req, res) {
-    just.render('listDatabase', 
-        { databaseList: config.db, authenticate: authenticate}, 
-        function(error, html) {
-          showPage (res, error, html);
-        }
-    );
+    respond( res, 'listDatabase', 
+        { databaseList: config.db, authenticate: authenticate} );
 }
 
 function start(req, res) {
@@ -79,12 +83,9 @@ function start(req, res) {
         if (err) {
             showError (res, err, pathname);
         } else {
-            just.render('tableList', 
+            respond( res, 'tableList',  
                 { tablesList: result, path: pathname, tableGr: tabGr, 
-                    authenticate: authenticate, path_sql: pathname + ":sql" }, 
-                function(error, html) {
-                    showPage (res, error, html);
-                });
+                    authenticate: authenticate, path_sql: pathname + ":sql" });
         }
     });
 }
@@ -158,9 +159,7 @@ function showTable(req, res) {
             data.dbType    = dbType;
             data.authenticate = authenticate;
 
-            just.render('tableDetails', templatesP, function(error, html) {
-                showPageTotalRecords(res, error, html, db, connection, table);
-            });
+            respond( res, 'tableDetails', data );
         }
     });
 }
@@ -210,11 +209,8 @@ function showColumn(req, res) {
         if (err) {
             showError (res, err, pathname);
         } else {
-            just.render('columnData', 
-                { columnData: results, authenticate: authenticate, path: pathname }, 
-                function(error, html) {
-                    showPage (res, error, html);
-                });
+            respond(res, 'columnData', 
+                { columnData: results, authenticate: authenticate, path: pathname });
         }
     });
 }
@@ -240,12 +236,11 @@ function showValue(req, res) {
         }
 
         else {
-            just.render('showValues', 
-                { values: results, limit: limit, authenticate: authenticate, 
-                    path: pathname }, 
-                function(error, html) {
-                    showPage(res, error, html);
-                });
+            respond(res, 'showValues', 
+                { values: results, 
+                    limit: limit, 
+                    authenticate: authenticate, 
+                    path: pathname });
         }
     });
 }
@@ -271,7 +266,6 @@ function showPage (response, error, html, type) {
 
     response.writeHead(200, {"Content-Type": "text/" + type});
     response.write(html);
-
     response.end();
 }
 
@@ -363,11 +357,8 @@ function sqlHistory (response) {
         if (err) {
             showError (response, err, pathname);
         } else {
-            just.render('sqlHistory', 
-                { values: results, limit: limit, authenticate: authenticate }, 
-                function(error, html) {
-                    showPage (response, error, html);
-                });
+            respond( response, 'sqlHistory', 
+                { values: results, limit: limit, authenticate: authenticate });
         }
     });
 }
@@ -382,12 +373,9 @@ function sqlDetails (response, sqlId) {
         if (err) {
             showError (response, err, pathname);
         } else {
-            just.render('sqlDetails', 
+            respond( response, 'sqlDetails', 
                 { values: results, authenticate: authenticate, 
-                   sqlId: sqlId,   databaseList: config.db }, 
-                function(error, html) {
-                    showPage (response, error, html);
-                });
+                   sqlId: sqlId,   databaseList: config.db });
         }
     });
 }
@@ -405,14 +393,11 @@ function sqlSave (req, res) {
         if (err) {
             showError (res, err, bc_path);
         } else {
-            just.render('msg', 
+            respond( res, 'msg', 
                 { breadcrumbs_path: bc_path, 
                   title: 'Saving status', 
                   msg: 'Saving was successful!', 
-                  authenticate: authenticate }, 
-                function(error, html) { 
-                    showPage (res, error, html); 
-                });
+                  authenticate: authenticate });
         }
     });
 }
@@ -430,12 +415,9 @@ function sqlRemove (req, res) {
         if (err) {
             showError (res, err, bc_path);
         } else {
-            just.render('msg', 
+            respond( res, 'msg', 
                 { breadcrumbs_path: bc_path, title: 'Removing status', 
-                msg: 'Removing was successful!', authenticate: authenticate}, 
-                function(error, html) {
-                    showPage (res, error, html);
-                });
+                msg: 'Removing was successful!', authenticate: authenticate});
         }
     });
 }
