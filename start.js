@@ -132,12 +132,18 @@ app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
 function prepare_dbconnection( req, res, next ) {
+    console.log( 'prepare_dbconnection(): start' );
     if (!req.params.dbID) {
         req.params.dbID = req.body.db || req.params[0];
     }
 
     var dbId = req.params.dbID;
     req.dbconfig = config.db[dbId];
+
+    if (!req.dbconfig) {
+        return requestHandlers.showError(req, res,
+                                         "No such database: " + dbId + ".");
+    }
 
     // for compatibility
     req.params.dbType = req.dbconfig.type;
@@ -160,10 +166,6 @@ function prepare_dbconnection( req, res, next ) {
         }
     };
 
-    if (!req.dbconfig) {
-        return requestHandlers.showError(req, res,
-            "No such database: " + dbId + ".");
-    }
 
     if (database[dbId]) {
         database[dbId].query("SELECT NOW()", function(err, rows, fields) {
@@ -175,9 +177,7 @@ function prepare_dbconnection( req, res, next ) {
                 return done();
             }
         });
-    }
-
-    if (database[dbId] == false) {
+    } else {
         db_connect(req, dbId, done);
     }
 }
@@ -197,6 +197,7 @@ function db_connect( req, dbId, done ) {
         database: c.database,
         port    : c.port
     };
+    console.log( 'connecting to ' + dbId );
 
     if (c.type == 'mysql') {
         database[dbId] = mysql.createConnection(cc);
@@ -212,7 +213,7 @@ function db_connect( req, dbId, done ) {
 function loadUser(req, res, next) {
     if (!config.authenticate) { return next(); }
 
-    var pathname = req.params.path;
+    var pathname = req.params.pathurl.parse(req.url).pathname;
     if ( /^\/(\w+):sql\/*(\d)*/.exec(pathname) ) {
         pathname = '/';
     }
