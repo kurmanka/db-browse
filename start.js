@@ -30,7 +30,7 @@ app.use(express.logger('tiny'));
 // sessions
 app.use(express.session(config.session_config));
 
-var connectionStatus = {};
+var database = {};
 
 var loginError = 'This login & password combination is not allowed.';
 
@@ -41,7 +41,8 @@ app.get('/', loadUser, requestHandlers.selectDatabase); //run method selectDatab
 app.get('/style.css', requestHandlers.cssConnect); //connect to css file
 
 app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sqlite db
-    req.params.dbId = req.params[0];
+    // prepare_dbconnection() already sets req.params.dbID   
+    //req.params.dbId = req.params[0];    
     if (req.body.db) {
         req.params.dbId = req.body.db;
     }
@@ -112,11 +113,14 @@ app.get('/logout', function(req, res){ //logout
 });
 
 function parameters_determination(req, res, next) {
-    req.params.connect = connectionStatus[req.params.dbID].connection;
+    // prepare_dbconnection() sets req.dbconnection to the same
+    req.params.connect = database[req.params.dbID];
 
     var pathname = url.parse(req.url).pathname;
     req.params.path = pathname.replace(/\/$/, '');
 
+    // prepare_dbconnection() sets req.dbconfig, so 
+    // one could use req.dbconfig.type and req.dbconfig.table_groups
     req.params.dbType = config.db[req.params.dbID].type;
 
     if (config.db[req.params.dbID].table_groups) {
@@ -153,7 +157,7 @@ function prepare_dbconnection( req, res, next ) {
 
         } else {
             // save connection into request
-            req.dbconnection = connectionStatus[dbId].connection;
+            req.dbconnection = database[dbId];
             // call next handler
             next();
         }
@@ -164,18 +168,11 @@ function prepare_dbconnection( req, res, next ) {
             "No such database: " + dbId + ".");
     }
 
-    if (!connectionStatus[dbId]) {
-        connectionStatus[dbId] = {
-            status: false,
-            connection: '',
-        }
-    }
-
-    if (connectionStatus[dbId].status == true) {
-        connectionStatus[dbId].connection.query("SELECT NOW()", function(err, rows, fields) {
+    if (database[dbId]) {
+        database[dbId].query("SELECT NOW()", function(err, rows, fields) {
             if (err) {
                 // reconnect
-                connectionStatus[dbId].status = false;
+                database[dbId] = false;
                 db_connect(req, dbId, done);
             } else {
                 return done();
@@ -183,7 +180,7 @@ function prepare_dbconnection( req, res, next ) {
         });
     }
 
-    if (connectionStatus[dbId].status == false) {
+    if (database[dbId] == false) {
         db_connect(req, dbId, done);
     }
 }
@@ -205,14 +202,14 @@ function db_connect( req, dbId, done ) {
     };
 
     if (c.type == 'mysql') {
-        connectionStatus[dbId].connection = mysql.createConnection(cc);
+        database[dbId] = mysql.createConnection(cc);
     } else if (c.type == 'postgres') {
-        connectionStatus[dbId].connection = new pg.Client(cc);
+        database[dbId] = new pg.Client(cc);
     } else {
         // unsupported db type
         // XXX configuration error
     }
-    connectionStatus[dbId].connection.connect(done);
+    database[dbId].connect(done);
 }
 
 function loadUser(req, res, next) {
