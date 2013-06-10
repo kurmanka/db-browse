@@ -195,25 +195,24 @@ function db_connect( req, dbId, done ) {
         done( "The database with id '" +  dbId + "' is absent in the configuration" );
         return;
     }
+
+    var cc = {
+        host    : c.host,
+        user    : c.user,
+        password: c.password,
+        database: c.database,
+        port    : c.port
+    };
+
     if (c.type == 'mysql') {
-        connectionStatus[dbId].connection = mysql.createConnection({
-            host     : c.host,
-            user     : c.user,
-            password : c.password,
-            database : c.database,
-        });
-
-        connectionStatus[dbId].connection.connect(done);
-
+        connectionStatus[dbId].connection = mysql.createConnection(cc);
     } else if (c.type == 'postgres') {
-        var conString = "tcp://" + c.user + ":" + c.password + "@" + c.host + "/" + c.database;
-        connectionStatus[dbId].connection = new pg.Client(conString);
-        connectionStatus[dbId].connection.connect(done);
-
+        connectionStatus[dbId].connection = new pg.Client(cc);
     } else {
         // unsupported db type
+        // XXX configuration error
     }
-
+    connectionStatus[dbId].connection.connect(done);
 }
 
 function loadUser(req, res, next) {
