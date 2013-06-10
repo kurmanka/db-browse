@@ -1,7 +1,7 @@
 var config = require("./config");
 
 // templating engine
-var JUST = require('just');
+var JUST      = require('just');
 var just_usecache = false; // or true
 var just      = new JUST({ root: './view', useCache: just_usecache, ext: '.html' });
 var justStyle = new JUST({ root: './view', useCache: just_usecache, ext: '.css' });
@@ -9,7 +9,7 @@ var justJS    = new JUST({ root: './view', useCache: just_usecache, ext: '.js' }
 
 var mysql    = require('./db_mysql.js');
 var postgres = require('./db_postgres.js');
-var sqlite = require('./sqliteDB.js');
+var sqlite   = require('./sqliteDB.js');
 
 var async = require('async');
 
@@ -21,7 +21,7 @@ if (config.authenticate) {
     authenticate = true;
 }
 
-function changing_parameters(req) {
+function set_variables(req) {
     connection      = req.params.connect;
     pathname        = req.params.path;
     dbType          = req.params.dbType;
@@ -57,7 +57,7 @@ function selectDatabase (req, res) {
 }
 
 function start(req, res) {
-    changing_parameters(req);
+    set_variables(req);
 
     var tabGr = [];
     async.waterfall([
@@ -133,7 +133,7 @@ function getArrayOfStrings(tableGroups, done) {
 
 function showTable(req, res) {
     var db;
-    changing_parameters(req);
+    set_variables(req);
 
     async.waterfall([
         function (done){
@@ -197,7 +197,7 @@ async.waterfall([
 function showColumn(req, res) {
     var limit = 20;
     var db;
-    changing_parameters(req);
+    set_variables(req);
 
     async.waterfall([
         function (done){
@@ -221,7 +221,7 @@ function showColumn(req, res) {
 function showValue(req, res) {
     var limit = 10;
     var db;
-    changing_parameters(req);
+    set_variables(req);
 
     async.waterfall([
         function (done){
@@ -298,7 +298,7 @@ function cssConnect (req, res) {
 }
 
 function sqlRequest(req, res) {
-   changing_parameters(req);
+   set_variables(req);
    var path = pathname.replace(/\:/, '/');
    var type = '';
 
@@ -392,7 +392,7 @@ function sqlDetails (response, sqlId) {
 }
 
 function sqlSave (req, res) {
-    changing_parameters(req);
+    set_variables(req);
     var bc_path = '/' + dbId + '/:sql/' + sqlId + '/saved';
 
     async.waterfall([
@@ -417,7 +417,7 @@ function sqlSave (req, res) {
 }
 
 function sqlRemove (req, res) {
-    changing_parameters(req);
+    set_variables(req);
     var bc_path = '/' + dbId + '/:sql/' + sqlId;
 
     async.waterfall([
