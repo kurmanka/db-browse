@@ -115,17 +115,17 @@ function readFile(fileName, done) {
     }
 }
 
-function getArrayOfStrings(tableGroups, done) {
+function getArrayOfStrings(string, done) {
     var array = [];
     var i = 0;
 
-    while (/\S/.exec(tableGroups)) {
-        var temp = /[^\n]+[\n\r]*/.exec(tableGroups);
+    while (/\S/.exec(string)) {
+        var temp = /[^\n]+[\n\r]*/.exec(string);
         if (/\S/.exec(temp)) {
             array[i] = temp.join().replace(/\n|\r/g, '');
             i++;
         }
-        tableGroups = tableGroups.replace(/[^\n]+[\n\r]*/, '');
+        string = string.replace(/[^\n]+[\n\r]*/, '');
     }
 
     done(null, array);
@@ -145,17 +145,18 @@ function showTable(req, res) {
         if (err) {
             showError (res, err, pathname);
         } else {
-            var templatesP = {attrList: results[0], indexesArr: results[1], foreignKey: results[2], 
-                    referenced: results[3], triggers: results[4], statusArr: results[5]};
+            var data = {attrList: results[0], indexesArr: results[1], foreignKey: results[2]};
 
-            if (dbType == 'mysql') {
-                templatesP = {attrList: results[0], indexesArr: results[1], statusArr: results[2]};
+            if (dbType == 'postgres') {
+                data.referenced = results[3];
+                data.triggers   = results[4];
+                data.statusArr  = results[5];
             }
 
-            templatesP.path = pathname;
-            templatesP.tableName = table;
-            templatesP.dbType = dbType;
-            templatesP.authenticate = authenticate;
+            data.path      = pathname;
+            data.tableName = table;
+            data.dbType    = dbType;
+            data.authenticate = authenticate;
 
             just.render('tableDetails', templatesP, function(error, html) {
                 showPageTotalRecords(res, error, html, db, connection, table);
@@ -298,14 +299,14 @@ function cssConnect (req, res) {
 }
 
 function sqlRequest(req, res) {
-   set_variables(req);
-   var path = pathname.replace(/\:/, '/');
-   var type = '';
+    set_variables(req);
+    var path = pathname.replace(/\:/, '/');
+    var type = '';
 
-   if(path_breadcrumbs) {
-       path = path_breadcrumbs;
-       type='total change';
-   }
+    if(path_breadcrumbs) {
+        path = path_breadcrumbs;
+        type='total change';
+    }
     async.waterfall([
         function (done){
             if ( /ALTER|create|drop/i.exec(sql) ) {
