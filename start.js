@@ -132,7 +132,7 @@ app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
 function prepare_dbconnection( req, res, next ) {
-    console.log( 'prepare_dbconnection(): start' );
+    //console.log( 'prepare_dbconnection(): start' );
     if (!req.params.dbID) {
         req.params.dbID = req.body.db || req.params[0];
     }
@@ -159,6 +159,7 @@ function prepare_dbconnection( req, res, next ) {
                 "Error connecting to the database with id '" + dbId + "'. " + err );
 
         } else {
+            console.log('... connected');
             // save connection into request
             req.params.connect = req.dbconnection = database[dbId];
             // call next handler
@@ -183,7 +184,6 @@ function prepare_dbconnection( req, res, next ) {
 }
 
 function db_connect( req, dbId, done ) {
-    console.log("Connect to database " + dbId + " ...");
     var c = req.dbconfig;
     if (!c) {
         done( "The database with id '" +  dbId + "' is absent in the configuration" );
@@ -197,7 +197,7 @@ function db_connect( req, dbId, done ) {
         database: c.database,
         port    : c.port
     };
-    console.log( 'connecting to ' + dbId );
+    console.log( 'connecting to database ' + dbId );
 
     if (c.type == 'mysql') {
         database[dbId] = mysql.createConnection(cc);
