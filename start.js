@@ -34,7 +34,7 @@ var database = {};
 
 var loginError = 'This login & password combination is not allowed.';
 
-var middleware = [loadUser, prepare_dbconnection, parameters_determination];
+var middleware = [prepare_req_params, loadUser, prepare_dbconnection];
 
 app.get('/', loadUser, requestHandlers.selectDatabase); //run method selectDatabase
 
@@ -112,20 +112,10 @@ app.get('/logout', function(req, res){ //logout
    requestHandlers.login(res, "/", '');
 });
 
-function parameters_determination(req, res, next) {
-    // prepare_dbconnection() sets req.dbconnection to the same
-    req.params.connect = database[req.params.dbID];
-
+// former parameters_determination()
+function prepare_req_params(req, res, next) {
     var pathname = url.parse(req.url).pathname;
     req.params.path = pathname.replace(/\/$/, '');
-
-    // prepare_dbconnection() sets req.dbconfig, so 
-    // one could use req.dbconfig.type and req.dbconfig.table_groups
-    req.params.dbType = config.db[req.params.dbID].type;
-
-    if (config.db[req.params.dbID].table_groups) {
-        req.params.groups = config.db[req.params.dbID].table_groups;
-    }
 
     next();
 }
@@ -149,6 +139,13 @@ function prepare_dbconnection( req, res, next ) {
     var dbId = req.params.dbID;
     req.dbconfig = config.db[dbId];
 
+    // for compatibility
+    req.params.dbType = req.dbconfig.type;
+
+    if (req.dbconfig.table_groups) {
+        req.params.groups = req.dbconfig.table_groups;
+    }
+
     var done = function (err) {
         if (err) {
             // handle the error
@@ -157,7 +154,7 @@ function prepare_dbconnection( req, res, next ) {
 
         } else {
             // save connection into request
-            req.dbconnection = database[dbId];
+            req.params.connect = req.dbconnection = database[dbId];
             // call next handler
             next();
         }
@@ -215,7 +212,7 @@ function db_connect( req, dbId, done ) {
 function loadUser(req, res, next) {
     if (!config.authenticate) { return next(); }
 
-    var pathname = url.parse(req.url).pathname;
+    var pathname = req.params.path;
     if ( /^\/(\w+):sql\/*(\d)*/.exec(pathname) ) {
         pathname = '/';
     }
