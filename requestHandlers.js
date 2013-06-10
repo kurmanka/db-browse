@@ -13,7 +13,8 @@ var sqlite = require('./sqliteDB.js');
 
 var async = require('async');
 
-var connection, pathname, dbType, tableGroupsFile, table, column, value, sql, dbId, reqName, user, comment,    path_breadcrumbs, sqlId;
+var connection, pathname, dbType, tableGroupsFile, table, column, value, sql, dbId, 
+    reqName, user, comment, path_breadcrumbs, sqlId;
 
 var authenticate = false;
 if (config.authenticate) {
@@ -21,20 +22,20 @@ if (config.authenticate) {
 }
 
 function changing_parameters(req) {
-    connection = req.params.connect;
-    pathname = req.params.path;
-    dbType = req.params.dbType;
+    connection      = req.params.connect;
+    pathname        = req.params.path;
+    dbType          = req.params.dbType;
     tableGroupsFile = req.params.groups || '';
-    table = req.params.table;
-    column = req.params.column;
-    value = req.params.value;
-    sql = req.body.sql;
-    dbId = req.params.dbId;
-    reqName = req.body.name;
-    user = req.session.user;
-    comment = req.body.comment;
+    table           = req.params.table;
+    column          = req.params.column;
+    value           = req.params.value;
+    sql             = req.body.sql;
+    dbId            = req.params.dbId;
+    reqName         = req.body.name;
+    user            = req.session.user;
+    comment         = req.body.comment;
     path_breadcrumbs = req.params.path_breadcrumbs;
-    sqlId = req.params.sqlId;
+    sqlId           = req.params.sqlId;
 }
 
 function login (response, pathname, errmsg) {
@@ -47,9 +48,12 @@ function login (response, pathname, errmsg) {
 }
 
 function selectDatabase (req, res) {
-    just.render('listDatabase', { databaseList: config.db, authenticate: authenticate}, function(error, html) {
-        showPage (res, error, html);
-    });
+    just.render('listDatabase', 
+        { databaseList: config.db, authenticate: authenticate}, 
+        function(error, html) {
+          showPage (res, error, html);
+        }
+    );
 }
 
 function start(req, res) {
@@ -75,9 +79,12 @@ function start(req, res) {
         if (err) {
             showError (res, err, pathname);
         } else {
-            just.render('tableList', { tablesList: result, path: pathname, tableGr: tabGr, authenticate: authenticate, path_sql: pathname + ":sql"}, function(error, html) {
-                showPage (res, error, html);
-            });
+            just.render('tableList', 
+                { tablesList: result, path: pathname, tableGr: tabGr, 
+                    authenticate: authenticate, path_sql: pathname + ":sql" }, 
+                function(error, html) {
+                    showPage (res, error, html);
+                });
         }
     });
 }
@@ -138,9 +145,10 @@ function showTable(req, res) {
         if (err) {
             showError (res, err, pathname);
         } else {
-            var templatesP = {attrList: results[0], indexesArr: results[1], foreignKey: results[2], referenced: results[3], triggers: results[4], statusArr: results[5]};
+            var templatesP = {attrList: results[0], indexesArr: results[1], foreignKey: results[2], 
+                    referenced: results[3], triggers: results[4], statusArr: results[5]};
 
-            if(dbType == 'mysql') {
+            if (dbType == 'mysql') {
                 templatesP = {attrList: results[0], indexesArr: results[1], statusArr: results[2]};
             }
 
@@ -201,9 +209,11 @@ function showColumn(req, res) {
         if (err) {
             showError (res, err, pathname);
         } else {
-            just.render('columnData', { columnData: results, authenticate: authenticate, path: pathname }, function(error, html) {
-                showPage (res, error, html);
-            });
+            just.render('columnData', 
+                { columnData: results, authenticate: authenticate, path: pathname }, 
+                function(error, html) {
+                    showPage (res, error, html);
+                });
         }
     });
 }
@@ -224,13 +234,17 @@ function showValue(req, res) {
         }
 
         else if (results == 0) {
-            showError(res, "The value '" + value + "' is not present in column '" + column + "'", pathname);
+            showError(res, "The value '" + value + "' is not present in column '" + 
+                column + "'", pathname);
         }
 
         else {
-            just.render('showValues', { values: results, limit: limit, authenticate: authenticate, path: pathname }, function(error, html) {
-                showPage (res, error, html);
-            });
+            just.render('showValues', 
+                { values: results, limit: limit, authenticate: authenticate, 
+                    path: pathname }, 
+                function(error, html) {
+                    showPage(res, error, html);
+                });
         }
     });
 }
@@ -320,10 +334,12 @@ function sqlRequest(req, res) {
                 },
 
                 function(done){
-                    just.render('showSqlRequest', { authenticate: authenticate, path: path, sql: sql, results: results }, function(error, html) {
-                        showPage (res, error, html);
-                        done(null);
-                    });
+                    just.render('showSqlRequest', 
+                        { authenticate: authenticate, path: path, sql: sql, results: results }, 
+                        function(error, html) {
+                            showPage (res, error, html);
+                            done(null);
+                        });
                 }
             ], function (err, results) {
                 if (err) {
@@ -346,9 +362,11 @@ function sqlHistory (response) {
         if (err) {
             showError (response, err, pathname);
         } else {
-            just.render('sqlHistory', { values: results, limit: limit, authenticate: authenticate}, function(error, html) {
-                showPage (response, error, html);
-            });
+            just.render('sqlHistory', 
+                { values: results, limit: limit, authenticate: authenticate }, 
+                function(error, html) {
+                    showPage (response, error, html);
+                });
         }
     });
 }
@@ -363,9 +381,12 @@ function sqlDetails (response, sqlId) {
         if (err) {
             showError (response, err, pathname);
         } else {
-            just.render('sqlDetails', { values: results, authenticate: authenticate, sqlId: sqlId, databaseList: config.db}, function(error, html) {
-                showPage (response, error, html);
-            });
+            just.render('sqlDetails', 
+                { values: results, authenticate: authenticate, 
+                   sqlId: sqlId,   databaseList: config.db }, 
+                function(error, html) {
+                    showPage (response, error, html);
+                });
         }
     });
 }
@@ -383,9 +404,14 @@ function sqlSave (req, res) {
         if (err) {
             showError (res, err, bc_path);
         } else {
-            just.render('msg', { breadcrumbs_path: bc_path, title: 'Saving status', msg: 'Saving was successful!', authenticate: authenticate}, function(error, html) {
-                showPage (res, error, html);
-            });
+            just.render('msg', 
+                { breadcrumbs_path: bc_path, 
+                  title: 'Saving status', 
+                  msg: 'Saving was successful!', 
+                  authenticate: authenticate }, 
+                function(error, html) { 
+                    showPage (res, error, html); 
+                });
         }
     });
 }
@@ -403,23 +429,26 @@ function sqlRemove (req, res) {
         if (err) {
             showError (res, err, bc_path);
         } else {
-            just.render('msg', { breadcrumbs_path: bc_path, title: 'Removing status', msg: 'Removing was successful!', authenticate: authenticate}, function(error, html) {
-                showPage (res, error, html);
-            });
+            just.render('msg', 
+                { breadcrumbs_path: bc_path, title: 'Removing status', 
+                msg: 'Removing was successful!', authenticate: authenticate}, 
+                function(error, html) {
+                    showPage (res, error, html);
+                });
         }
     });
 }
 
 exports.start = start;
 exports.login = login;
-exports.showTable = showTable;
-exports.cssConnect = cssConnect;
-exports.showColumn = showColumn;
-exports.showError = showError;
+exports.showTable      = showTable;
+exports.cssConnect     = cssConnect;
+exports.showColumn     = showColumn;
+exports.showError      = showError;
 exports.selectDatabase = selectDatabase;
-exports.showValue = showValue;
-exports.sqlRequest = sqlRequest;
-exports.sqlHistory  = sqlHistory;
-exports.sqlDetails  = sqlDetails;
-exports.sqlSave = sqlSave;
-exports.sqlRemove = sqlRemove;
+exports.showValue      = showValue;
+exports.sqlRequest     = sqlRequest;
+exports.sqlHistory     = sqlHistory;
+exports.sqlDetails     = sqlDetails;
+exports.sqlSave        = sqlSave;
+exports.sqlRemove      = sqlRemove;
