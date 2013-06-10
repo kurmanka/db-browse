@@ -213,7 +213,7 @@ function db_connect( req, dbId, done ) {
 function loadUser(req, res, next) {
     if (!config.authenticate) { return next(); }
 
-    var pathname = req.params.pathurl.parse(req.url).pathname;
+    var pathname = req.params.path;
     if ( /^\/(\w+):sql\/*(\d)*/.exec(pathname) ) {
         pathname = '/';
     }
