@@ -159,7 +159,10 @@ function showTable(req, res) {
             data.dbType    = dbType;
             data.authenticate = authenticate;
 
-            respond( res, 'tableDetails', data );
+            //respond( res, 'tableDetails', data ); -- not good enough
+            just.render('tableDetails', data, function(error, html) {
+                showPageTotalRecords(res, error, html, db, connection, table);
+            });
         }
     });
 }
