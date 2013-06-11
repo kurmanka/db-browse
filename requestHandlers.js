@@ -48,11 +48,11 @@ function respond(res, template, data) {
 
 
 
-function login (response, pathname, errmsg) {
+function login (res, pathname, errmsg) {
     if (!pathname) {
         pathname = '/';
     }
-    respond( response, 'login', { errormsg: errmsg, path: pathname} );
+    respond( res, 'login', { errormsg: errmsg, path: pathname} );
 }
 
 function selectDatabase (req, res) {
@@ -164,14 +164,14 @@ function showTable(req, res) {
     });
 }
 
-function showPageTotalRecords (response, error, html, db, connection, table) {
+function showPageTotalRecords (res, error, html, db, connection, table) {
 async.waterfall([
     function (done) {
         if (error) {
             console.log(error);
         }
-        response.writeHead(200, {"Content-Type": "text/html"});
-        response.write(html);
+        res.writeHead(200, {"Content-Type": "text/html"});
+        res.write(html);
         done(null);
     },
 
@@ -181,14 +181,14 @@ async.waterfall([
 
     ], function (err, counter) {
         if (err) {
-            showError (response, err, pathname);
+            showError (res, err, pathname);
         } else {
             just.render('totalRecords', {rowsCounter: counter}, function(error, html_counter) {
                 if (err) {
                     console.log(err);
                 }
-                response.write(html_counter);
-                response.end();
+                res.write(html_counter);
+                res.end();
             });
         }
     });
@@ -255,7 +255,7 @@ function getDbType (dbType) {
     return db;
 }
 
-function showPage (response, error, html, type) {
+function showPage (res, error, html, type) {
     if (error) {
         console.log(error);
     }
@@ -264,12 +264,12 @@ function showPage (response, error, html, type) {
         type = 'html';
     }
 
-    response.writeHead(200, {"Content-Type": "text/" + type});
-    response.write(html);
-    response.end();
+    res.writeHead(200, {"Content-Type": "text/" + type});
+    res.write(html);
+    res.end();
 }
 
-function showError (req, response, msg) {
+function showError (req, res, msg) {
     var pathname = req._pathname;
     just.render('msg', { breadcrumbs_path: pathname,
             title: "404 Status",
@@ -280,9 +280,9 @@ function showError (req, response, msg) {
         }
 
         console.log(msg);
-        response.writeHead(404, {"Content-Type": "text/html"});
-        response.write(html);
-        response.end();
+        res.writeHead(404, {"Content-Type": "text/html"});
+        res.write(html);
+        res.end();
     });
 }
 
@@ -345,7 +345,7 @@ function sqlRequest(req, res) {
     });
 }
 
-function sqlHistory (response) {
+function sqlHistory (res) {
     var limit = 20;
 
     async.waterfall([
@@ -355,15 +355,15 @@ function sqlHistory (response) {
 
     ], function (err, results) {
         if (err) {
-            showError (response, err, pathname);
+            showError (res, err, pathname);
         } else {
-            respond( response, 'sqlHistory', 
+            respond( res, 'sqlHistory', 
                 { values: results, limit: limit, authenticate: authenticate });
         }
     });
 }
 
-function sqlDetails (response, sqlId) {
+function sqlDetails (res, sqlId) {
     async.waterfall([
         function (done){
             sqlite.details(done, sqlId);
@@ -371,9 +371,9 @@ function sqlDetails (response, sqlId) {
 
     ], function (err, results) {
         if (err) {
-            showError (response, err, pathname);
+            showError (res, err, pathname);
         } else {
-            respond( response, 'sqlDetails', 
+            respond( res, 'sqlDetails', 
                 { values: results, authenticate: authenticate, 
                    sqlId: sqlId,   databaseList: config.db });
         }
