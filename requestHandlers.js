@@ -13,6 +13,8 @@ var sqlite   = require('./sqliteDB.js');
 
 var async = require('async');
 
+// this list of global variables is not good.
+// it does not work well with concurrent requests.
 var connection, pathname, dbType, tableGroupsFile, table, column, value, sql, dbId, 
     reqName, user, comment, path_breadcrumbs, sqlId;
 
@@ -21,6 +23,8 @@ if (config.authenticate) {
     authenticate = true;
 }
 
+// this function will have to go away.
+// prepare_locals() below is a partial replacement.
 function set_variables(req) {
     connection      = req.params.connect;
     pathname        = req.params.path;
@@ -38,14 +42,42 @@ function set_variables(req) {
     sqlId           = req.params.sqlId;
 }
 
+// prepare some general data elements, that would
+// be available to all the templates
+
+exports.prepare_locals = 
+function prepare_locals (req, res, next) {
+    var authenticate = false;
+    if (config.authenticate) {
+        authenticate = true;
+    }
+
+    res.locals( {
+        req:    req,
+        authenticate: authenticate,
+        path:   req.params.path,
+        config: config,
+    } );
+    next();
+}
+
+// produce a response with a JUST template,
+// from the ./view/ directory,
+// but use res.locals to store the template data
 function respond(res, template, data) {
-    just.render( template, data, 
+    // integrate data into res.locals
+    res.locals(data);
+    // a trick to make locals available to 
+    // the template
+    var locals = {};
+    for (var p in res.locals) { locals[p] = res.locals[p]; }
+    // execute the template
+    just.render( template, 
+                 locals,
                  function(error, html) {
                     showPage(res, error, html);
                  });
 }
-
-
 
 
 function login (res, pathname, errmsg) {
@@ -56,8 +88,8 @@ function login (res, pathname, errmsg) {
 }
 
 function selectDatabase (req, res) {
-    respond( res, 'listDatabase', 
-        { databaseList: config.db, authenticate: authenticate} );
+    console.log( 'selectDatabase()' );
+    respond( res, 'listDatabase', {databaseList: config.db} );
 }
 
 function start(req, res) {
@@ -84,8 +116,9 @@ function start(req, res) {
             showError (res, err, pathname);
         } else {
             respond( res, 'tableList',  
-                { tablesList: result, path: pathname, tableGr: tabGr, 
-                    authenticate: authenticate, path_sql: pathname + ":sql" });
+                {   tablesList: result, 
+                    tableGr: tabGr, 
+                    path_sql: pathname + ":sql" });
         }
     });
 }
