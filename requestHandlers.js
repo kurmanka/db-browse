@@ -274,24 +274,27 @@ function showPage (res, error, html, type) {
 
 function showError (req, res, msg) {
     var pathname = req._pathname;
-    just.render('msg', { breadcrumbs_path: pathname,
+    just.render('msg', { 
+            breadcrumbs_path: pathname,
             title: "404 Status",
             authenticate: authenticate,
-            msg: msg }, function(error, html) {
-        if (error) {
-            console.log(error);
-        }
+            msg: msg }, 
+        function(error, html) {
+            if (error) {
+                console.log(error);
+            }
 
-        console.log(msg);
-        res.writeHead(404, {"Content-Type": "text/html"});
-        res.write(html);
-        res.end();
-    });
+            console.log(msg);
+            res.writeHead(404, {"Content-Type": "text/html"});
+            res.write(html);
+            res.end();
+        }
+    );
 }
 
 function cssConnect (req, res) {
     justStyle.render('style', {}, function(error, html) {
-        showPage (res, error, html, 'css');
+        showPage(res, error, html, 'css');
     });
 }
 
