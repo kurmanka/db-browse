@@ -34,9 +34,15 @@ var database = {};
 
 var loginError = 'This login & password combination is not allowed.';
 
-var middleware = [prepare_req_params, loadUser, prepare_dbconnection];
+var middleware = [  prepare_req_params, 
+                    loadUser, 
+                    prepare_dbconnection, 
+                    requestHandlers.prepare_locals ];
 
-app.get('/', loadUser, requestHandlers.selectDatabase); //run method selectDatabase
+app.get('/', prepare_req_params, 
+             loadUser, 
+             requestHandlers.prepare_locals,
+             requestHandlers.selectDatabase); //run method selectDatabase
 
 app.get('/style.css', requestHandlers.cssConnect); //connect to css file
 
