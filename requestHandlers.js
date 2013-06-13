@@ -310,7 +310,7 @@ function showError (req, res, msg, bc_path) {
 }
 
 function cssConnect (req, res) {
-    justStyle.render('style', {}, function(error, html) {
+    justStyle.render('style', function(error, html) {
         showPage(res, error, html, 'css');
     });
 }
