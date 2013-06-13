@@ -50,19 +50,20 @@ function prepare_locals (req, res, next) {
 // produce a response with a JUST template,
 // from the ./view/ directory,
 // but use res.locals to store the template data
-function respond(res, template, data) {
+function respond(res, template, data, callback) {
     // integrate data into res.locals
     res.locals(data);
     // a trick to make locals available to
     // the template
     var locals = {};
     for (var p in res.locals) { locals[p] = res.locals[p]; }
+    // the default callback
+    callback = (callback) ? callback
+                          : function(error, html) { showPage(res, error, html); };
     // execute the template
     just.render( template,
                  locals,
-                 function(error, html) {
-                    showPage(res, error, html);
-                 });
+                 callback );
 }
 
 
