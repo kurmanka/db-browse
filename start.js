@@ -15,9 +15,11 @@ app.use(express.cookieParser());
 
 // very simple loging of the incomming requests to console
 // from http://expressjs.com/api.html#app.use
+// but don't log the damn /favicon.ico requests
+// (which can be handled right away)
 app.use(function(req, res, next){
     if(req.url == '/favicon.ico') {
-        requestHandlers.showError(req, res, "Serve 404. Connect to /favicon.ico.");
+        res.send(404,'Not found');
     } else {
         console.log('%s %s', req.method, req.url);
         next();
