@@ -277,7 +277,7 @@ function getDbType (dbType) {
     return db;
 }
 
-function showPage (res, error, html, type) {
+function showPage (res, error, content, type) {
     if (error) {
         console.log(error);
     }
@@ -286,9 +286,8 @@ function showPage (res, error, html, type) {
         type = 'html';
     }
 
-    res.writeHead(200, {"Content-Type": "text/" + type});
-    res.write(html);
-    res.end();
+    res.set('Content-Type', 'text/' + type );
+    res.send(content);
 }
 
 function showError (req, res, msg, bc_path) {
