@@ -41,7 +41,7 @@ function prepare_locals (req, res, next) {
         dbId:         req.params.db_id,
         sql:          req.body.sql,
         reqName:      req.body.name,
-        user:         req.session.user,
+        user:         (req.session) ? req.session.user : null,
         comment:      req.body.comment,
     } );
     next();
