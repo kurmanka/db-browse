@@ -66,6 +66,19 @@ function respond(res, template, data, callback) {
                  callback );
 }
 
+// produce error response if there is error, 
+// or produce page response otherwise
+function finish( req, res, template, data, cb) {
+    // return a function
+    return function (err, result) {
+        if (err) {
+            showError(req, res, err);
+        } else {
+            respond( res, template, data, cb );
+        }
+    };
+}
+
 
 function login (res, pathname, errmsg) {
     if (!pathname) {
@@ -96,18 +109,15 @@ function start(req, res) {
             tabGr = tableGroups;
             var db = getDbType(l.dbType);
             db.showAllTable(l.connection, done);
+        },
+        function (tablesList, done) {
+            l.tablesList = tablesList;
+            done(null);
         }
-
-    ], function (err, result) {
-        if (err) {
-            showError(req, res, err);
-        } else {
-            respond( res, 'tableList',
-                {   tablesList: result,
-                    tableGr: tabGr,
-                    path_sql: l.pathname + ":sql" });
-        }
-    });
+    ], finish( req, res, 'tableList',
+                {   tableGr: tabGr,
+                    path_sql: l.pathname + ":sql" })
+    );
 }
 
 function readFile(fileName, done) {
@@ -160,26 +170,25 @@ function showTable(req, res) {
         function (done){
             db = getDbType(l.dbType);
             db.showTableRequest(l.connection, l.table, done);
-        }
-
-    ], function (err, results) {
-        if (err) {
-            showError(req, res, err);
-        } else {
+        },
+        function (results,done){
             var data = {attrList: results[0], indexesArr: results[1], statusArr: results[2]};
 
             if (l.dbType == 'postgres') {
                 data.referenced = results[3];
                 data.triggers   = results[4];
-                data.foreignKey  = results[5];
+                data.foreignKey = results[5];
             }
-
-            // provide a custom callback for the template
-            respond(res, 'tableDetails', data, function(error, html) {
-                showPageTotalRecords(res, error, html, db, l.connection, l.table);
-            });
+            res.locals(data);
+            done(null);
         }
-    });
+    ], 
+    // provide a custom callback for the template
+    finish(req, res, 'tableDetails', {}, 
+       function(error, html) {
+                showPageTotalRecords(res, error, html, db, l.connection, l.table);
+       })
+    );
 
 }
 
@@ -224,16 +233,14 @@ function showColumn(req, res) {
         function (done){
             db = getDbType(l.dbType);
             db.showColumnRequest(l.connection, l.column, l.table, limit, done);
+        }, 
+        function( columnData, done ) {
+            res.locals.columnData = columnData;
+            done(null);
         }
 
-    ], function (err, results) {
-        if (err) {
-            showError(req, res, err);
-        } else {
-            respond(res, 'columnData',
-                { columnData: results, authenticate: authenticate, path: l.pathname });
-        }
-    });
+    ], finish(req, res, 'columnData' )
+    );
 }
 
 function showValue(req, res) {
@@ -245,25 +252,19 @@ function showValue(req, res) {
         function (done){
             db = getDbType(l.dbType);
             db.showValueRequest(l.connection, l.table, l.column, l.value, done);
+        },
+        function (results, done) {
+            if (results == 0) {
+                // error
+                done( "The value '" + l.value + "' is not present in column '" +
+                      l.column + "'" );
+            } else {
+                l.values = results; 
+                done(null);
+            }
         }
-    ], function (err, results) {
-        if (err) {
-            showError(req, res, err);
-        }
-
-        else if (results == 0) {
-            showError(req, res, "The value '" + l.value + "' is not present in column '" +
-                l.column + "'");
-        }
-
-        else {
-            respond(res, 'showValues',
-                { values: results,
-                    limit: limit,
-                    authenticate: authenticate,
-                    path: l.pathname });
-        }
-    });
+    ], finish( req, res, 'showValues', { limit: limit } )
+    );
 }
 
 function getDbType (dbType) {
