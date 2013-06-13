@@ -296,7 +296,7 @@ function showError (req, res, msg, bc_path) {
 
     just.render('msg', {
             breadcrumbs_path: pathname,
-            title: "404 Status",
+            title: "Error",
             authenticate: authenticate,
             msg: msg },
 
@@ -306,9 +306,7 @@ function showError (req, res, msg, bc_path) {
             }
 
             console.log(msg);
-            res.writeHead(404, {"Content-Type": "text/html"});
-            res.write(html);
-            res.end();
+            res.send(500, html);
         }
     );
 }
