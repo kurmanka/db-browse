@@ -174,17 +174,13 @@ function showTable(req, res) {
                 data.foreignKey  = results[5];
             }
 
-            data.path      = l.pathname;
-            data.tableName = l.table;
-            data.dbType    = l.dbType;
-            data.authenticate = authenticate;
-
-            //respond( res, 'tableDetails', data ); -- not good enough
-            just.render('tableDetails', data, function(error, html) {
+            // provide a custom callback for the template
+            respond(res, 'tableDetails', data, function(error, html) {
                 showPageTotalRecords(res, error, html, db, l.connection, l.table);
             });
         }
     });
+
 }
 
 function showPageTotalRecords (res, error, html, db, connection, table) {
@@ -193,6 +189,7 @@ async.waterfall([
         if (error) {
             console.log(error);
         }
+        // send the main part of the page
         res.writeHead(200, {"Content-Type": "text/html"});
         res.write(html);
         done(null);
@@ -206,12 +203,13 @@ async.waterfall([
         if (err) {
             showError(req, res, err);
         } else {
-            just.render('totalRecords', {rowsCounter: counter}, function(error, html_counter) {
-                if (err) {
-                    console.log(err);
-                }
-                res.write(html_counter);
-                res.end();
+            respond(res, 'totalRecords', {rowsCounter: counter},
+                function(error, html_counter) {
+                    if (err) {
+                        console.log(err);
+                    }
+                    res.write(html_counter);
+                    res.end();
             });
         }
     });
