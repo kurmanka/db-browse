@@ -150,14 +150,29 @@ function showValueRequest(connection, table, column, value, doneReturn) {
     ]);
 }
 
-function getSQL (connection, sql, doneReturn){
-    connection.query(sql, function(err, rows, fields) {
-        if (err) {
-            err = err + " in request '" + sql + "'";
-        }
+function getSQL (connection, sql, table, column, doneReturn){
+    async.waterfall([
+        function (done){
+            objectCheck(connection, doneReturn, done, table);
+        },
 
-        doneReturn(err, rows);
-    });
+        function (done){
+            if (column != '*') {
+                objectCheck(connection, doneReturn, done, table, column);
+            } else {
+                done();
+            }
+        },
+
+        function (done){
+            connection.query(sql, function(err, rows, fields) {
+                if (err) {
+                    err = err + " in request '" + sql + "'";
+                }
+                doneReturn(err, rows);
+            });
+        }
+    ]);
 }
 
 exports.showAllTable = showAllTable;

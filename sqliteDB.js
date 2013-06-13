@@ -26,8 +26,8 @@ function saveRequest(sql, dbId, reqName, user, comment, doneReturn) {
 
         function(done){
             db.each(
-                "SELECT max(used_times) as ut, id, comment, name, created_at " 
-                + " FROM sql WHERE sql=?", sql, 
+                "SELECT max(used_times) as ut, id, comment, name, created_at "
+                + " FROM sql WHERE sql=?", sql,
                 function(err, row) {
                 if (row && row.ut) {
                     used_timeNew = parseInt(row.ut) + 1;
@@ -44,10 +44,14 @@ function saveRequest(sql, dbId, reqName, user, comment, doneReturn) {
             });
         }
     ], function (err) {
+        if (err) {
+            doneReturn(err);
+        }
         var stmt = db.prepare("INSERT INTO sql VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         stmt.run(newId, sql, nameNew, commentNew, dbId, user, created_at, used_timeNew, last_used);
         stmt.finalize();
-        doneReturn(err);
+
+        doneReturn(null);
     });
 }
 
@@ -65,6 +69,9 @@ function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, typ
             db.each(
                 "SELECT max(used_times) as ut, id, comment, name, created_at, last_used "
                 +"FROM sql WHERE id=?", sqlId, function(err, row) {
+                if (err) {
+                    done(err);
+                }
                 if (row.id) {
                     created_at = row.created_at;
                     if (type == 'save') {
@@ -76,14 +83,19 @@ function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, typ
                     }
                     db.run("delete FROM sql WHERE id=?", sqlId );
                 }
-                done(err);
+
+                done(null);
             });
         }
     ], function (err) {
+        if (err) {
+            doneReturn(err);
+        }
         var stmt = db.prepare("INSERT INTO sql VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         stmt.run(sqlId, sql, reqName, comment, dbId, user, created_at, used_time, last_used);
         stmt.finalize();
-        doneReturn(err);
+
+        doneReturn(null);
     });
 }
 

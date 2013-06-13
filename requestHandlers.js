@@ -13,39 +13,14 @@ var sqlite   = require('./sqliteDB.js');
 
 var async = require('async');
 
-// this list of global variables is not good.
-// it does not work well with concurrent requests.
-var connection, pathname, dbType, tableGroupsFile, table, column, value, sql, dbId, 
-    reqName, user, comment, path_breadcrumbs, sqlId;
-
 var authenticate = false;
 if (config.authenticate) {
     authenticate = true;
 }
 
-// this function will have to go away.
-// prepare_locals() below is a partial replacement.
-function set_variables(req) {
-    connection      = req.params.connect;
-    pathname        = req.params.path;
-    dbType          = req.params.dbType;
-    tableGroupsFile = req.params.groups || '';
-    table           = req.params.table;
-    column          = req.params.column;
-    value           = req.params.value;
-    sql             = req.body.sql;
-    dbId            = req.params.dbId;
-    reqName         = req.body.name;
-    user            = req.session.user;
-    comment         = req.body.comment;
-    path_breadcrumbs = req.params.path_breadcrumbs;
-    sqlId           = req.params.sqlId;
-}
-
 // prepare some general data elements, that would
 // be available to all the templates
-
-exports.prepare_locals = 
+exports.prepare_locals =
 function prepare_locals (req, res, next) {
     var authenticate = false;
     if (config.authenticate) {
@@ -53,10 +28,21 @@ function prepare_locals (req, res, next) {
     }
 
     res.locals( {
-        req:    req,
+        req:          req,
         authenticate: authenticate,
-        path:   req.params.path,
-        config: config,
+        path:         req.params.path,
+        config:       config,
+        connection:   req.params.connect,
+        pathname:     req.params.path,
+        dbType:       req.params.dbType,
+        table:        req.params.table,
+        column:       req.params.column,
+        value:        req.params.value,
+        dbId:         req.params.db_id,
+        sql:          req.body.sql,
+        reqName:      req.body.name,
+        user:         req.session.user,
+        comment:      req.body.comment,
     } );
     next();
 }
@@ -67,12 +53,12 @@ function prepare_locals (req, res, next) {
 function respond(res, template, data) {
     // integrate data into res.locals
     res.locals(data);
-    // a trick to make locals available to 
+    // a trick to make locals available to
     // the template
     var locals = {};
     for (var p in res.locals) { locals[p] = res.locals[p]; }
     // execute the template
-    just.render( template, 
+    just.render( template,
                  locals,
                  function(error, html) {
                     showPage(res, error, html);
@@ -93,12 +79,12 @@ function selectDatabase (req, res) {
 }
 
 function start(req, res) {
-    set_variables(req);
+    var l = res.locals;
 
     var tabGr = [];
     async.waterfall([
         function (done){
-            readFile(tableGroupsFile, done);
+            readFile(req.params.groups, done);
         },
 
         function (tableGroups, done){
@@ -107,18 +93,18 @@ function start(req, res) {
 
         function (tableGroups, done){
             tabGr = tableGroups;
-            var db = getDbType(dbType);
-            db.showAllTable(connection, done);
+            var db = getDbType(l.dbType);
+            db.showAllTable(l.connection, done);
         }
 
     ], function (err, result) {
         if (err) {
-            showError (res, err, pathname);
+            showError(req, res, err);
         } else {
-            respond( res, 'tableList',  
-                {   tablesList: result, 
-                    tableGr: tabGr, 
-                    path_sql: pathname + ":sql" });
+            respond( res, 'tableList',
+                {   tablesList: result,
+                    tableGr: tabGr,
+                    path_sql: l.pathname + ":sql" });
         }
     });
 }
@@ -167,34 +153,34 @@ function getArrayOfStrings(string, done) {
 
 function showTable(req, res) {
     var db;
-    set_variables(req);
+    var l = res.locals;
 
     async.waterfall([
         function (done){
-            db = getDbType(dbType);
-            db.showTableRequest(connection, table, done);
+            db = getDbType(l.dbType);
+            db.showTableRequest(l.connection, l.table, done);
         }
 
     ], function (err, results) {
         if (err) {
-            showError (res, err, pathname);
+            showError(req, res, err);
         } else {
-            var data = {attrList: results[0], indexesArr: results[1], foreignKey: results[2]};
+            var data = {attrList: results[0], indexesArr: results[1], statusArr: results[2]};
 
-            if (dbType == 'postgres') {
+            if (l.dbType == 'postgres') {
                 data.referenced = results[3];
                 data.triggers   = results[4];
-                data.statusArr  = results[5];
+                data.foreignKey  = results[5];
             }
 
-            data.path      = pathname;
-            data.tableName = table;
-            data.dbType    = dbType;
+            data.path      = l.pathname;
+            data.tableName = l.table;
+            data.dbType    = l.dbType;
             data.authenticate = authenticate;
 
             //respond( res, 'tableDetails', data ); -- not good enough
             just.render('tableDetails', data, function(error, html) {
-                showPageTotalRecords(res, error, html, db, connection, table);
+                showPageTotalRecords(res, error, html, db, l.connection, l.table);
             });
         }
     });
@@ -217,7 +203,7 @@ async.waterfall([
 
     ], function (err, counter) {
         if (err) {
-            showError (res, err, pathname);
+            showError(req, res, err);
         } else {
             just.render('totalRecords', {rowsCounter: counter}, function(error, html_counter) {
                 if (err) {
@@ -233,20 +219,20 @@ async.waterfall([
 function showColumn(req, res) {
     var limit = 20;
     var db;
-    set_variables(req);
+    var l = res.locals;
 
     async.waterfall([
         function (done){
-            db = getDbType(dbType);
-            db.showColumnRequest(connection, column, table, limit, done);
+            db = getDbType(l.dbType);
+            db.showColumnRequest(l.connection, l.column, l.table, limit, done);
         }
 
     ], function (err, results) {
         if (err) {
-            showError (res, err, pathname);
+            showError(req, res, err);
         } else {
-            respond(res, 'columnData', 
-                { columnData: results, authenticate: authenticate, path: pathname });
+            respond(res, 'columnData',
+                { columnData: results, authenticate: authenticate, path: l.pathname });
         }
     });
 }
@@ -254,29 +240,29 @@ function showColumn(req, res) {
 function showValue(req, res) {
     var limit = 10;
     var db;
-    set_variables(req);
+    var l = res.locals;
 
     async.waterfall([
         function (done){
-            db = getDbType(dbType);
-            db.showValueRequest(connection, table, column, value, done);
+            db = getDbType(l.dbType);
+            db.showValueRequest(l.connection, l.table, l.column, l.value, done);
         }
     ], function (err, results) {
         if (err) {
-            showError (res, err, pathname);
+            showError(req, res, err);
         }
 
         else if (results == 0) {
-            showError(res, "The value '" + value + "' is not present in column '" + 
-                column + "'", pathname);
+            showError(req, res, "The value '" + l.value + "' is not present in column '" +
+                l.column + "'");
         }
 
         else {
-            respond(res, 'showValues', 
-                { values: results, 
-                    limit: limit, 
-                    authenticate: authenticate, 
-                    path: pathname });
+            respond(res, 'showValues',
+                { values: results,
+                    limit: limit,
+                    authenticate: authenticate,
+                    path: l.pathname });
         }
     });
 }
@@ -305,13 +291,15 @@ function showPage (res, error, html, type) {
     res.end();
 }
 
-function showError (req, res, msg) {
-    var pathname = req._pathname;
-    just.render('msg', { 
+function showError (req, res, msg, bc_path) {
+    var pathname = bc_path || req.params.path;
+
+    just.render('msg', {
             breadcrumbs_path: pathname,
             title: "404 Status",
             authenticate: authenticate,
-            msg: msg }, 
+            msg: msg },
+
         function(error, html) {
             if (error) {
                 console.log(error);
@@ -332,44 +320,51 @@ function cssConnect (req, res) {
 }
 
 function sqlRequest(req, res) {
-    set_variables(req);
-    var path = pathname.replace(/\:/, '/');
+    var l = res.locals;
+    var path = l.pathname.replace(/\:/, '/');
     var type = '';
 
-    if(path_breadcrumbs) {
-        path = path_breadcrumbs;
+    if(req.params.path_breadcrumbs) {
+        path = req.params.path_breadcrumbs;
         type='total change';
     }
     async.waterfall([
         function (done){
-            if ( /ALTER|create|drop/i.exec(sql) ) {
-                 showError (res, "Request '" + sql + "' can not be executed", pathname);
+            if ( /ALTER|create|drop/i.exec(l.sql) ) {
+                showError(req, res, "Request '" + l.sql + "' can not be executed");
             } else {
                 done(null);
             }
         },
 
         function (done){
-            var db = getDbType(dbType);
-            db.getSQL(connection, sql, done);
+            var db = getDbType(l.dbType);
+
+            var temp = /from\s+[^\s]+/.exec(l.sql).join();
+            var table = temp.replace(/from\s+/, '');
+
+            var temp = /select\s+[^\s]+/.exec(l.sql).join();
+            var column = temp.replace(/select\s+/, '');
+
+            db.getSQL(l.connection, l.sql, table, column, done);
         }
 
     ], function (err, results) {
         if (err) {
-            showError (res, err, pathname);
+            showError(req, res, err);
         } else {
-            async.parallel([
+            async.waterfall([
                 function(done){
-                    if (sqlId) {
-                        sqlite.changeRequest(sql, dbId, reqName, user, comment, done, sqlId, 'execute');
+                    if (req.params.sql_id) {
+                        sqlite.changeRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done, req.params.sql_id, 'execute');
                     } else {
-                        sqlite.saveRequest(sql, dbId, reqName, user, comment, done);
+                        sqlite.saveRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done);
                     }
                 },
 
                 function(done){
-                    just.render('showSqlRequest', 
-                        { authenticate: authenticate, path: path, sql: sql, results: results }, 
+                    just.render('showSqlRequest',
+                        { authenticate: authenticate, path: path, sql: l.sql, results: results },
                         function(error, html) {
                             showPage (res, error, html);
                             done(null);
@@ -377,7 +372,7 @@ function sqlRequest(req, res) {
                 }
             ], function (err, results) {
                 if (err) {
-                    showError(res, err, pathname);
+                    showError(req, res, err);
                 }
             });
         }
@@ -394,9 +389,9 @@ function sqlHistory (res) {
 
     ], function (err, results) {
         if (err) {
-            showError (res, err, pathname);
+            showError(req, res, err);
         } else {
-            respond( res, 'sqlHistory', 
+            respond( res, 'sqlHistory',
                 { values: results, limit: limit, authenticate: authenticate });
         }
     });
@@ -410,52 +405,52 @@ function sqlDetails (res, sqlId) {
 
     ], function (err, results) {
         if (err) {
-            showError (res, err, pathname);
+            showError(req, res, err);
         } else {
-            respond( res, 'sqlDetails', 
-                { values: results, authenticate: authenticate, 
+            respond( res, 'sqlDetails',
+                { values: results, authenticate: authenticate,
                    sqlId: sqlId,   databaseList: config.db });
         }
     });
 }
 
 function sqlSave (req, res) {
-    set_variables(req);
-    var bc_path = '/' + dbId + '/:sql/' + sqlId + '/saved';
+    var l = res.locals;
+    var bc_path = '/' + l.dbId + '/:sql/' + req.params.sql_id + '/saved';
 
     async.waterfall([
         function (done){
-            sqlite.changeRequest(sql, dbId, reqName, user, comment, done, sqlId, 'save');
+            sqlite.changeRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done, req.params.sql_id, 'save');
         }
 
     ], function (err, results) {
         if (err) {
-            showError (res, err, bc_path);
+            showError(req, res, err, bc_path);
         } else {
-            respond( res, 'msg', 
-                { breadcrumbs_path: bc_path, 
-                  title: 'Saving status', 
-                  msg: 'Saving was successful!', 
+            respond( res, 'msg',
+                { breadcrumbs_path: bc_path,
+                  title: 'Saving status',
+                  msg: 'Saving was successful!',
                   authenticate: authenticate });
         }
     });
 }
 
 function sqlRemove (req, res) {
-    set_variables(req);
-    var bc_path = '/' + dbId + '/:sql/' + sqlId;
+    var l = res.locals;
+    var bc_path = '/' + l.dbId + '/:sql/' + req.params.sql_id;
 
     async.waterfall([
         function (done){
-            sqlite.remove(sqlId, done);
+            sqlite.remove(req.params.sql_id, done);
         }
 
     ], function (err, results) {
         if (err) {
-            showError (res, err, bc_path);
+            showError(req, res, err, bc_path);
         } else {
-            respond( res, 'msg', 
-                { breadcrumbs_path: bc_path, title: 'Removing status', 
+            respond( res, 'msg',
+                { breadcrumbs_path: bc_path, title: 'Removing status',
                 msg: 'Removing was successful!', authenticate: authenticate});
         }
     });

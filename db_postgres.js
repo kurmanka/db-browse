@@ -82,8 +82,8 @@ function showTableRequest(connection, table, doneReturn) {
                     });
                 },
 
-                function(done){ //show Foreign-key
-                    connection.query("SELECT conname, pg_catalog.pg_get_constraintdef(r.oid, true) as condef FROM pg_catalog.pg_constraint r WHERE r.conrelid ='" + escape(table) + "'::regclass AND r.contype = 'f';", function(err, result) {
+                function(done){ //show Status
+                    connection.query("SELECT * FROM information_schema.tables WHERE table_name = $1;", [table], function(err, result) {
                         done(err, result.rows);
                     });
                 },
@@ -100,8 +100,8 @@ function showTableRequest(connection, table, doneReturn) {
                     });
                 },
 
-                function(done){ //show Status
-                    connection.query("SELECT * FROM information_schema.tables WHERE table_name = $1;", [table], function(err, result) {
+                function(done){ //show Foreign-key
+                    connection.query("SELECT conname, pg_catalog.pg_get_constraintdef(r.oid, true) as condef FROM pg_catalog.pg_constraint r WHERE r.conrelid ='" + escape(table) + "'::regclass AND r.contype = 'f';", function(err, result) {
                         done(err, result.rows);
                     });
                 }
@@ -135,7 +135,7 @@ function showValueRequest(connection, table, column, value, doneReturn) {
         },
 
         function (done){
-           objectCheck(connection, doneReturn, done, table, column);
+            objectCheck(connection, doneReturn, done, table, column);
         },
 
         function (done){
@@ -146,18 +146,34 @@ function showValueRequest(connection, table, column, value, doneReturn) {
     ]);
 }
 
-function getSQL (connection, sql, doneReturn){
-    connection.query(sql, function(err, result) {
-        if (err) {
-            err = err + " in request '" + sql + "'";
-        }
+function getSQL (connection, sql, table, column, doneReturn){
+    async.waterfall([
+        function (done){
+            objectCheck(connection, doneReturn, done, table);
+        },
 
-        if (result) {
-            doneReturn(err, result.rows);
-        } else {
-            doneReturn(err);
+        function (done){
+            if (column != '*') {
+                objectCheck(connection, doneReturn, done, table, column);
+            } else {
+                done();
+            }
+        },
+
+        function (done){
+            connection.query(sql, function(err, result) {
+                if (err) {
+                    err = err + " in request '" + sql + "'";
+                }
+
+                if (result) {
+                    doneReturn(err, result.rows);
+                } else {
+                    doneReturn(err);
+                }
+            });
         }
-    });
+    ]);
 }
 
 function escape (text) {

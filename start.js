@@ -16,13 +16,12 @@ app.use(express.cookieParser());
 // very simple loging of the incomming requests to console
 // from http://expressjs.com/api.html#app.use
 app.use(function(req, res, next){
-
-  if(req.url == '/favicon.ico') {
-      requestHandlers.showError(req, res, "Serve 404. Connect to /favicon.ico.");
-  } else {
-    console.log('%s %s', req.method, req.url);
-    next();
-  }
+    if(req.url == '/favicon.ico') {
+        requestHandlers.showError(req, res, "Serve 404. Connect to /favicon.ico.");
+    } else {
+        console.log('%s %s', req.method, req.url);
+        next();
+    }
 });
 
 // logging with response time
@@ -34,33 +33,27 @@ var database = {};
 
 var loginError = 'This login & password combination is not allowed.';
 
-var middleware = [  prepare_req_params, 
-                    loadUser, 
-                    prepare_dbconnection, 
+var middleware = [  prepare_req_params,
+                    loadUser,
+                    prepare_dbconnection,
                     requestHandlers.prepare_locals ];
 
-app.get('/', prepare_req_params, 
-             loadUser, 
+app.get('/', prepare_req_params,
+             loadUser,
              requestHandlers.prepare_locals,
              requestHandlers.selectDatabase); //run method selectDatabase
 
 app.get('/style.css', requestHandlers.cssConnect); //connect to css file
 
 app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sqlite db
-    // prepare_dbconnection() already sets req.params.dbID   
-    //req.params.dbId = req.params[0];    
-    if (req.body.db) {
-        req.params.dbId = req.body.db;
-    }
-
-    req.params.sqlId = req.params[1];
+    req.params.sql_id = req.params[1];
     if(req.body.comment == 'comment...'){
         req.body.comment = '';
     }
 
     if (req.body.sql) {
         if (req.body.run == 'Execute') {
-            req.params.path_breadcrumbs = '/' + req.params.dbId + '/:sql/' + req.params.sqlId + '/show';
+            req.params.path_breadcrumbs = '/' + req.params.db_id + '/:sql/' + req.params.sql_id + '/show';
             requestHandlers.sqlRequest(req, res);
         }
         else if (req.body.run == 'Save'){
@@ -74,9 +67,9 @@ app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sql
         }
     } else {
         if (req.body.run) {
-            res.redirect('/:sql/' + req.params.sqlId);
+            res.redirect('/:sql/' + req.params.sql_id);
         } else {
-            res.redirect('/' + req.params.dbId);
+            res.redirect('/' + req.params.db_id);
         }
     }
 });
@@ -126,24 +119,23 @@ function prepare_req_params(req, res, next) {
     next();
 }
 
-app.get('/:dbID', middleware, requestHandlers.start); //run method start
+app.get('/:db_id', middleware, requestHandlers.start); //run method start
 
-app.get('/:dbID/:table', middleware, requestHandlers.showTable);//run method showTable
+app.get('/:db_id/:table', middleware, requestHandlers.showTable);//run method showTable
 
-app.get('/:dbID/:table/:column', middleware, requestHandlers.showColumn); //run method showColumn
+app.get('/:db_id/:table/:column', middleware, requestHandlers.showColumn); //run method showColumn
 
-app.get('/:dbID/:table/:column/:value', middleware, requestHandlers.showValue); //run method showValue
+app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue); //run method showValue
 
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
 function prepare_dbconnection( req, res, next ) {
     //console.log( 'prepare_dbconnection(): start' );
-    if (!req.params.dbID) {
-        req.params.dbID = req.body.db || req.params[0];
+    if (!req.params.db_id) {
+        req.params.db_id = req.body.db || req.params[0];
     }
-
-    var dbId = req.params.dbID;
+    var dbId = req.params.db_id;
     req.dbconfig = config.db[dbId];
 
     if (!req.dbconfig) {
@@ -155,14 +147,14 @@ function prepare_dbconnection( req, res, next ) {
     req.params.dbType = req.dbconfig.type;
 
     if (req.dbconfig.table_groups) {
-        req.params.groups = req.dbconfig.table_groups;
+        req.params.groups = req.dbconfig.table_groups || '';
     }
 
     var done = function (err) {
         if (err) {
             // handle the error
             requestHandlers.showError(req, res,
-                "Error connecting to the database with id '" + dbId + "'. " + err );
+                "Error connecting to the database with id '" + dbId + "'. " + err);
 
         } else {
             console.log('... connected');
