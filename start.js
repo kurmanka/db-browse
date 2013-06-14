@@ -49,9 +49,6 @@ app.get('/style.css', requestHandlers.cssConnect); //connect to css file
 
 app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sqlite db
     req.params.sql_id = req.params[1];
-    if(req.body.comment == 'comment...'){
-        req.body.comment = '';
-    }
 
     if (req.body.sql) {
         if (req.body.run == 'Execute') {

@@ -26,6 +26,10 @@ function prepare_locals (req, res, next) {
     if (config.authenticate) {
         authenticate = true;
     }
+	if(req.body.comment == 'comment...'){
+        req.body.comment = '';
+    }
+	
 
     res.locals( {
         req:          req,
@@ -42,7 +46,7 @@ function prepare_locals (req, res, next) {
         sql:          req.body.sql,
         reqName:      req.body.name,
         user:         (req.session) ? req.session.user : null,
-        comment:      req.body.comment,
+        comment:      req.body.comment || '',
     } );
     next();
 }
