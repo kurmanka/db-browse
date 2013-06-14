@@ -26,10 +26,9 @@ function prepare_locals (req, res, next) {
     if (config.authenticate) {
         authenticate = true;
     }
-	if(req.body.comment == 'comment...'){
+    if (req.body.comment == 'comment...'){
         req.body.comment = '';
     }
-	
 
     res.locals( {
         req:          req,
@@ -43,7 +42,7 @@ function prepare_locals (req, res, next) {
         column:       req.params.column,
         value:        req.params.value,
         dbId:         req.params.db_id,
-        sql:          req.body.sql,
+        sql:          (req.body.sql) ? req.body.sql.replace(/;/, ''): '',
         reqName:      req.body.name,
         user:         (req.session) ? req.session.user : null,
         comment:      req.body.comment || '',
@@ -70,7 +69,7 @@ function respond(res, template, data, callback) {
                  callback );
 }
 
-// produce error response if there is error, 
+// produce error response if there is error,
 // or produce page response otherwise
 function finish( req, res, template, data, cb) {
     // return a function
@@ -186,9 +185,9 @@ function showTable(req, res) {
             res.locals(data);
             done(null);
         }
-    ], 
+    ],
     // provide a custom callback for the template
-    finish(req, res, 'tableDetails', {}, 
+    finish(req, res, 'tableDetails', {},
        function(error, html) {
                 showPageTotalRecords(res, error, html, db, l.connection, l.table);
        })
@@ -237,7 +236,7 @@ function showColumn(req, res) {
         function (done){
             db = getDbType(l.dbType);
             db.showColumnRequest(l.connection, l.column, l.table, limit, done);
-        }, 
+        },
         function( columnData, done ) {
             res.locals.columnData = columnData;
             done(null);
@@ -263,7 +262,7 @@ function showValue(req, res) {
                 done( "The value '" + l.value + "' is not present in column '" +
                       l.column + "'" );
             } else {
-                l.values = results; 
+                l.values = results;
                 done(null);
             }
         }
@@ -341,25 +340,25 @@ function sqlRequest(req, res) {
         function (done){
             var db = getDbType(l.dbType);
 
+            if ( /\*/.exec(l.sql) && !/\s+\*\s+/.exec(l.sql)) {
+                l.sql = l.sql.replace(/\*/, ' * ');
+            }
+
             var temp = /from\s+[^\s]+/.exec(l.sql);
-			var table;
-			if (temp) {
-			    table = temp.join().replace(/from\s+/, '');
-			}			
+            var table;
+            if (temp) {
+                table = temp.join().replace(/from\s+/, '');
+            }
 
             var temp = /select\s+[^\s]+/.exec(l.sql);
-			var column;
-			if (temp) {
-				column = temp.join().replace(/select\s+/, '');
-			} else {
-			    if ( /select*/.exec(l.sql) ) {
-				    column = '*';
-				}
-			}
+            var column;
+            if (temp) {
+                column = temp.join().replace(/select\s+/, '');
+            }
 
-			if (!table || !column) {
-			    showError(req, res, "Request '" + l.sql + "' can not be executed", path);
-			}
+            if (!table || !column) {
+                showError(req, res, "Request '" + l.sql + "' can not be executed", path);
+            }
             db.getSQL(l.connection, l.sql, table, column, done);
         }
 
