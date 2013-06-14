@@ -322,7 +322,7 @@ function cssConnect (req, res) {
 
 function sqlRequest(req, res) {
     var l = res.locals;
-    var path = l.pathname.replace(/\:/, '/');
+    var path = l.pathname.replace(/:/, '/');
     var type = '';
 
     if(req.params.path_breadcrumbs) {
@@ -332,7 +332,7 @@ function sqlRequest(req, res) {
     async.waterfall([
         function (done){
             if ( /ALTER|create|drop/i.exec(l.sql) ) {
-                showError(req, res, "Request '" + l.sql + "' can not be executed");
+                showError(req, res, "Request '" + l.sql + "' can not be executed", path);
             } else {
                 done(null);
             }
@@ -358,14 +358,14 @@ function sqlRequest(req, res) {
 			}
 
 			if (!table || !column) {
-			    showError(req, res, "Request '" + l.sql + "' can not be executed");
+			    showError(req, res, "Request '" + l.sql + "' can not be executed", path);
 			}
             db.getSQL(l.connection, l.sql, table, column, done);
         }
 
     ], function (err, results) {
         if (err) {
-            showError(req, res, err);
+            showError(req, res, err, path);
         } else {
             async.waterfall([
                 function(done){
@@ -386,7 +386,7 @@ function sqlRequest(req, res) {
                 }
             ], function (err, results) {
                 if (err) {
-                    showError(req, res, err);
+                    showError(req, res, err, path);
                 }
             });
         }
