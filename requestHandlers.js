@@ -33,6 +33,7 @@ function prepare_locals (req, res, next) {
     res.locals( {
         req:          req,
         authenticate: authenticate,
+        databaseList: config.db,
         path:         req.params.path,
         config:       config,
         connection:   req.params.connect,
@@ -92,7 +93,7 @@ function login (res, pathname, errmsg) {
 
 function selectDatabase (req, res) {
     console.log( 'selectDatabase()' );
-    respond( res, 'listDatabase', {databaseList: config.db} );
+    respond( res, 'listDatabase' );
 }
 
 function start(req, res) {
@@ -109,17 +110,18 @@ function start(req, res) {
         },
 
         function (tableGroups, done){
-            tabGr = tableGroups;
+            //tabGr = tableGroups;
+            l.tableGr = tableGroups;
             var db = getDbType(l.dbType);
             db.showAllTable(l.connection, done);
         },
+
         function (tablesList, done) {
             l.tablesList = tablesList;
             done(null);
         }
     ], finish( req, res, 'tableList',
-                {   tableGr: tabGr,
-                    path_sql: l.pathname + ":sql" })
+                { path_sql: l.pathname + ":sql" })
     );
 }
 
@@ -392,7 +394,7 @@ function sqlRequest(req, res) {
     });
 }
 
-function sqlHistory (res) {
+function sqlHistory (req, res) {
     var limit = 20;
 
     async.waterfall([
@@ -405,12 +407,12 @@ function sqlHistory (res) {
             showError(req, res, err);
         } else {
             respond( res, 'sqlHistory',
-                { values: results, limit: limit, authenticate: authenticate });
+                { values: results, limit: limit });
         }
     });
 }
 
-function sqlDetails (res, sqlId) {
+function sqlDetails (req, res, sqlId) {
     async.waterfall([
         function (done){
             sqlite.details(done, sqlId);
@@ -421,8 +423,7 @@ function sqlDetails (res, sqlId) {
             showError(req, res, err);
         } else {
             respond( res, 'sqlDetails',
-                { values: results, authenticate: authenticate,
-                   sqlId: sqlId,   databaseList: config.db });
+                { values: results, sqlId: sqlId });
         }
     });
 }
@@ -443,8 +444,7 @@ function sqlSave (req, res) {
             respond( res, 'msg',
                 { breadcrumbs_path: bc_path,
                   title: 'Saving status',
-                  msg: 'Saving was successful!',
-                  authenticate: authenticate });
+                  msg: 'Saving was successful!' });
         }
     });
 }
@@ -464,7 +464,7 @@ function sqlRemove (req, res) {
         } else {
             respond( res, 'msg',
                 { breadcrumbs_path: bc_path, title: 'Removing status',
-                msg: 'Removing was successful!', authenticate: authenticate});
+                msg: 'Removing was successful!' });
         }
     });
 }

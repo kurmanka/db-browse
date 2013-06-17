@@ -90,14 +90,14 @@ app.post('/*', function(req, res){ //get and check users data
     }
 });
 
-app.get(/(\/\:sql)$/, loadUser, function(req, res){ //History of previous SQL
-    requestHandlers.sqlHistory(res);
+app.get(/(\/\:sql)$/, prepare_req_params, loadUser, requestHandlers.prepare_locals, function(req, res){ //History of previous SQL
+    requestHandlers.sqlHistory(req, res);
 });
 
-app.get(/\/\:sql\/\d+/, loadUser, function(req, res){ //Sql details page-form
+app.get(/\/\:sql\/\d+/, prepare_req_params, loadUser, requestHandlers.prepare_locals, function(req, res){ //Sql details page-form
     var pathname = url.parse(req.url).pathname;
     var sqlId = /(\d+)$/.exec(pathname);
-    requestHandlers.sqlDetails(res, sqlId[0]);
+    requestHandlers.sqlDetails(req, res, sqlId[0]);
 });
 
 app.get('/logout', function(req, res){ //logout
