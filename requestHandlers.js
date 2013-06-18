@@ -402,8 +402,13 @@ function sqlHistory (req, res) {
 
     async.waterfall([
         function (done){
-            sqlite.history(done, l);
-        }
+            sqlite.history(done);
+        },
+		
+		function (result, done){
+            l.values = result;
+			done(null);
+        },		
     ],
     finish( req, res, 'sqlHistory',
                 { limit: limit })
@@ -415,9 +420,13 @@ function sqlDetails (req, res, sqlId) {
 
     async.waterfall([
         function (done){
-            sqlite.details(done, sqlId, l);
-        }
-
+            sqlite.details(done, sqlId);
+        },
+		
+        function (result, done){
+            l.values = result;
+			done(null);
+        },
     ],
     finish( req, res, 'sqlDetails',
                 { sqlId: sqlId })
