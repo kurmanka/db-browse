@@ -212,16 +212,20 @@ function showPageTotalRecords (req, res, error, html, db) {
         },
 
         function (done) {
-            db.rowsCounter(l.connection, l.table, done, l);
-        }
+            db.rowsCounter(l.connection, l.table, done);
+        },
 
+        function (count, done) {
+            l.rowsCounter = count;
+            done(null);
+        }
     ],
     finish(req, res, 'totalRecords', {},
-        function(err, html_counter) {
+        function(err, html) {
                 if (err) {
                     console.log(err);
                 }
-                res.write(html_counter);
+                res.write(html);
                 res.end();
         })
     );
