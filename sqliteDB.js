@@ -144,7 +144,7 @@ function getCurrentDate() {
     //return year + '-' + month + '-' + day;
 }
 
-function history(doneReturn) {
+function history(doneReturn, l) {
     var sqlArray = [];
     var rowsCounter;
 
@@ -168,6 +168,7 @@ function history(doneReturn) {
             db.each("SELECT id, name, substr(sql, 1, 120) as sql, comment, dbid, created_by, last_used FROM sql order by used_times desc", function(err, row) {
                 sqlArray.push(row);
                 if (sqlArray.length == rowsCounter) {
+                    l.values = sqlArray;
                     doneReturn(err, sqlArray);
                 }
             });
@@ -175,11 +176,14 @@ function history(doneReturn) {
     ]);
 }
 
-function details(doneReturn, sqlId) {
+function details(doneReturn, sqlId, l) {
     async.waterfall([
         connectCheck,
         function(done){
-            db.each("SELECT * FROM sql where id=?", sqlId, doneReturn);
+            db.each("SELECT * FROM sql where id=?", sqlId, function(err, row) {
+                l.values = row;
+                doneReturn(err, row);
+            });
         }
     ]);
 }

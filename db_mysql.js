@@ -57,8 +57,9 @@ function objectCheck(connection, doneReturn, done, table, column) {
     });
 }
 
-function rowsCounter(connection, table, done) {
+function rowsCounter(connection, table, done, l) {
     connection.query('select count(*) as count FROM ' + mysql.escapeId(table) + ';', function(err, rows, fields) {
+	    l.rowsCounter = rows[0].count;
         done(err, rows[0].count);
     });
 }

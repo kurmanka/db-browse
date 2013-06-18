@@ -55,9 +55,10 @@ function objectCheck(connection, doneReturn, done, table, column) {
     });
 }
 
-function rowsCounter(connection, table, done) {
+function rowsCounter(connection, table, done, l) {
     connection.query('select count(*) as count FROM ' + escape(table) + ';', function(err, result) {
 //        setTimeout( function() { done(err, result.rows[0].count); }, 10000);
+        l.rowsCounter = result.rows[0].count;
         done(err, result.rows[0].count);
     });
 }

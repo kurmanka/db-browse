@@ -190,43 +190,41 @@ function showTable(req, res) {
     ],
     // provide a custom callback for the template
     finish(req, res, 'tableDetails', {},
-       function(error, html) {
-                showPageTotalRecords(res, error, html, db, l.connection, l.table);
-       })
+        function(error, html) {
+                showPageTotalRecords(req, res, error, html, db);
+        })
     );
 
 }
 
-function showPageTotalRecords (res, error, html, db, connection, table) {
-async.waterfall([
-    function (done) {
-        if (error) {
-            console.log(error);
-        }
-        // send the main part of the page
-        res.writeHead(200, {"Content-Type": "text/html"});
-        res.write(html);
-        done(null);
-    },
+function showPageTotalRecords (req, res, error, html, db) {
+    var l = res.locals;
 
-    function (done) {
-        db.rowsCounter(connection, table, done);
-    }
+    async.waterfall([
+        function (done) {
+            if (error) {
+                console.log(error);
+            }
+            // send the main part of the page
+            res.writeHead(200, {"Content-Type": "text/html"});
+            res.write(html);
+            done(null);
+        },
 
-    ], function (err, counter) {
-        if (err) {
-            showError(req, res, err);
-        } else {
-            respond(res, 'totalRecords', {rowsCounter: counter},
-                function(error, html_counter) {
-                    if (err) {
-                        console.log(err);
-                    }
-                    res.write(html_counter);
-                    res.end();
-            });
+        function (done) {
+            db.rowsCounter(l.connection, l.table, done, l);
         }
-    });
+
+    ],
+    finish(req, res, 'totalRecords', {},
+        function(err, html_counter) {
+                if (err) {
+                    console.log(err);
+                }
+                res.write(html_counter);
+                res.end();
+        })
+    );
 }
 
 function showColumn(req, res) {
@@ -240,7 +238,7 @@ function showColumn(req, res) {
             db.showColumnRequest(l.connection, l.column, l.table, limit, done);
         },
         function( columnData, done ) {
-            res.locals.columnData = columnData;
+            l.columnData = columnData;
             done(null);
         }
 
@@ -396,36 +394,30 @@ function sqlRequest(req, res) {
 
 function sqlHistory (req, res) {
     var limit = 20;
+    var l = res.locals;
 
     async.waterfall([
         function (done){
-            sqlite.history(done);
+            sqlite.history(done, l);
         }
-
-    ], function (err, results) {
-        if (err) {
-            showError(req, res, err);
-        } else {
-            respond( res, 'sqlHistory',
-                { values: results, limit: limit });
-        }
-    });
+    ],
+    finish( req, res, 'sqlHistory',
+                { limit: limit })
+    );
 }
 
 function sqlDetails (req, res, sqlId) {
+    var l = res.locals;
+
     async.waterfall([
         function (done){
-            sqlite.details(done, sqlId);
+            sqlite.details(done, sqlId, l);
         }
 
-    ], function (err, results) {
-        if (err) {
-            showError(req, res, err);
-        } else {
-            respond( res, 'sqlDetails',
-                { values: results, sqlId: sqlId });
-        }
-    });
+    ],
+    finish( req, res, 'sqlDetails',
+                { sqlId: sqlId })
+    );
 }
 
 function sqlSave (req, res) {
@@ -437,16 +429,10 @@ function sqlSave (req, res) {
             sqlite.changeRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done, req.params.sql_id, 'save');
         }
 
-    ], function (err, results) {
-        if (err) {
-            showError(req, res, err, bc_path);
-        } else {
-            respond( res, 'msg',
-                { breadcrumbs_path: bc_path,
-                  title: 'Saving status',
-                  msg: 'Saving was successful!' });
-        }
-    });
+    ],
+    finish( req, res, 'msg',
+                { breadcrumbs_path: bc_path, title: 'Saving status', msg: 'Saving was successful!' })
+    );
 }
 
 function sqlRemove (req, res) {
@@ -458,15 +444,10 @@ function sqlRemove (req, res) {
             sqlite.remove(req.params.sql_id, done);
         }
 
-    ], function (err, results) {
-        if (err) {
-            showError(req, res, err, bc_path);
-        } else {
-            respond( res, 'msg',
-                { breadcrumbs_path: bc_path, title: 'Removing status',
-                msg: 'Removing was successful!' });
-        }
-    });
+    ],
+    finish( req, res, 'msg',
+                { breadcrumbs_path: bc_path, title: 'Removing status', msg: 'Removing was successful!' })
+    );
 }
 
 exports.start = start;
