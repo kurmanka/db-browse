@@ -61,9 +61,7 @@ function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, typ
     var used_time;
 
     async.waterfall([
-        function(done){
-            connectCheck(done);
-        },
+        connectCheck,
 
         function(done){
             db.each(
@@ -145,32 +143,10 @@ function getCurrentDate() {
 }
 
 function history(doneReturn) {
-    var sqlArray = [];
-    var rowsCounter;
-
     async.waterfall([
+        connectCheck,
         function(done){
-            connectCheck(done);
-        },
-
-        function(done){
-            db.each("SELECT count(*) as counter FROM sql", function(err, row) {
-                rowsCounter = row.counter;
-                if (rowsCounter == 0) {
-                    doneReturn(err);
-                } else {
-                    done(err);
-                }
-            });
-        },
-
-        function(done){
-            db.each("SELECT id, name, substr(sql, 1, 120) as sql, comment, dbid, created_by, last_used FROM sql order by used_times desc", function(err, row) {
-                sqlArray.push(row);
-                if (sqlArray.length == rowsCounter) {
-                    doneReturn(err, sqlArray);
-                }
-            });
+            db.all("SELECT id, name, substr(sql, 1, 120) as sql, comment, dbid, created_by, last_used FROM sql order by used_times desc", doneReturn);
         }
     ]);
 }
