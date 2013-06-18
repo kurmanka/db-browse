@@ -1,3 +1,4 @@
+//https://github.com/developmentseed/node-sqlite3/wiki/API
 var sqlite = require('sqlite3').verbose();
 var async = require('async');
 
