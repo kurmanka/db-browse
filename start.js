@@ -263,10 +263,26 @@ function init_addons (app, config) {
 
         a.setup(app,config, path);
 
+        app.addon_features = {};
+        for ( var f in a.features ) {
+            app.addon_features[f] = a.features.f;
+            // detect feature name conflicts? XXX
+        }
+
     }
 
 }
 
 function addon_feature (req,res,next) {
+
+    var feature = req.params.table;
+    if (req.app.addon_features[ feature ]) {
+        // 
+        console.log( 'feature ' + feature );
+        req.app.addon_features[ feature ](req,res,next)
+
+    } else {
+        next();
+    }
 
 }

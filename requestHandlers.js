@@ -173,7 +173,7 @@ function showTable(req, res, next) {
 
     async.waterfall([
         function (done){
-            db = getDbType(l.dbType);
+            req.db = db = getDbType(l.dbType);
             db.showTableRequest(l.connection, l.table, done);
         },
         function (results,done){
@@ -187,12 +187,23 @@ function showTable(req, res, next) {
             res.locals(data);
             done(null);
         }
-    ],
-    // provide a custom callback for the template
-    finish(req, res, 'tableDetails', {},
-        function(error, html) {
+
+    ], function (err, data) {
+        // err is most likely being "Table xxx not found". at least, that's
+        // what we assume here
+        if (err) {
+            // call the next chained function, specifically, check for an addon feature
+            // of the same name
+            next();
+        } else {
+            // provide a custom callback for the template
+            var handler = finish(req, res, 'tableDetails', {},
+                function(error, html) {
                 showPageTotalRecords(req, res, error, html, db);
-        })
+            });
+            handler(err,data);
+        }
+    }
     );
 
 }
