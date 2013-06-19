@@ -90,15 +90,9 @@ app.post('/*', function(req, res){ //get and check users data
     }
 });
 
-app.get(/(\/\:sql)$/, prepare_req_params, loadUser, requestHandlers.prepare_locals, function(req, res){ //History of previous SQL
-    requestHandlers.sqlHistory(req, res);
-});
+app.get(/(\/\:sql)$/, prepare_req_params, loadUser, requestHandlers.prepare_locals, requestHandlers.sqlHistory); //History of previous SQL
 
-app.get(/\/\:sql\/\d+/, prepare_req_params, loadUser, requestHandlers.prepare_locals, function(req, res){ //Sql details page-form
-    var pathname = url.parse(req.url).pathname;
-    var sqlId = /(\d+)$/.exec(pathname);
-    requestHandlers.sqlDetails(req, res, sqlId[0]);
-});
+app.get(/\/\:sql\/\d+/, prepare_req_params, loadUser, requestHandlers.prepare_locals, requestHandlers.sqlDetails); //Sql details page-form
 
 app.get('/logout', function(req, res){ //logout
     req.session.authentication = false;
@@ -114,6 +108,11 @@ app.get('/logout', function(req, res){ //logout
 function prepare_req_params(req, res, next) {
     var pathname = url.parse(req.url).pathname;
     req.params.path = pathname.replace(/\/$/, '');
+	
+	var sqlId = /(\d+)$/.exec(pathname);
+	if (sqlId) {
+	    req.params.sqlId = sqlId[0];
+	}
 
     next();
 }

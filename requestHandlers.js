@@ -47,6 +47,7 @@ function prepare_locals (req, res, next) {
         reqName:      req.body.name,
         user:         (req.session) ? req.session.user : null,
         comment:      req.body.comment || '',
+		sqlId:        req.params.sqlId,
     } );
     next();
 }
@@ -415,12 +416,12 @@ function sqlHistory (req, res) {
     );
 }
 
-function sqlDetails (req, res, sqlId) {
+function sqlDetails (req, res) {
     var l = res.locals;
 
     async.waterfall([
         function (done){
-            sqlite.details(done, sqlId);
+            sqlite.details(done, l.sqlId);
         },
 		
         function (result, done){
@@ -429,7 +430,7 @@ function sqlDetails (req, res, sqlId) {
         },
     ],
     finish( req, res, 'sqlDetails',
-                { sqlId: sqlId })
+                { sqlId: l.sqlId })
     );
 }
 
