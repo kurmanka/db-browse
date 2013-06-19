@@ -40,6 +40,8 @@ var middleware = [  prepare_req_params,
                     prepare_dbconnection,
                     requestHandlers.prepare_locals ];
 
+init_addons( app, config );
+
 app.get('/', prepare_req_params,
              loadUser,
              requestHandlers.prepare_locals,
@@ -120,11 +122,17 @@ function prepare_req_params(req, res, next) {
 
 app.get('/:db_id', middleware, requestHandlers.start); //run method start
 
-app.get('/:db_id/:table', middleware, requestHandlers.showTable);//run method showTable
+app.get('/:db_id/:table', 
+        middleware, 
+        requestHandlers.showTable, // show table details, if that's a table
+        addon_feature,             // run addon feature, if that's a feature
+        requestHandlers.noSuchTable );
 
 app.get('/:db_id/:table/:column', middleware, requestHandlers.showColumn); //run method showColumn
 
 app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue); //run method showValue
+
+
 
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
@@ -219,4 +227,46 @@ function loadUser(req, res, next) {
     } else {
         requestHandlers.login(res, pathname, '');
     }
+}
+
+function init_addons (app, config) {
+    if (!config.addons) { return; }
+
+    // for each config.addons.* 
+    // do require('./addons/*/index.js')
+    // 
+    app.addons = {};
+
+    for ( var i in config.addons ) {
+        var path = './addons/' + i;
+        try {
+            var a = require(path + '/index.js');
+        } catch (err) {
+            console.log( "can't init addon " + i);
+            continue;
+        }
+
+        if (a) {
+            console.log( 'init addon ' + i );
+            a.init( app, config.addons.i, path );
+            app.addons[i] = a;
+        }
+
+        var s = fs.statSync( path+'/static' );
+        if (s) {
+            if (s.isDirectory()) {
+                app.use('/ao/'+i, express.static(path+'/static'));
+                console.log( '/ao/' + i );
+                console.log( ' -> ' + path + '/static' );
+            }
+        }
+
+        a.setup(app,config, path);
+
+    }
+
+}
+
+function addon_feature (req,res,next) {
+
 }

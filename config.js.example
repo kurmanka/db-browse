@@ -62,6 +62,10 @@ exports.authenticate = function (user, pass) { //if you don't waunt to use authe
     return false;
 }
 
+var addons = {};
+addons.fun = {}; // empty configuration for the fun add-on
+
+exports.addons = addons;
 exports.db = db;
 exports.listen = listen;
 exports.session_config = session_config;

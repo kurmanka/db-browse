@@ -167,7 +167,7 @@ function getArrayOfStrings(string, done) {
     done(null, array);
 }
 
-function showTable(req, res) {
+function showTable(req, res, next) {
     var db;
     var l = res.locals;
 
@@ -196,6 +196,11 @@ function showTable(req, res) {
     );
 
 }
+
+function noSuchTable (req, res, next) {
+    res.send('No such table: ' + req.params.table);
+}
+
 
 function showPageTotalRecords (req, res, error, html, db) {
     var l = res.locals;
@@ -463,6 +468,7 @@ function sqlRemove (req, res) {
     );
 }
 
+
 exports.start = start;
 exports.login = login;
 exports.showTable      = showTable;
@@ -476,3 +482,4 @@ exports.sqlHistory     = sqlHistory;
 exports.sqlDetails     = sqlDetails;
 exports.sqlSave        = sqlSave;
 exports.sqlRemove      = sqlRemove;
+exports.noSuchTable    = noSuchTable;

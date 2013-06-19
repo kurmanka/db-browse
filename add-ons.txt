@@ -1,0 +1,59 @@
+Add-ons
+=======
+
+URLs
+----
+
+http://host/<db>/<feature> - if not a table, the list of enabled add-ons
+for this db is checked for this feature. If a matching feature is found,
+it is executed.
+
+http://host/ao/<addon-id>/... static path,
+
+
+
+Directory structure
+-------------------
+
+addons/
+  <addon-id>/
+     static/
+       ...
+     index.js
+     other.js
+
+
+API
+---
+
+addon.init( app, config, path );
+  - initialize the add-on
+
+addon.setup( app, config, path );
+  - setup the app routes, if any (app.get, app.post, etc.)
+
+
+
+Configuration
+-------------
+
+config.js:
+
+	var addons = exports.addons = {};
+
+	addons.cool_addon = { ... };
+
+	...
+
+	exports.db = {
+  		'data': {
+    		type: 'postgres',
+    		host: 'crunch.ahinea.com',
+    		database: 'bsdata_v3',
+    		user:     'iku',
+    		password: 'rkbvfnjuhfabz',
+    		addons: [ 'cool_addon' ],
+  		},
+  	...
+
+
