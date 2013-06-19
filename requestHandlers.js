@@ -173,7 +173,7 @@ function showTable(req, res, next) {
 
     async.waterfall([
         function (done){
-            req.db = db = getDbType(l.dbType);
+            db = getDbType(l.dbType);
             db.showTableRequest(l.connection, l.table, done);
         },
         function (results,done){

@@ -12,7 +12,10 @@ exports.setup = function (a,c,home) {
 }
 
 function _do (req, res, next) {
-	res.send('do this & that');
+	req.dbconnection.query( 'select count(*) from product', [], 
+		function(err,result) { res.json(result); } 
+	);
+//	res.send('do this & that');
 }
 
 exports.features = {

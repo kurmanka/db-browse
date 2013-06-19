@@ -128,6 +128,11 @@ app.get('/:db_id/:table',
         addon_feature,             // run addon feature, if that's a feature
         requestHandlers.noSuchTable );
 
+app.post('/:db_id/:table', 
+        middleware, 
+        addon_feature,             // run addon feature, if that's a feature
+        requestHandlers.noSuchTable );
+
 app.get('/:db_id/:table/:column', middleware, requestHandlers.showColumn); //run method showColumn
 
 app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue); //run method showValue
@@ -265,7 +270,7 @@ function init_addons (app, config) {
 
         app.addon_features = {};
         for ( var f in a.features ) {
-            app.addon_features[f] = a.features.f;
+            app.addon_features[f] = a.features[f];
             // detect feature name conflicts? XXX
         }
 
@@ -274,6 +279,7 @@ function init_addons (app, config) {
 }
 
 function addon_feature (req,res,next) {
+    console.log( 'addon_feature: start');
 
     var feature = req.params.table;
     if (req.app.addon_features[ feature ]) {
