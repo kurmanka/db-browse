@@ -47,7 +47,7 @@ function prepare_locals (req, res, next) {
         reqName:      req.body.name,
         user:         (req.session) ? req.session.user : null,
         comment:      req.body.comment || '',
-		sqlId:        req.params.sqlId,
+        sqlId:        req.params.sqlId,
     } );
     next();
 }
@@ -374,7 +374,8 @@ function sqlRequest(req, res) {
             async.waterfall([
                 function(done){
                     if (req.params.sql_id) {
-                        sqlite.changeRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done, req.params.sql_id, 'execute');
+                        sqlite.changeRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done,
+                                             req.params.sql_id, 'execute');
                     } else {
                         sqlite.saveRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done);
                     }
@@ -405,11 +406,11 @@ function sqlHistory (req, res) {
         function (done){
             sqlite.history(done);
         },
-		
-		function (result, done){
+
+        function (result, done){
             l.values = result;
-			done(null);
-        },		
+            done(null);
+        },
     ],
     finish( req, res, 'sqlHistory',
                 { limit: limit })
@@ -423,10 +424,10 @@ function sqlDetails (req, res) {
         function (done){
             sqlite.details(done, l.sqlId);
         },
-		
+
         function (result, done){
             l.values = result;
-			done(null);
+            done(null);
         },
     ],
     finish( req, res, 'sqlDetails',
@@ -440,12 +441,15 @@ function sqlSave (req, res) {
 
     async.waterfall([
         function (done){
-            sqlite.changeRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done, req.params.sql_id, 'save');
+            sqlite.changeRequest(l.sql, l.dbId, l.reqName, l.user, l.comment,
+                                  done, req.params.sql_id, 'save');
         }
 
     ],
-    finish( req, res, 'msg',
-                { breadcrumbs_path: bc_path, title: 'Saving status', msg: 'Saving was successful!' })
+    finish ( req, res, 'msg', { breadcrumbs_path: bc_path,
+                                title: 'Saving status',
+                                 msg: 'Saving was successful!' }
+           )
     );
 }
 
@@ -459,8 +463,10 @@ function sqlRemove (req, res) {
         }
 
     ],
-    finish( req, res, 'msg',
-                { breadcrumbs_path: bc_path, title: 'Removing status', msg: 'Removing was successful!' })
+    finish ( req, res, 'msg', { breadcrumbs_path: bc_path,
+                                 title: 'Removing status',
+                                msg: 'Removing was successful!' }
+            )
     );
 }
 
