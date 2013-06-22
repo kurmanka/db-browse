@@ -60,30 +60,31 @@ function run_sqlt( sqlt, req, res, next ) {
 		else if (req.body[i]) { values[i] = req.body[i]; }
 	}
 
-	sql = apply_values( sqlt.sqlt, sqlt.params, values );
+	var sa = apply_values( sqlt.sqlt, sqlt.params, values );
 
-	if ( sql.sql ) {
+	if ( sa.missing ) {
+		// error
+		// show a form
+		res.send( {missing: sa.missing} );
 
-		req.dbconnection.query( sql.sql, 
-			sql.par,
+	} else {
+
+		req.dbconnection.query( sa.sql, 
+			sa.par,
 			function(err,result) {
 				if (err) {
 					res.json(
 						{error: err, 
-						 sql: sql } );
+						 sql: sa.sql } );
 				} else res.json( {
 					'sqlt':   sqlt.sqlt,
-					'sql':    sql, 
+					'sql':    sa.sql, 
 					'values': values, 
 					'result': result 
 				} ); 
 			} 
 		);
 
-	} else {
-		// error
-		// show a form
-		res.send( 'XXX show a form' );
 	}
 }
 
@@ -120,7 +121,7 @@ function apply_values( t, p, v ) {
 	}
 	if (missing.length) {
 		console.log( 'missing: ', missing );
-		return missing;
+		return {sql:s, missing: missing, par: par};
 	}
 	console.log( 'apply_values(): sql', s );
 	console.log( 'apply_values(): par', par );
