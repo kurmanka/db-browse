@@ -19,6 +19,8 @@ addons/
   <addon-id>/
      static/
        ...
+     sql/
+       ...
      index.js
      other.js
 

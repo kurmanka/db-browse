@@ -1,15 +1,124 @@
+var ECT = require('ect');
+var ect;
 
 exports.init = function(a,c,home) {
+	ect = ECT({ root: home + '/views', watch: true });
+	// ...
+	return true;
+};
 
-	return {};
+var render = 
+exports.render = function(req, res, template, data) {
+	console.log( 'render()', template, data );
+	if (!ect) console.log( 'no ect' );
+	var html = ect.render(template, data);
+	console.log( 'generated: ' + html );
+	res.send( html );
 };
 
 exports.setup = function (a,c,home) {
-	a.get( '/fun', function(req,res,next) {
-		res.send('have fun!');
-	});
+	//
+};
 
+
+// there is:
+//  - the SQL template
+//  - a list of parameters
+//  - each parameter may have a type and may have a value.
+//  - if a parameter has no value,   
+//
+
+var sqlt = {};
+
+sqlt.get_file = {
+	sqlt: 'select * from file where file_id=?',
+	params: { id: 'string' },
+};
+
+sqlt.average_response_time = {
+	sqlt: 
+'select req_url_path, sum(resp_t_app) as sum_app_time, count(*) as count, 
+  sum(resp_t_app) / count(*) as average from requests 
+  where req_time between {start} and {end} 
+  group by req_url_path having count(*) > {count} 
+order by sum_app_time desc',
+	params: { start: 'date', end: 'date', count: 'int' },
+};
+
+function run_sqlt( sqlt, req, res, next ) {
+	res.locals.sqlt = sqlt;
+	var values = {};
+
+	for( var i in sqlt.params ) {
+		if (req.query[i]) { values[i] = req.query[i]; }
+		else if (req.body[i]) { values[i] = req.body[i]; }
+	}
+
+	sql = apply_values( sqlt.sqlt, sqlt.params, values );
+
+	if ( sql.sql ) {
+
+		req.dbconnection.query( sql.sql, 
+			sql.par,
+			function(err,result) { 
+				res.json( {
+					sqlt:   sqlt.sqlt,
+					sql: 	sql, 
+					values: values, 
+					result: result 
+				} ); 
+			} 
+		);
+
+	} else {
+		// error
+		// show a form
+		res.send( 'XXX show a form' );
+	}
 }
+
+
+function apply_values( t, p, v ) {
+	var s = t;
+	var missing = [];
+	var par = [];
+	console.log( 'apply_values()', t);
+	for( var i in p ) {
+		if (v[i]=== undefined) { 
+			// complain!
+			// XXX
+			missing.push( i );
+		} else { 
+			var re = new RegExp( '({\s*' + i + '\s*})', 'g' );
+			s.replace( re, '?' );
+			par.push( v[i] );
+		}
+	}
+	if (missing.length) {
+		console.log( 'missing: ', missing );
+		return missing;
+	}
+	console.log( 'apply_values(): sql', s );
+	console.log( 'apply_values(): par', par );
+	return {sql: sql, par: par};
+}
+
+
+function check_sqlt_params(req, res, next) {
+	var sqlt   = res.locals.sqlt;
+	var params = res.locals.params;
+	var values = res.locals.values;
+	
+	var empty_params = [];
+	for (var i in params) {
+		if (values[i]) {}
+		else { empty_params.push(i); }
+	}
+
+	return empty_params;
+}
+
+
 
 function _do (req, res, next) {
 	req.dbconnection.query( 'select count(*) from product', [], 
@@ -18,7 +127,20 @@ function _do (req, res, next) {
 //	res.send('do this & that');
 }
 
+var features = 
 exports.features = {
 	'do': _do,
-
+	'show': function(req,res,n) { 
+		console.log( 'show()' );
+		render(req, res, 'show', {hello:'dolly'}); 
+	},
 };
+
+for (var i in sqlt) {
+	var s = sqlt[i];
+	features[i] = function (req,res,n) {
+		run_sqlt( s, req, res, n );
+	};
+}
+
+
