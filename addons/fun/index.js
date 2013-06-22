@@ -31,19 +31,25 @@ exports.setup = function (a,c,home) {
 var sqlt = {};
 
 sqlt.get_file = {
-	sqlt: 'select * from file where file_id=?',
+	sqlt: 'select * from file where file_id= {id}',
 	params: { id: 'string' },
 };
 
 sqlt.average_response_time = {
 	sqlt: 
-'select req_url_path, sum(resp_t_app) as sum_app_time, count(*) as count, 
-  sum(resp_t_app) / count(*) as average from requests 
-  where req_time between {start} and {end} 
-  group by req_url_path having count(*) > {count} 
+'select req_url_path, sum(resp_t_app) as sum_app_time, count(*) as count, \
+  sum(resp_t_app) / count(*) as average from requests \
+  where req_time between {start} and {end} \
+  group by req_url_path having count(*) > {count} \
 order by sum_app_time desc',
 	params: { start: 'date', end: 'date', count: 'int' },
 };
+
+function create_sqlt_feature( sqlt ) {
+	return function( req, res, n ) {
+		run_sqlt( sqlt, req, res, n );
+	};
+}
 
 function run_sqlt( sqlt, req, res, next ) {
 	res.locals.sqlt = sqlt;
@@ -60,12 +66,16 @@ function run_sqlt( sqlt, req, res, next ) {
 
 		req.dbconnection.query( sql.sql, 
 			sql.par,
-			function(err,result) { 
-				res.json( {
-					sqlt:   sqlt.sqlt,
-					sql: 	sql, 
-					values: values, 
-					result: result 
+			function(err,result) {
+				if (err) {
+					res.json(
+						{error: err, 
+						 sql: sql } );
+				} else res.json( {
+					'sqlt':   sqlt.sqlt,
+					'sql':    sql, 
+					'values': values, 
+					'result': result 
 				} ); 
 			} 
 		);
@@ -83,15 +93,29 @@ function apply_values( t, p, v ) {
 	var missing = [];
 	var par = [];
 	console.log( 'apply_values()', t);
+
 	for( var i in p ) {
+		console.log( 'par', i, 'value', v[i] );
 		if (v[i]=== undefined) { 
 			// complain!
 			// XXX
 			missing.push( i );
+
 		} else { 
-			var re = new RegExp( '({\s*' + i + '\s*})', 'g' );
-			s.replace( re, '?' );
-			par.push( v[i] );
+			var re = new RegExp( '\\{' + i + '\\}', 'g' );
+			console.log( re );
+
+			if (   p[i] == 'string'
+				|| p[i] == 'date' 
+				|| p[i] == 'int' ) {
+
+				s = s.replace( re, '$' + (par.length + 1).toString() );
+				par.push( v[i] );
+
+			} else {
+				s = s.replace( re, v[i] );
+
+			}
 		}
 	}
 	if (missing.length) {
@@ -100,7 +124,7 @@ function apply_values( t, p, v ) {
 	}
 	console.log( 'apply_values(): sql', s );
 	console.log( 'apply_values(): par', par );
-	return {sql: sql, par: par};
+	return {sql: s, par: par};
 }
 
 
@@ -138,9 +162,7 @@ exports.features = {
 
 for (var i in sqlt) {
 	var s = sqlt[i];
-	features[i] = function (req,res,n) {
-		run_sqlt( s, req, res, n );
-	};
+	features[i] = create_sqlt_feature( s );
 }
 
 
