@@ -29,7 +29,8 @@ exports.setup = function (a,c,home) {
 //  - if a parameter has no value,   
 //
 
-var sqlt = {};
+var sqlt =
+exports.sqlt = {};
 
 sqlt.get_file = {
 	sqlt: 'select * from file where file_id= {id}',
@@ -46,11 +47,6 @@ order by sum_app_time desc',
 	params: { start: 'date', end: 'date', count: 'int' },
 };
 
-function create_sqlt_feature( sqlt ) {
-	return function( req, res, n ) {
-		sq.run_sqlt( sqlt, req, res, n );
-	};
-}
 
 
 function _do (req, res, next) {
@@ -68,10 +64,5 @@ exports.features = {
 		render(req, res, 'show', {hello:'dolly'}); 
 	},
 };
-
-for (var i in sqlt) {
-	var s = sqlt[i];
-	features[i] = create_sqlt_feature( s );
-}
 
 

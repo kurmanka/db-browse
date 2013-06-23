@@ -280,9 +280,21 @@ function init_addons (app, config) {
             // detect feature name conflicts? XXX
         }
 
+        for ( var f in a.sqlt ) {
+            app.addon_features[f] = create_sqlt_feature( a.sqlt[f] );
+            // detect feature name conflicts? XXX
+        }
+
     }
 
 }
+
+function create_sqlt_feature( def ) {
+    return function( req, res, n ) {
+        sqlt.run_sqlt( def, req, res, n );
+    };
+}
+
 
 function addon_feature (req,res,next) {
     console.log( 'addon_feature: start');
