@@ -1,4 +1,3 @@
-var sq  = require('../../sqlt.js');
 var ECT = require('ect');
 var ect;
 
@@ -46,8 +45,6 @@ sqlt.average_response_time = {
 order by sum_app_time desc',
 	params: { start: 'date', end: 'date', count: 'int' },
 };
-
-
 
 function _do (req, res, next) {
 	req.dbconnection.query( 'select count(*) from product', [], 
