@@ -1,6 +1,33 @@
 // a bunch of functions for sql templates, that can be used in 
 // various add-ons.
 
+// each sqlt item has:
+//  - an SQL template
+//  - a list of parameters (zero or more)
+//  - each parameter may have a type and may have a value.
+//  - if a parameter has no value, we need to raise an error 
+//    or request that value from the user.
+//
+
+/* example sqlt with parameters:
+
+sqlt.get_file = {
+	sqlt: 'select * from file where file_id= {id}',
+	params: { id: 'string' },
+};
+
+sqlt.average_response_time = {
+	sqlt: 
+'select req_url_path, sum(resp_t_app) as sum_app_time, count(*) as count, \
+  sum(resp_t_app) / count(*) as average from requests \
+  where req_time between {start} and {end} \
+  group by req_url_path having count(*) > {count} \
+order by sum_app_time desc',
+	params: { start: 'date', end: 'date', count: 'int' },
+};
+
+*/
+
 function run_sqlt( sqlt, req, res, next ) {
 	res.locals.sqlt = sqlt;
 	var values = {};
