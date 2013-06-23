@@ -1,13 +1,18 @@
-var requestHandlers = require("./requestHandlers");
-var config = require("./config");
-
-var url = require("url");
+var url   = require('url');
 var async = require('async');
 var mysql = require('mysql');
-var pg = require('pg');
-var fs = require("fs");
+var pg    = require('pg');
+var fs    = require('fs');
+var express = require('express');
 
-var express = require("express");
+// some modules
+var requestHandlers = require('./requestHandlers.js');
+var sqlt = require('./sqlt.js');
+
+// configuration
+var config = require('./config.js');
+
+// create the express app
 var app = express();
 
 app.use(express.bodyParser());
