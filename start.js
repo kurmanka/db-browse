@@ -278,14 +278,19 @@ function init_addons (app, config) {
         a.setup(app,config, path);
 
         app.addon_features = {};
-        for ( var f in a.features ) {
-            app.addon_features[f] = a.features[f];
-            // detect feature name conflicts? XXX
+
+        if ( a.features ) {
+            for ( var f in a.features ) {
+                app.addon_features[f] = a.features[f];
+                // detect feature name conflicts? XXX
+            }
         }
 
-        for ( var f in a.sqlt ) {
-            app.addon_features[f] = create_sqlt_feature( a.sqlt[f] );
-            // detect feature name conflicts? XXX
+        if ( a.sqlt ) {
+            for ( var f in a.sqlt ) {
+                app.addon_features[f] = create_sqlt_feature( a.sqlt[f] );
+                // detect feature name conflicts? XXX
+            }
         }
 
     }
