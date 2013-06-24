@@ -254,7 +254,7 @@ function init_addons (app, config) {
         try {
             var a = require(path + '/index.js');
         } catch (err) {
-            console.log( "can't init addon " + i);
+            console.log( "can't load addon " + path );
             console.log( err );
             continue;
         }
