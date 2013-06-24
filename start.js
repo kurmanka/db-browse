@@ -59,8 +59,8 @@ app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sql
 
     if (req.body.sql) {
         if (req.body.run == 'Execute') {
-            req.params.path_breadcrumbs = '/' + req.params.db_id
-                    + '/:sql/' + req.params.sql_id + '/show';
+            req.params.path_breadcrumbs = '/' + req.params.db_id + '/:sql/'
+                                             + req.params.sql_id + '/show';
             requestHandlers.sqlRequest(req, res);
         }
         else if (req.body.run == 'Save'){
@@ -99,16 +99,10 @@ app.post('/*', function(req, res){ //get and check users data
 });
 
 app.get(/(\/\:sql)$/, prepare_req_params, loadUser, requestHandlers.prepare_locals,
-function(req, res){ //History of previous SQL
-    requestHandlers.sqlHistory(req, res);
-});
+        requestHandlers.sqlHistory); //History of previous SQL
 
 app.get(/\/\:sql\/\d+/, prepare_req_params, loadUser, requestHandlers.prepare_locals,
-function(req, res){ //Sql details page-form
-    var pathname = url.parse(req.url).pathname;
-    var sqlId = /(\d+)$/.exec(pathname);
-    requestHandlers.sqlDetails(req, res, sqlId[0]);
-});
+        requestHandlers.sqlDetails); //Sql details page-form
 
 app.get('/logout', function(req, res){ //logout
     req.session.authentication = false;
@@ -124,6 +118,11 @@ app.get('/logout', function(req, res){ //logout
 function prepare_req_params(req, res, next) {
     var pathname = url.parse(req.url).pathname;
     req.params.path = pathname.replace(/\/$/, '');
+
+    var sqlId = /(\d+)$/.exec(pathname);
+    if (sqlId) {
+        req.params.sqlId = sqlId[0];
+    }
 
     next();
 }

@@ -15,7 +15,9 @@
         <% for (var key in values[0]) {
             if (key != 'id') {
                 if (key == 'sql') { %>
-                    <td class = 'data'><a href="/:sql/<%=values[i].id%>"><%=values[i][key] || ''%></a></td>
+                    <td class = 'data'>
+					    <a href="/:sql/<%=values[i].id%>"><%=values[i][key] || ''%></a>
+					</td>
                 <% } else { %>
                     <td class = 'data'><%=values[i][key] || ''%></td>
                 <% }

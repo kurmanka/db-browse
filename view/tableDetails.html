@@ -15,7 +15,7 @@
 
     <% var flag = 0; %>
     <% var firstKey = ''; %>
-    <% for (var i = 0; i < attrList.length; i++) { 
+    <% for (var i = 0; i < attrList.length; i++) {
         var attr = attrList[i];
         %>
     <tr>
@@ -25,7 +25,7 @@
                 firstKey = key;
                 flag = 1;
             }
-            if (key != 'parse' && key != '_typeCast' && key != 'is_nullable' 
+            if (key != 'parse' && key != '_typeCast' && key != 'is_nullable'
                 && key != 'column_default' && key != 'mlength') {
                 if (firstKey == key) { %>
                     <td class = 'data'><a href = <%=path%>/<%= val %>><%= val %></a></td>
@@ -88,7 +88,10 @@
     <table id = 'referenced'>
         <% for (var i = 0; i < referenced.length; i++) { %>
         <tr>
-            <td>TABLE "<%=referenced[i].conrelid %>" CONSTRAINT "<%=referenced[i].conname%>" <%=referenced[i].condef%></td>
+            <td>
+                TABLE "<%=referenced[i].conrelid %>" CONSTRAINT "<%=referenced[i].conname%>"
+                <%=referenced[i].condef%>
+            </td>
         </tr>
         <% } %>
     </table>
@@ -119,7 +122,7 @@
 
 <table id = 'statusT'>
     <% for (var key in statusArr[0]) {%>
-        <% if(key != 'parse' && key != '_typeCast' && statusArr[0][key] != '' && key != 'TABLE_NAME')    {%>
+        <% if(key != 'parse' && key != '_typeCast' && statusArr[0][key] != '' && key != 'TABLE_NAME') {%>
         <tr>
             <td><%=key%>: </td>
             <% for (var i = 0; i < statusArr.length; i++) {%>

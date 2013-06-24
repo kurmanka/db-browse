@@ -30,19 +30,20 @@ function saveRequest(sql, dbId, reqName, user, comment, doneReturn) {
                 "SELECT max(used_times) as ut, id, comment, name, created_at "
                 + " FROM sql WHERE sql=?", sql,
                 function(err, row) {
-                if (row && row.ut) {
-                    used_timeNew = parseInt(row.ut) + 1;
-                    created_at = row.created_at;
-                    newId = row.id;
-                    if (!commentNew) {
-                        commentNew = row.comment;
-                    } if (!nameNew) {
-                        nameNew = row.name;
+                    if (row && row.ut) {
+                        used_timeNew = parseInt(row.ut) + 1;
+                        created_at = row.created_at;
+                        newId = row.id;
+                        if (!commentNew) {
+                            commentNew = row.comment;
+                        } if (!nameNew) {
+                            nameNew = row.name;
+                        }
+                        db.run("delete FROM sql WHERE sql=?", sql);
                     }
-                    db.run("delete FROM sql WHERE sql=?", sql);
+                    done(err);
                 }
-                done(err);
-            });
+            );
         }
     ], function (err) {
         if (err) {
@@ -67,24 +68,25 @@ function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, typ
         function(done){
             db.each(
                 "SELECT max(used_times) as ut, id, comment, name, created_at, last_used "
-                +"FROM sql WHERE id=?", sqlId, function(err, row) {
-                if (err) {
-                    done(err);
-                }
-                if (row.id) {
-                    created_at = row.created_at;
-                    if (type == 'save') {
-                        used_time = row.ut;
-                        last_used = row.last_used;
-                    } else {
-                        used_time = parseInt(row.ut) + 1;
-                        last_used = getCurrentDate();
+                +"FROM sql WHERE id=?", sqlId,
+                function(err, row) {
+                    if (err) {
+                        done(err);
                     }
-                    db.run("delete FROM sql WHERE id=?", sqlId );
+                    if (row.id) {
+                        created_at = row.created_at;
+                        if (type == 'save') {
+                            used_time = row.ut;
+                            last_used = row.last_used;
+                        } else {
+                            used_time = parseInt(row.ut) + 1;
+                            last_used = getCurrentDate();
+                        }
+                        db.run("delete FROM sql WHERE id=?", sqlId );
+                    }
+                    done(null);
                 }
-
-                done(null);
-            });
+            );
         }
     ], function (err) {
         if (err) {
@@ -147,7 +149,8 @@ function history(doneReturn) {
     async.waterfall([
         connectCheck,
         function(done){
-            db.all("SELECT id, name, substr(sql, 1, 120) as sql, comment, dbid, created_by, last_used FROM sql order by used_times desc", doneReturn);
+            db.all("SELECT id, name, substr(sql, 1, 120) as sql, comment, dbid, " +
+                  "created_by, last_used FROM sql order by used_times desc", doneReturn);
         }
     ]);
 }

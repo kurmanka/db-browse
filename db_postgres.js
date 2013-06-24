@@ -3,13 +3,16 @@ var async = require('async');
 function showAllTable(connection, doneReturn) {
     async.waterfall([
         function (done){
-            connection.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';", function(err, result) {
-                if (err) {
-                    doneReturn(err);
-                } else {
-                    done(null, result.rows);
-                }
-            });
+            connection.query("SELECT table_name FROM information_schema.tables " +
+                            "WHERE table_schema = 'public'",
+                            function(err, result) {
+                                if (err) {
+                                    doneReturn(err);
+                                } else {
+                                    done(null, result.rows);
+                                }
+                            }
+            );
         },
 
         function (arr, done){
@@ -35,7 +38,8 @@ function objectCheck(connection, doneReturn, done, table, column) {
     };
 
     if (column) {
-        select.sql = "SELECT count(*) as count FROM information_schema.COLUMNS WHERE TABLE_NAME=$1 AND COLUMN_NAME=$2;";
+        select.sql = "SELECT count(*) as count FROM information_schema.COLUMNS " +
+                     "WHERE TABLE_NAME=$1 AND COLUMN_NAME=$2";
         select.params = [table, column];
         select.err = "Column '" + column + "' not found in table '" + table + "'";
     }
@@ -56,10 +60,10 @@ function objectCheck(connection, doneReturn, done, table, column) {
 }
 
 function rowsCounter(connection, table, done) {
-    connection.query('select count(*) as count FROM ' + escape(table) + ';', function(err, result) {
-//        setTimeout( function() { done(err, result.rows[0].count); }, 10000);
-        done(err, result.rows[0].count);
-    });
+    connection.query('select count(*) as count FROM ' + escape(table),
+    	            function(err, result) {
+                        done(err, result.rows[0].count);
+                    });
 }
 
 function showTableRequest(connection, table, doneReturn) {
@@ -71,39 +75,58 @@ function showTableRequest(connection, table, doneReturn) {
         function (done){
             async.parallel([
                 function(done){
-                    connection.query("SELECT column_name as Column, data_type as Type, character_maximum_length as mLength, column_default, is_nullable FROM information_schema.columns WHERE table_name=$1;", [table], function(err, result) {
-                        done(err, result.rows);
-                   });
+                    connection.query("SELECT column_name as Column, data_type as Type, " +
+                                    "character_maximum_length as mLength, " +
+                                    "column_default, is_nullable " +
+                                    "FROM information_schema.columns WHERE table_name=$1", [table],
+                                    function(err, result) {
+                                        done(err, result.rows);
+                                    });
                 },
 
                 function(done){ //show indexes
-                    connection.query("SELECT indexname, tablespace, indexdef FROM pg_indexes WHERE tablename = $1;", [table], function(err, result) {
-                        done(err, result.rows);
-                    });
+                    connection.query("SELECT indexname, tablespace, indexdef FROM pg_indexes " +
+                                    "WHERE tablename = $1", [table],
+                                    function(err, result) {
+                                        done(err, result.rows);
+                                    });
                 },
 
                 function(done){ //show Status
-                    connection.query("SELECT * FROM information_schema.tables WHERE table_name = $1;", [table], function(err, result) {
-                        done(err, result.rows);
-                    });
+                    connection.query("SELECT * FROM information_schema.tables " +
+                                    "WHERE table_name = $1", [table],
+                                    function(err, result) {
+                                        done(err, result.rows);
+                                    });
                 },
 
                 function(done){ //show Referenced
-                    connection.query("SELECT conname, conrelid::pg_catalog.regclass, pg_catalog.pg_get_constraintdef(c.oid, true) as condef FROM pg_catalog.pg_constraint c WHERE c.confrelid = '" + escape(table) + "'::regclass AND c.contype = 'f';", function(err, result) {
-                        done(err, result.rows);
-                    });
+                    connection.query("SELECT conname, conrelid::pg_catalog.regclass, " +
+                                    "pg_catalog.pg_get_constraintdef(c.oid, true) as condef " +
+                                    "FROM pg_catalog.pg_constraint c WHERE c.confrelid = '" +
+                                    escape(table) + "'::regclass AND c.contype = 'f'",
+                                    function(err, result) {
+                                        done(err, result.rows);
+                                    });
                 },
 
                 function(done){ //show Triggers
-                    connection.query("SELECT pg_catalog.pg_get_triggerdef(t.oid) as creating FROM pg_catalog.pg_trigger t WHERE t.tgrelid = '" + escape(table) + "'::regclass AND t.tgconstraint = 0;", function(err, result) {
-                        done(err, result.rows);
-                    });
+                    connection.query("SELECT pg_catalog.pg_get_triggerdef(t.oid) as creating " +
+                                    "FROM pg_catalog.pg_trigger t WHERE t.tgrelid = '" +
+                                    escape(table) + "'::regclass AND t.tgconstraint = 0",
+                                    function(err, result) {
+                                        done(err, result.rows);
+                                    });
                 },
 
                 function(done){ //show Foreign-key
-                    connection.query("SELECT conname, pg_catalog.pg_get_constraintdef(r.oid, true) as condef FROM pg_catalog.pg_constraint r WHERE r.conrelid ='" + escape(table) + "'::regclass AND r.contype = 'f';", function(err, result) {
-                        done(err, result.rows);
-                    });
+                    connection.query("SELECT conname, " +
+                                    "pg_catalog.pg_get_constraintdef(r.oid, true) as condef " +
+                                    "FROM pg_catalog.pg_constraint r WHERE r.conrelid ='" +
+                                    escape(table) + "'::regclass AND r.contype = 'f'",
+                                    function(err, result) {
+                                        done(err, result.rows);
+                                    });
                 }
             ], doneReturn);
         }
@@ -121,9 +144,12 @@ function showColumnRequest(connection, column, table, limit, doneReturn) {
         },
 
         function (done){
-            connection.query("select " + escape(column) + ", count(*) as count from " + escape(table) + " group by " + escape(column) + " order by count desc limit " + limit + ";", function(err, result) {
-                doneReturn(err, result.rows);
-            });
+            connection.query("select " + escape(column) + ", count(*) as count from "
+                            + escape(table) + " group by " + escape(column) +
+                            " order by count desc limit " + limit,
+                            function(err, result) {
+                                doneReturn(err, result.rows);
+                            });
         }
     ]);
 }
@@ -139,9 +165,11 @@ function showValueRequest(connection, table, column, value, doneReturn) {
         },
 
         function (done){
-            connection.query("select * from " + escape(table) + " where " + escape(column) + "=$1;", [value], function(err, result) {
-                doneReturn(err, result.rows);
-            });
+            connection.query("select * from " + escape(table) + " where "
+                            + escape(column) + "=$1", [value],
+                            function (err, result) {
+                                doneReturn(err, result.rows);
+                            });
         }
     ]);
 }

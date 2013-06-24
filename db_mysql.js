@@ -30,13 +30,15 @@ function showAllTable(connection, doneReturn) {
 
 function objectCheck(connection, doneReturn, done, table, column) {
     var select = {
-        sql: "SELECT count(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() and table_name = ?;",
+        sql: "SELECT count(*) as count FROM information_schema.tables " +
+             "WHERE table_schema = DATABASE() and table_name = ?",
         params: [table],
         err: "Table '" + table + "' not found"
     };
 
     if (column) {
-        select.sql = "SELECT count(*) as count FROM information_schema.COLUMNS WHERE TABLE_NAME=? AND COLUMN_NAME=?;";
+        select.sql = "SELECT count(*) as count FROM information_schema.COLUMNS " +
+                     "WHERE TABLE_NAME=? AND COLUMN_NAME=?";
         select.params = [table, column];
         select.err = "Column '" + column + "' not found in table '" + table + "'";
     }
@@ -58,9 +60,11 @@ function objectCheck(connection, doneReturn, done, table, column) {
 }
 
 function rowsCounter(connection, table, done) {
-    connection.query('select count(*) as count FROM ' + mysql.escapeId(table) + ';', function(err, rows, fields) {
-        done(err, rows[0].count);
-    });
+    connection.query('select count(*) as count FROM ' +
+                    mysql.escapeId(table),
+                    function(err, rows, fields) {
+                        done(err, rows[0].count);
+                    });
 }
 
 function showTableRequest(connection, table, doneReturn) {
@@ -72,23 +76,29 @@ function showTableRequest(connection, table, doneReturn) {
         function (done){
             async.parallel([
                 function(done){
-                    connection.query('SHOW COLUMNS FROM ' + mysql.escapeId(table) + ';', function(err, rows, fields) {
+                    connection.query('SHOW COLUMNS FROM ' + mysql.escapeId(table),
+                    function(err, rows, fields) {
                         done(err, rows);
-                   });
+                    });
                 },
 
                 function(done){
-                    connection.query('show create table ' + mysql.escapeId(table) + ';', function(err, rows, fields) {
+                    connection.query('show create table ' + mysql.escapeId(table),
+                    function(err, rows, fields) {
                         getIndexes(rows, done);
                     });
                 },
 
                 function(done){
-                    connection.query('SELECT TABLE_NAME, Engine, Version, Row_format, TABLE_ROWS, Avg_row_length, Data_length, Max_data_length, Index_length,' +
-                                     'Data_free, Auto_increment, Create_time, Update_time, Check_time, TABLE_COLLATION, Checksum, Create_options, TABLE_COMMENT ' +
-                                     'FROM information_schema.tables WHERE table_schema = DATABASE() and table_name = ?;', [table], function(err, rows, fields) {
-                        done(err, rows);
-                    });
+                    connection.query('SELECT TABLE_NAME, Engine, Version, Row_format, TABLE_ROWS, ' +
+                                    'Avg_row_length, Data_length, Max_data_length, Index_length,' +
+                                    'Data_free, Auto_increment, Create_time, Update_time, Check_time, ' +
+                                    'TABLE_COLLATION, Checksum, Create_options, TABLE_COMMENT ' +
+                                    'FROM information_schema.tables ' +
+                                    'WHERE table_schema = DATABASE() and table_name = ?', [table],
+                                    function(err, rows, fields) {
+                                        done(err, rows);
+                                    });
                 }
             ],doneReturn);
         }
@@ -125,9 +135,12 @@ function showColumnRequest(connection, column, table, limit, doneReturn) {
         },
 
         function (done){
-            connection.query("select " + mysql.escapeId(column) + ", count(*) as count from " + mysql.escapeId(table) + " group by " + mysql.escapeId(column) + " order by count desc limit " + limit + ";", function(err, rows, fields) {
-                doneReturn(err, rows);
-            });
+            connection.query("select " + mysql.escapeId(column) + ", count(*) as count from " +
+                            mysql.escapeId(table) + " group by " + mysql.escapeId(column) +
+                            " order by count desc limit " + limit,
+                            function(err, rows, fields) {
+                                doneReturn(err, rows);
+                            });
         }
     ]);
 }
@@ -143,9 +156,11 @@ function showValueRequest(connection, table, column, value, doneReturn) {
         },
 
         function (done){
-            connection.query("select * from " + mysql.escapeId(table) + " where " + mysql.escapeId(column) + "=?;", [value], function(err, rows, fields) {
-                doneReturn(err, rows);
-            });
+            connection.query("select * from " + mysql.escapeId(table) +
+                            " where " + mysql.escapeId(column) + "=?", [value],
+                            function(err, rows, fields) {
+                                doneReturn(err, rows);
+                            });
         }
     ]);
 }
