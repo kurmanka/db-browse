@@ -266,13 +266,17 @@ function init_addons (app, config) {
             app.addons[i] = a;
         }
 
-        var s = fs.statSync( path+'/static' );
-        if (s) {
-            if (s.isDirectory()) {
-                app.use('/ao/'+i, express.static(path+'/static'));
-                console.log( '/ao/' + i );
-                console.log( ' -> ' + path + '/static' );
+        try {
+            var s = fs.statSync( path+'/static' );
+            if (s) {
+                if (s.isDirectory()) {
+                    app.use('/ao/'+i, express.static(path+'/static'));
+                    console.log( '/ao/' + i );
+                    console.log( ' -> ' + path + '/static' );
+                }
             }
+        } catch (e) {
+            console.log( e );
         }
 
         if (a.setup) {
