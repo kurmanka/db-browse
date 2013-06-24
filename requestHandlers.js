@@ -349,6 +349,9 @@ function sqlRequest(req, res) {
         path = req.params.path_breadcrumbs;
         type='total change';
     }
+
+    console.log( 'sql:', l.sql );
+
     async.waterfall([
         function (done){
             if ( /ALTER|create|drop/i.exec(l.sql) ) {
@@ -380,6 +383,9 @@ function sqlRequest(req, res) {
             if (!table || !column) {
                 showError(req, res, "Request '" + l.sql + "' can not be executed", path);
             }
+
+            console.log( 'sql:', l.sql );
+
             db.getSQL(l.connection, l.sql, table, column, done);
         }
 
