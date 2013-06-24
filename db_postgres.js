@@ -175,33 +175,17 @@ function showValueRequest(connection, table, column, value, doneReturn) {
 }
 
 function getSQL (connection, sql, table, column, doneReturn){
-    async.waterfall([
-        function (done){
-            objectCheck(connection, doneReturn, done, table);
-        },
-
-        function (done){
-            if (column != '*') {
-                objectCheck(connection, doneReturn, done, table, column);
-            } else {
-                done();
-            }
-        },
-
-        function (done){
-            connection.query(sql, function(err, result) {
-                if (err) {
-                    err = err + " in request '" + sql + "'";
-                }
-
-                if (result) {
-                    doneReturn(err, result.rows);
-                } else {
-                    doneReturn(err);
-                }
-            });
+    connection.query(sql, function(err, result) {
+        if (err) {
+            err = err + " in request '" + sql + "'";
         }
-    ]);
+
+        if (result) {
+            doneReturn(err, result.rows);
+        } else {
+            doneReturn(err);
+        }
+    });
 }
 
 function escape (text) {
