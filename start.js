@@ -74,21 +74,32 @@ app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sql
     }
 });
 
-app.post('/*', function(req, res){ //get and check users data
+app.post('/*', requestHandlers.prepare_locals, function(req, res){ //get and check users data
     var pathname = url.parse(req.url).pathname;
-    var result = config.authenticate(req.body.user, req.body.pass);
-    if (result == false) {
-        requestHandlers.login(res, pathname, loginError);
-    } else {
-        req.session.authentication = true;
-        req.session.user = req.body.user;
 
-        if (pathname) {
-            res.redirect(pathname);
-        } else {
-            res.redirect('/');
+    async.waterfall([
+        function (done){
+            config.authenticate(req.body.user, req.body.pass, done);
         }
-    }
+    ],  function (err, result) {
+            if (err) {
+                requestHandlers.showError(req, res, err);
+            }
+
+            if (result == false) {
+                requestHandlers.login(res, pathname, loginError);
+            } else {
+                req.session.authentication = true;
+                req.session.user = req.body.user;
+
+                if (pathname) {
+                    res.redirect(pathname);
+                } else {
+                    res.redirect('/');
+                }
+            }
+        }
+    );
 });
 
 app.get(/(\/\:sql)$/, prepare_req_params, loadUser, requestHandlers.prepare_locals,

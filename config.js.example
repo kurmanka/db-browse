@@ -2,6 +2,8 @@
 // ID of database must be unique
 var FileStore = require('connect-session-file');
 
+var authenticate_userfile = 'users.txt';
+
 var listen = {
     host: '127.0.0.1',
     port: 8888
@@ -65,3 +67,4 @@ exports.authenticate = function (user, pass) { //if you don't waunt to use authe
 exports.db = db;
 exports.listen = listen;
 exports.session_config = session_config;
+exports.authenticate_userfile = authenticate_userfile;

@@ -23,9 +23,33 @@ if (config.authenticate) {
 exports.prepare_locals =
 function prepare_locals (req, res, next) {
     var authenticate = false;
-    if (config.authenticate) {
+    if (config.authenticate || config.authenticate_userfile) {
         authenticate = true;
     }
+
+    if ( config.authenticate_userfile && !config.authenticate ) {
+        config.authenticate = function (name, password, doneReturn) {
+            var search_string = name + ':' + password;
+
+            async.waterfall([
+                function (done){
+                    readFile(config.authenticate_userfile, done);
+                },
+
+                function (text, done){
+                    getArrayOfStrings(text, done);
+                }
+            ],  function (err, arr) {
+                    if (arr.indexOf(search_string) != -1) {
+                        doneReturn(err, true);
+                    } else {
+                        doneReturn(err, false);
+                    }
+                }
+            );
+        }
+    }
+
     if (req.body.comment == 'comment...'){
         req.body.comment = '';
     }
