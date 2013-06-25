@@ -145,7 +145,6 @@ app.get('/:db_id/:table/:column', middleware, requestHandlers.showColumn); //run
 app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue); //run method showValue
 
 
-
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
@@ -299,6 +298,15 @@ function init_addons (app, config) {
         }
 
     }
+
+    app.get('/ao/config', function(req,res) {
+        if (req.param('ao')) {
+            res.send( config.addons[req.param('ao')] );
+        } else {
+            res.send( 500, 'ao param is needed' );
+        }
+    });
+
 
 }
 
