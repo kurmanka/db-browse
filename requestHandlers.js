@@ -346,26 +346,7 @@ function sqlRequest(req, res) {
         function (done){
             var db = getDbType(l.dbType);
 
-            if ( /\*/.exec(l.sql) && !/\s+\*\s+/.exec(l.sql)) {
-                l.sql = l.sql.replace(/\*/, ' * ');
-            }
-
-            var temp = /from\s+[^\s]+/.exec(l.sql);
-            var table;
-            if (temp) {
-                table = temp.join().replace(/from\s+/, '');
-            }
-
-            var temp = /select\s+[^\s]+/.exec(l.sql);
-            var column;
-            if (temp) {
-                column = temp.join().replace(/select\s+/, '');
-            }
-
-            if (!table || !column) {
-                showError(req, res, "Request '" + l.sql + "' can not be executed", path);
-            }
-            db.getSQL(l.connection, l.sql, table, column, done);
+            db.getSQL(l.connection, l.sql, done);
         }
 
     ], function (err, results) {

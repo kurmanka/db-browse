@@ -28,37 +28,6 @@ function showAllTable(connection, doneReturn) {
     ]);
 }
 
-function objectCheck(connection, doneReturn, done, table, column) {
-    var select = {
-        sql: "SELECT count(*) as count FROM information_schema.tables " +
-             "WHERE table_schema = DATABASE() and table_name = ?",
-        params: [table],
-        err: "Table '" + table + "' not found"
-    };
-
-    if (column) {
-        select.sql = "SELECT count(*) as count FROM information_schema.COLUMNS " +
-                     "WHERE TABLE_NAME=? AND COLUMN_NAME=?";
-        select.params = [table, column];
-        select.err = "Column '" + column + "' not found in table '" + table + "'";
-    }
-
-    connection.query(select.sql, select.params, function(err, rows, fields) {
-        if (err) {
-            doneReturn(err);
-        }
-
-        else if(rows[0].count == 0) {
-            doneReturn(select.err);
-            err = select.err;
-        }
-
-        else {
-            done(null);
-        }
-    });
-}
-
 function rowsCounter(connection, table, done) {
     connection.query('select count(*) as count FROM ' +
                     mysql.escapeId(table),
@@ -70,22 +39,26 @@ function rowsCounter(connection, table, done) {
 function showTableRequest(connection, table, doneReturn) {
     async.waterfall([
         function (done){
-            objectCheck(connection, doneReturn, done, table);
-        },
-
-        function (done){
             async.parallel([
                 function(done){
                     connection.query('SHOW COLUMNS FROM ' + mysql.escapeId(table),
                     function(err, rows, fields) {
-                        done(err, rows);
+                        if (err) {
+                            doneReturn(err);
+                        } else {
+                            done(null, rows);
+                        }
                     });
                 },
 
                 function(done){
                     connection.query('show create table ' + mysql.escapeId(table),
                     function(err, rows, fields) {
-                        getIndexes(rows, done);
+                        if (err) {
+                            doneReturn(err);
+                        } else {
+                            getIndexes(rows, done);
+                        }
                     });
                 },
 
@@ -97,7 +70,11 @@ function showTableRequest(connection, table, doneReturn) {
                                     'FROM information_schema.tables ' +
                                     'WHERE table_schema = DATABASE() and table_name = ?', [table],
                                     function(err, rows, fields) {
-                                        done(err, rows);
+                                        if (err) {
+                                           doneReturn(err);
+                                        } else {
+                                           done(null, rows);
+                                        }
                                     });
                 }
             ],doneReturn);
@@ -125,60 +102,24 @@ function getIndexes(rows, done) {
 }
 
 function showColumnRequest(connection, column, table, limit, doneReturn) {
-    async.waterfall([
-        function (done){
-            objectCheck(connection, doneReturn, done, table);
-        },
-
-        function (done){
-           objectCheck(connection, doneReturn, done, table, column);
-        },
-
-        function (done){
-            connection.query("select " + mysql.escapeId(column) + ", count(*) as count from " +
-                            mysql.escapeId(table) + " group by " + mysql.escapeId(column) +
-                            " order by count desc limit " + limit,
-                            function(err, rows, fields) {
-                                doneReturn(err, rows);
-                            });
-        }
-    ]);
+    connection.query("select " + mysql.escapeId(column) + ", count(*) as count from " +
+                    mysql.escapeId(table) + " group by " + mysql.escapeId(column) +
+                    " order by count desc limit " + limit,
+                    function(err, rows, fields) {
+                        doneReturn(err, rows);
+                    });
 }
 
 function showValueRequest(connection, table, column, value, doneReturn) {
-    async.waterfall([
-        function (done){
-            objectCheck(connection, doneReturn, done, table);
-        },
-
-        function (done){
-           objectCheck(connection, doneReturn, done, table, column);
-        },
-
-        function (done){
-            connection.query("select * from " + mysql.escapeId(table) +
-                            " where " + mysql.escapeId(column) + "=?", [value],
-                            function(err, rows, fields) {
-                                doneReturn(err, rows);
-                            });
-        }
-    ]);
+    connection.query("select * from " + mysql.escapeId(table) +
+                    " where " + mysql.escapeId(column) + "=?", [value],
+                    function(err, rows, fields) {
+                        doneReturn(err, rows);
+                    });
 }
 
-function getSQL (connection, sql, table, column, doneReturn){
+function getSQL (connection, sql, doneReturn){
     async.waterfall([
-        function (done){
-            objectCheck(connection, doneReturn, done, table);
-        },
-
-        function (done){
-            if (column != '*') {
-                objectCheck(connection, doneReturn, done, table, column);
-            } else {
-                done();
-            }
-        },
-
         function (done){
             connection.query(sql, function(err, rows, fields) {
                 if (err) {
