@@ -27,29 +27,6 @@ function prepare_locals (req, res, next) {
         authenticate = true;
     }
 
-    if ( config.authenticate_userfile && !config.authenticate ) {
-        config.authenticate = function (name, password, doneReturn) {
-            var search_string = name + ':' + password;
-
-            async.waterfall([
-                function (done){
-                    readFile(config.authenticate_userfile, done);
-                },
-
-                function (text, done){
-                    getArrayOfStrings(text, done);
-                }
-            ],  function (err, arr) {
-                    if (arr.indexOf(search_string) != -1) {
-                        doneReturn(err, true);
-                    } else {
-                        doneReturn(err, false);
-                    }
-                }
-            );
-        }
-    }
-
     if (req.body.comment == 'comment...'){
         req.body.comment = '';
     }
@@ -494,16 +471,18 @@ function sqlRemove (req, res) {
     );
 }
 
-exports.start = start;
-exports.login = login;
-exports.showTable      = showTable;
-exports.cssConnect     = cssConnect;
-exports.showColumn     = showColumn;
-exports.showError      = showError;
-exports.selectDatabase = selectDatabase;
-exports.showValue      = showValue;
-exports.sqlRequest     = sqlRequest;
-exports.sqlHistory     = sqlHistory;
-exports.sqlDetails     = sqlDetails;
-exports.sqlSave        = sqlSave;
-exports.sqlRemove      = sqlRemove;
+exports.start             = start;
+exports.login             = login;
+exports.showTable         = showTable;
+exports.cssConnect        = cssConnect;
+exports.showColumn        = showColumn;
+exports.showError         = showError;
+exports.selectDatabase    = selectDatabase;
+exports.showValue         = showValue;
+exports.sqlRequest        = sqlRequest;
+exports.sqlHistory        = sqlHistory;
+exports.sqlDetails        = sqlDetails;
+exports.sqlSave           = sqlSave;
+exports.sqlRemove         = sqlRemove;
+exports.readFile          = readFile;
+exports.getArrayOfStrings = getArrayOfStrings;

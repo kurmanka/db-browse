@@ -74,10 +74,36 @@ app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sql
     }
 });
 
-app.post('/*', requestHandlers.prepare_locals, function(req, res){ //get and check users data
+app.post('/*', function(req, res){ //get and check users data
     var pathname = url.parse(req.url).pathname;
 
     async.waterfall([
+        function (done){
+            if ( config.authenticate_userfile && !config.authenticate ) {
+                config.authenticate = function (name, password, doneReturn) {
+                    var search_string = name + ':' + password;
+
+                    async.waterfall([
+                        function (done1){
+                            requestHandlers.readFile(config.authenticate_userfile, done1);
+                        },
+
+                        function (text, done1){
+                            requestHandlers.getArrayOfStrings(text, done1);
+                        }
+                    ],  function (err, arr) {
+                            if (arr.indexOf(search_string) != -1) {
+                                doneReturn(err, true);
+                            } else {
+                                doneReturn(err, false);
+                            }
+                        }
+                    );
+                }
+            }
+            done(null);
+        },
+
         function (done){
             config.authenticate(req.body.user, req.body.pass, done);
         }
