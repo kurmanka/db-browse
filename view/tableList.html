@@ -7,7 +7,7 @@
     <% }
 
     else if (index != -1) { %>
-        <li><a href = "<%=path%>/<%=tableGr[i]%>"><%=tableGr[i]%></a></li>
+        <li><a href = "<%=dbId%>/<%=tableGr[i]%>"><%=tableGr[i]%></a></li>
     <% }
 
     else { %>
@@ -24,7 +24,7 @@
     var index = tableGr.join().search(tablesList[i]);
 
     if (index == -1) { %>
-        <li><a href = "<%=path%>/<%=tablesList[i]%>"><%=tablesList[i]%></a></li>
+        <li><a href = "<%=dbId%>/<%=tablesList[i]%>"><%=tablesList[i]%></a></li>
     <% }
 } %>
 
