@@ -278,7 +278,7 @@ function init_addons (app, config) {
         }
 
         if (a.setup) {
-            a.setup(app,config, path);
+            a.setup(app, config, path);
         }
 
         app.addon_features = {};
