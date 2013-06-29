@@ -36,6 +36,8 @@ app.use(express.logger('tiny'));
 // sessions
 app.use(express.session(config.session_config));
 
+app.use( '/_/', express.static('./static') );
+
 var database = {};
 
 var loginError = 'This login & password combination is not allowed.';
@@ -52,7 +54,6 @@ app.get('/', prepare_req_params,
              requestHandlers.prepare_locals,
              requestHandlers.selectDatabase); //run method selectDatabase
 
-app.get('/style.css', requestHandlers.cssConnect); //connect to css file
 
 app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sqlite db
     req.params.sql_id = req.params[1];
