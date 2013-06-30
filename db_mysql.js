@@ -37,49 +37,37 @@ function rowsCounter(connection, table, done) {
 }
 
 function showTableRequest(connection, table, doneReturn) {
-    async.waterfall([
-        function (done){
-            async.parallel([
-                function(done){
-                    connection.query('SHOW COLUMNS FROM ' + mysql.escapeId(table),
-                    function(err, rows, fields) {
-                        if (err) {
-                            doneReturn(err);
-                        } else {
-                            done(null, rows);
-                        }
-                    });
-                },
+    async.parallel([
+        function(done){
+            connection.query('SHOW COLUMNS FROM ' + mysql.escapeId(table),
+                             function(err, rows, fields) {
+                                done(err, rows);
+                            });
+        },
 
-                function(done){
-                    connection.query('show create table ' + mysql.escapeId(table),
-                    function(err, rows, fields) {
-                        if (err) {
-                            doneReturn(err);
-                        } else {
-                            getIndexes(rows, done);
-                        }
-                    });
-                },
+        function(done){
+            connection.query('show create table ' + mysql.escapeId(table),
+                            function(err, rows, fields) {
+                                if (err) {
+                                    doneReturn(err);
+                                } else {
+                                    getIndexes(rows, done);
+                                }
+                            });
+        },
 
-                function(done){
-                    connection.query('SELECT TABLE_NAME, Engine, Version, Row_format, TABLE_ROWS, ' +
-                                    'Avg_row_length, Data_length, Max_data_length, Index_length,' +
-                                    'Data_free, Auto_increment, Create_time, Update_time, Check_time, ' +
-                                    'TABLE_COLLATION, Checksum, Create_options, TABLE_COMMENT ' +
-                                    'FROM information_schema.tables ' +
-                                    'WHERE table_schema = DATABASE() and table_name = ?', [table],
-                                    function(err, rows, fields) {
-                                        if (err) {
-                                           doneReturn(err);
-                                        } else {
-                                           done(null, rows);
-                                        }
-                                    });
-                }
-            ],doneReturn);
+        function(done){
+            connection.query('SELECT TABLE_NAME, Engine, Version, Row_format, TABLE_ROWS, ' +
+                            'Avg_row_length, Data_length, Max_data_length, Index_length,' +
+                            'Data_free, Auto_increment, Create_time, Update_time, Check_time, ' +
+                            'TABLE_COLLATION, Checksum, Create_options, TABLE_COMMENT ' +
+                            'FROM information_schema.tables ' +
+                            'WHERE table_schema = DATABASE() and table_name = ?', [table],
+                            function(err, rows, fields) {
+                                done(err, rows);
+                            });
         }
-    ]);
+    ],doneReturn);
 }
 
 function getIndexes(rows, done) {
