@@ -94,7 +94,7 @@ function login (res, pathname, errmsg) {
 
 function selectDatabase (req, res) {
     console.log( 'selectDatabase()' );
-    respond( res, 'listDatabase' );
+    respond( res, 'listDatabase', { addons: res.app.addons } );
 }
 
 function start(req, res) {
