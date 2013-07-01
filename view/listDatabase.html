@@ -19,10 +19,11 @@
     <% } %>
 </table>
 
-<div id="history"><a href="/:sql" >History of previous SQL</a></div>
-
 <h2>Add-ons</h2>
 
 <% for(var key in addons) { %>
-    <li><a href='ao/<%=key%>'><%=key%></a></li>
+    <li><a href='/ao/<%=key%>/'><%=key%></a></li>
 <% } %>	
+
+<div id="history"><a href="/:sql" >History of previous SQL</a></div>
+
