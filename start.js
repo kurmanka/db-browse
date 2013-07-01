@@ -130,14 +130,14 @@ function prepare_req_params(req, res, next) {
 
 app.get('/:db_id', middleware, requestHandlers.start); //run method start
 
-app.get('/:db_id/:table', 
-        middleware, 
+app.get('/:db_id/:table',
+        middleware,
         requestHandlers.showTable, // show table details, if that's a table
         addon_feature,             // run addon feature, if that's a feature
         requestHandlers.noSuchTable );
 
-app.post('/:db_id/:table', 
-        middleware, 
+app.post('/:db_id/:table',
+        middleware,
         addon_feature,             // run addon feature, if that's a feature
         requestHandlers.noSuchTable );
 
@@ -244,12 +244,12 @@ function loadUser(req, res, next) {
 function init_addons (app, config) {
     if (!config.addons) { return; }
 
-    // for each config.addons.* 
+    // for each config.addons.*
     // do require('./addons/*/index.js')
-    // 
+    //
     app.addons = {};
     app.addon_features = {};
-	
+
     for ( var i in config.addons ) {
         var path = './addons/' + i;
         try {
@@ -320,7 +320,7 @@ function addon_feature (req,res,next) {
 
     var feature = req.params.table;
     if (req.app.addon_features[ feature ]) {
-        // 
+        //
         console.log( 'feature ' + feature );
         req.app.addon_features[ feature ](req,res,next)
 
