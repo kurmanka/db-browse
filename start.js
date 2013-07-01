@@ -247,7 +247,8 @@ function init_addons (app, config) {
     // do require('./addons/*/index.js')
     // 
     app.addons = {};
-
+    app.addon_features = {};
+	
     for ( var i in config.addons ) {
         var path = './addons/' + i;
         try {
@@ -281,8 +282,6 @@ function init_addons (app, config) {
             a.setup(app,config, path);
         }
 
-        app.addon_features = {};
-
         if ( a.features ) {
             for ( var f in a.features ) {
                 app.addon_features[f] = a.features[f];
@@ -306,8 +305,6 @@ function init_addons (app, config) {
             res.send( 500, 'ao param is needed' );
         }
     });
-
-
 }
 
 function create_sqlt_feature( def ) {
