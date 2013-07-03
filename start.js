@@ -299,11 +299,12 @@ function init_addons (app, config) {
 
     }
 
-    app.get('/ao/config', function(req,res) {
-        if (req.param('ao')) {
-            res.send( config.addons[req.param('ao')] );
+    app.get('/ao/config', loadUser, function(req,res) {
+        var ao = req.param('ao') 
+        if ( ao && config.addons[ao] ) {
+            res.send( config.addons[ao] );
         } else {
-            res.send( 500, 'ao param is needed' );
+            res.send( 500, 'ao param is empty or no such addon' );
         }
     });
 }
