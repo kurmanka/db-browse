@@ -82,6 +82,9 @@ app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sql
     }
 });
 
+
+// XXX this needs to be fixed. 
+// Login form should submit to a separate URL.
 app.post('/*', function(req, res){ //get and check users data
     var pathname = url.parse(req.url).pathname;
     var result = config.authenticate(req.body.user, req.body.pass);
