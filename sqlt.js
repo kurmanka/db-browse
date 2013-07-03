@@ -29,6 +29,13 @@ order by sum_app_time desc',
 */
 
 function run_sqlt( sqlt, req, res, next ) {
+
+	// if sqlt is a function, execute it
+	if(typeof sqlt == 'function') {
+		sqlt = sqlt( req, res, 
+			function (err) { res.send( 500, err); } );
+	}
+	// save sqlt for the view
 	res.locals.sqlt = sqlt;
 	var values = {};
 
