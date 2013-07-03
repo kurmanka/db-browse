@@ -44,15 +44,22 @@ function run_sqlt( sqlt, req, res, next ) {
 		else if (req.body[i]) { values[i] = req.body[i]; }
 	}
 
-	var sa = apply_values( sqlt.sqlt, sqlt.params, values );
+	// the values in the resulting sql need to be 
+	// marked differntly, depending on the db type (driver)
+	var replacer = null;
+	if (req.dbconfig.type == 'mysql')    {replacer = replace_fn_mysql;}
+	if (req.dbconfig.type == 'postgres') {replacer = replace_fn_pg;}
+
+	// process the template, produce a valid SQL query
+	var sa = apply_values( sqlt.sqlt, sqlt.params, values, replacer );
 
 	if ( sa.missing ) {
 		// error
-		// show a form
+		// show a form, maybe? XXX
 		res.send( {missing: sa.missing} );
 
 	} else {
-
+		// SQL is ready to execute
 		req.dbconnection.query( sa.sql, 
 			sa.par,
 			function(err,result) {
@@ -72,10 +79,10 @@ function run_sqlt( sqlt, req, res, next ) {
 	}
 }
 
-// apply_values( template, parameterlist, values )
+// apply_values( template, parameterlist, values, replace_fn )
 //
-// XXX this function has a postgres-specific part to it
-function apply_values( t, p, v ) {
+
+function apply_values( t, p, v, replace_fn ) {
 	var s = t;
 	var missing = [];
 	var par = [];
@@ -95,16 +102,11 @@ function apply_values( t, p, v ) {
 			if (   p[i] == 'string'
 				|| p[i] == 'date' 
 				|| p[i] == 'int' ) {
-				// postgres-specific. follows 'pg' module convention 
-				// for parameterized queries 
-				// https://github.com/brianc/node-postgres
-				// (or is it, actually, the postgres convention?)
-				s = s.replace( re, '$' + (par.length + 1).toString() );
+				s = s.replace( re, replace_fn( par.length ) );
 				par.push( v[i] );
 
 			} else {
 				s = s.replace( re, v[i] );
-
 			}
 		}
 	}
@@ -116,6 +118,22 @@ function apply_values( t, p, v ) {
 	console.log( 'apply_values(): par', par );
 	return {sql: s, par: par};
 }
+
+
+function replace_fn_pg(i) {
+	// postgres-specific. follows 'pg' module convention 
+	// for parameterized queries 
+	// https://github.com/brianc/node-postgres
+	// (or is it, actually, the postgres convention?)
+	return '$' + (i + 1).toString();
+}
+
+function replace_fn_mysql() {
+	// mysql-specific. 
+	// https://github.com/felixge/node-mysql
+	return '?';
+}
+
 
 
 function check_sqlt_params(req, res, next) {
