@@ -271,12 +271,24 @@ function showValue(req, res) {
     var limit = 10;
     var db;
     var l = res.locals;
+    var template;
+
+    if ( /\?v\=col/.exec(l.pathname) ) {
+        template = 'showValues_col';
+    }
+    else if ( /\?v\=single/.exec(l.pathname) ) {
+        template = 'showValues_single';
+    }
+    else {
+        template = 'showValues';
+    }
 
     async.waterfall([
         function (done){
             db = getDbType(l.dbType);
             db.showValueRequest(l.connection, l.table, l.column, l.value, done);
         },
+
         function (results, done) {
             if (results == 0) {
                 // error
@@ -287,7 +299,7 @@ function showValue(req, res) {
                 done(null);
             }
         }
-    ], finish( req, res, 'showValues', { limit: limit } )
+    ], finish( req, res, template, { limit: limit } )
     );
 }
 

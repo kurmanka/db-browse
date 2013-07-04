@@ -18,6 +18,7 @@ table.light {
     border: 1px solid #ccc;
     border-collapse: collapse;
     min-width: 700px;
+    margin-top: 20px;
 }
 
 table.light tr th {

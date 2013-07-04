@@ -83,7 +83,7 @@ app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sql
 });
 
 
-// XXX this needs to be fixed. 
+// XXX this needs to be fixed.
 // Login form should submit to a separate URL.
 app.post('/*', function(req, res){ //get and check users data
     var pathname = url.parse(req.url).pathname;
@@ -120,7 +120,8 @@ app.get('/logout', function(req, res){ //logout
 
 // former parameters_determination()
 function prepare_req_params(req, res, next) {
-    var pathname = url.parse(req.url).pathname;
+    //var pathname = url.parse(req.url).pathname;
+    var pathname = req.url;
     req.params.path = pathname.replace(/\/$/, '');
 
     var sqlId = /(\d+)$/.exec(pathname);
@@ -303,7 +304,7 @@ function init_addons (app, config) {
     }
 
     app.get('/ao/config', loadUser, function(req,res) {
-        var ao = req.param('ao') 
+        var ao = req.param('ao')
         if ( ao && config.addons[ao] ) {
             res.send( config.addons[ao] );
         } else {

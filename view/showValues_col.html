@@ -1,0 +1,18 @@
+<%! parent { title: 'Result:', breadcrumbs_path: path } %>
+
+<table class='light'>
+    <% for (var key in values[0]) {
+        if (key != 'parse' && key != '_typeCast') {%>
+            <tr>
+                <th><%=key%></th>
+                <% for (var i = 0; i < Math.min(values.length, limit); i++) {
+                    if (key != 'parse' && key != '_typeCast') {%>
+                        <td class = 'data'><%=values[i][key]%></td>
+                    <% }
+                } %>
+            </tr>
+        <% }
+    } %>
+</table>
+
+<div id = 'columnCounter'><a><%=values.length%> rows</a></div>
