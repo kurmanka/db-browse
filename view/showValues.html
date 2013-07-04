@@ -1,23 +1,27 @@
-<%! parent { title: 'Result:', breadcrumbs_path: path } %>
+<%! parent { title: 'Result', breadcrumbs_path: path } %>
 
 <table class='light'>
     <tr>
-        <% for (var key in values[0]) {
-            if (key != 'parse' && key != '_typeCast') {%>
-                <th><%=key%></th>
-            <% }
+    <%  for (var key in values[0]) {
+            if (key == 'parse' || key == '_typeCast') { continue; } 
+            %>
+            <th><%= key %></th>
+            <% 
         } %>
     </tr>
 
     <% for (var i = 0; i < Math.min(values.length, limit); i++) { %>
-    <tr>
+        <tr>
         <% for (var key in values[0]) {
-            if (key != 'parse' && key != '_typeCast') {%>
-                <td class = 'data'><%=values[i][key]%></td>
-            <% }
-        } %>
-    </tr>
+            if (key == 'parse' || key == '_typeCast') { continue; } 
+            var _class = '';
+            var value = values[i][key];
+            if (values[i][key] == null ) { _class = ' null'; }
+            %>
+            <td class='data<%= _class %>'><%= value %></td>
+        <% } %>
+        </tr>
     <% } %>
 </table>
 
-<div id = 'columnCounter'><a><%=values.length%> rows</a></div>
+<div id='columnCounter'><a><%= values.length %> rows</a></div>

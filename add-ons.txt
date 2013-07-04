@@ -1,0 +1,79 @@
+Add-ons
+=======
+
+URLs
+----
+
+http://host/<db>/<feature> - if not a table, the list of enabled add-ons
+for this db is checked for this feature. If a matching feature is found,
+it is executed.
+
+http://host/ao/<addon-id>/ - root url for the static files (e.g. js, 
+css, html) within the addon's static/ dir. 
+
+
+
+Directory structure
+-------------------
+
+addons/
+  <addon-id>/
+     static/
+       index.html
+       ...
+     sql/
+       ...
+     index.js
+     other.js
+
+
+API
+---
+
+addon.init( app, config, path );
+  - initialize the add-on
+
+addon.setup( app, config, path );
+  - setup the app routes, if any (app.get, app.post, etc.)
+
+addon.features = {};  -- a map of features, in the name: function format 
+
+addon.sqlt = {}; -- a map of sql templates, in this format:
+
+  { 
+    sqlt: 'sqlt string with {aa}',
+    params: {
+      aa: 'string',
+      bb: 'sql'
+    } 
+  }
+
+
+Configuration
+-------------
+
+general app config.js:
+
+	var addons = exports.addons = {};
+
+	addons.cool_addon = { ... };
+
+	...
+
+	exports.db = {
+  		'data': {
+    		type: 'postgres',
+    		host: 'crunch.ahinea.com',
+    		database: 'bsdata_v3',
+    		user:     'iku',
+    		password: 'rkbvfnjuhfabz',
+    		addons: [ 'cool_addon' ],   // this is not implemented yet
+  		},
+  	...
+
+
+config.addons.somename must be present to enable the 'somename' add-on. 
+It may be an empty object:
+
+  config.addons.somename = {};
+

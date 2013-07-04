@@ -133,14 +133,12 @@ function getSQL (connection, sql, doneReturn){
                     err = err + " in request '" + sql + "'";
                 }
 
-                if (result) {
-                    doneReturn(err, result.rows);
-                } else {
-                    doneReturn(err);
-                }
-            });
+        if (result) {
+            doneReturn(err, result.rows);
+        } else {
+            doneReturn(err);
         }
-    ]);
+    });
 }
 
 function escape (text) {

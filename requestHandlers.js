@@ -95,7 +95,7 @@ function login (res, pathname, errmsg) {
 
 function selectDatabase (req, res) {
     console.log( 'selectDatabase()' );
-    respond( res, 'listDatabase' );
+    respond( res, 'listDatabase', { addons: res.app.addons } );
 }
 
 function start(req, res) {
@@ -169,7 +169,7 @@ function getArrayOfStrings(string, done) {
     done(null, array);
 }
 
-function showTable(req, res) {
+function showTable(req, res, next) {
     var db;
     var l = res.locals;
 
@@ -189,15 +189,31 @@ function showTable(req, res) {
             res.locals(data);
             done(null);
         }
-    ],
-    // provide a custom callback for the template
-    finish(req, res, 'tableDetails', {},
-        function(error, html) {
+
+    ], function (err, data) {
+        // err is most likely being "Table xxx not found". at least, that's
+        // what we assume here
+        if (err) {
+            // call the next chained function, specifically, check for an addon feature
+            // of the same name
+            next();
+        } else {
+            // provide a custom callback for the template
+            var handler = finish(req, res, 'tableDetails', {},
+                function(error, html) {
                 showPageTotalRecords(req, res, error, html, db);
-        })
+            });
+            handler(err,data);
+        }
+    }
     );
 
 }
+
+function noSuchTable (req, res, next) {
+    res.send('No such table: ' + req.params.table);
+}
+
 
 function showPageTotalRecords (req, res, error, html, db) {
     var l = res.locals;
@@ -256,12 +272,24 @@ function showValue(req, res) {
     var limit = 10;
     var db;
     var l = res.locals;
+    var template;
+
+    if ( /\?v\=col/.exec(l.pathname) ) {
+        template = 'showValues_col';
+    }
+    else if ( /\?v\=single/.exec(l.pathname) ) {
+        template = 'showValues_single';
+    }
+    else {
+        template = 'showValues';
+    }
 
     async.waterfall([
         function (done){
             db = getDbType(l.dbType);
             db.showValueRequest(l.connection, l.table, l.column, l.value, done);
         },
+
         function (results, done) {
             if (results == 0) {
                 // error
@@ -272,7 +300,7 @@ function showValue(req, res) {
                 done(null);
             }
         }
-    ], finish( req, res, 'showValues', { limit: limit } )
+    ], finish( req, res, template, { limit: limit } )
     );
 }
 
@@ -334,6 +362,9 @@ function sqlRequest(req, res) {
         path = req.params.path_breadcrumbs;
         type='total change';
     }
+
+    console.log( 'sql:', l.sql );
+
     async.waterfall([
         function (done){
             if ( /ALTER|create|drop/i.exec(l.sql) ) {
@@ -345,7 +376,6 @@ function sqlRequest(req, res) {
 
         function (done){
             var db = getDbType(l.dbType);
-
             db.getSQL(l.connection, l.sql, done);
         }
 
@@ -455,6 +485,7 @@ function sqlRemove (req, res) {
 exports.start             = start;
 exports.login             = login;
 exports.showTable         = showTable;
+exports.noSuchTable       = noSuchTable;
 exports.cssConnect        = cssConnect;
 exports.showColumn        = showColumn;
 exports.showError         = showError;

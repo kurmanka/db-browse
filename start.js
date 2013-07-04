@@ -1,13 +1,18 @@
-var requestHandlers = require("./requestHandlers");
-var config = require("./config");
-
-var url = require("url");
+var url   = require('url');
 var async = require('async');
 var mysql = require('mysql');
-var pg = require('pg');
-var fs = require("fs");
+var pg    = require('pg');
+var fs    = require('fs');
+var express = require('express');
 
-var express = require("express");
+// some modules
+var requestHandlers = require('./requestHandlers.js');
+var sqlt = require('./sqlt.js');
+
+// configuration
+var config = require('./config.js');
+
+// create the express app
 var app = express();
 
 app.use(express.bodyParser());
@@ -31,6 +36,8 @@ app.use(express.logger('tiny'));
 // sessions
 app.use(express.session(config.session_config));
 
+app.use( '/_/', express.static('./static') );
+
 var database = {};
 
 var loginError = 'This login & password combination is not allowed.';
@@ -40,12 +47,13 @@ var middleware = [  prepare_req_params,
                     prepare_dbconnection,
                     requestHandlers.prepare_locals ];
 
+init_addons( app, config );
+
 app.get('/', prepare_req_params,
              loadUser,
              requestHandlers.prepare_locals,
              requestHandlers.selectDatabase); //run method selectDatabase
 
-app.get('/style.css', requestHandlers.cssConnect); //connect to css file
 
 app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sqlite db
     req.params.sql_id = req.params[1];
@@ -74,6 +82,9 @@ app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sql
     }
 });
 
+
+// XXX this needs to be fixed.
+// Login form should submit to a separate URL.
 app.post('/*', function(req, res){ //get and check users data
     var pathname = url.parse(req.url).pathname;
 
@@ -146,7 +157,8 @@ app.get('/logout', function(req, res){ //logout
 
 // former parameters_determination()
 function prepare_req_params(req, res, next) {
-    var pathname = url.parse(req.url).pathname;
+    //var pathname = url.parse(req.url).pathname;
+    var pathname = req.url;
     req.params.path = pathname.replace(/\/$/, '');
 
     var sqlId = /(\d+)$/.exec(pathname);
@@ -159,11 +171,21 @@ function prepare_req_params(req, res, next) {
 
 app.get('/:db_id', middleware, requestHandlers.start); //run method start
 
-app.get('/:db_id/:table', middleware, requestHandlers.showTable);//run method showTable
+app.get('/:db_id/:table',
+        middleware,
+        requestHandlers.showTable, // show table details, if that's a table
+        addon_feature,             // run addon feature, if that's a feature
+        requestHandlers.noSuchTable );
+
+app.post('/:db_id/:table',
+        middleware,
+        addon_feature,             // run addon feature, if that's a feature
+        requestHandlers.noSuchTable );
 
 app.get('/:db_id/:table/:column', middleware, requestHandlers.showColumn); //run method showColumn
 
 app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue); //run method showValue
+
 
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
@@ -258,4 +280,94 @@ function loadUser(req, res, next) {
     } else {
         requestHandlers.login(res, pathname, '');
     }
+}
+
+function init_addons (app, config) {
+    if (!config.addons) { return; }
+
+    // for each config.addons.*
+    // do require('./addons/*/index.js')
+    //
+    app.addons = {};
+    app.addon_features = {};
+
+    for ( var i in config.addons ) {
+        var path = './addons/' + i;
+        try {
+            var a = require(path + '/index.js');
+        } catch (err) {
+            console.log( "can't load addon " + path );
+            console.log( err );
+            continue;
+        }
+
+        if (a) {
+            console.log( 'init addon ' + i );
+            a.init( app, config.addons.i, path );
+            app.addons[i] = a;
+        }
+
+        try {
+            var s = fs.statSync( path+'/static' );
+            if (s) {
+                if (s.isDirectory()) {
+                    app.use('/ao/'+i, express.static(path+'/static'));
+                    console.log( '/ao/' + i );
+                    console.log( ' -> ' + path + '/static' );
+                }
+            }
+        } catch (e) {
+            console.log( e );
+        }
+
+        if (a.setup) {
+            a.setup(app, config, path);
+        }
+
+        if ( a.features ) {
+            for ( var f in a.features ) {
+                app.addon_features[f] = a.features[f];
+                // detect feature name conflicts? XXX
+            }
+        }
+
+        if ( a.sqlt ) {
+            for ( var f in a.sqlt ) {
+                app.addon_features[f] = create_sqlt_feature( a.sqlt[f] );
+                // detect feature name conflicts? XXX
+            }
+        }
+
+    }
+
+    app.get('/ao/config', loadUser, function(req,res) {
+        var ao = req.param('ao')
+        if ( ao && config.addons[ao] ) {
+            res.send( config.addons[ao] );
+        } else {
+            res.send( 500, 'ao param is empty or no such addon' );
+        }
+    });
+}
+
+function create_sqlt_feature( def ) {
+    return function( req, res, n ) {
+        sqlt.run_sqlt( def, req, res, n );
+    };
+}
+
+
+function addon_feature (req,res,next) {
+    console.log( 'addon_feature: start');
+
+    var feature = req.params.table;
+    if (req.app.addon_features[ feature ]) {
+        //
+        console.log( 'feature ' + feature );
+        req.app.addon_features[ feature ](req,res,next)
+
+    } else {
+        next();
+    }
+
 }

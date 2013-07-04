@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "connect-session-file": "~1.0.4",
-    "sqlite3": "~2.1.7"
+    "sqlite3": "~2.1.7",
+    "ect": "~0.5.2"
   }
 }
