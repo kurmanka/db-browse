@@ -38,6 +38,10 @@ table.details td{
     padding: 0px 20px 5px 0px;
 }
 
+td.null {
+    color: #999;
+}
+
 #sqlname {
     min-width: 460px;
 }

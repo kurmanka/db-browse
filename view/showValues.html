@@ -4,7 +4,7 @@
     <tr>
         <% for (var key in values[0]) {
             if (key != 'parse' && key != '_typeCast') {%>
-                <th><%=key%></th>
+                <th><%= key %></th>
             <% }
         } %>
     </tr>
@@ -12,8 +12,14 @@
     <% for (var i = 0; i < Math.min(values.length, limit); i++) { %>
     <tr>
         <% for (var key in values[0]) {
-            if (key != 'parse' && key != '_typeCast') {%>
-                <td class = 'data'><%=values[i][key]%></td>
+            if (key != 'parse' && key != '_typeCast') {
+                var class = '';
+                var value = values[i][key];
+                if (values[i][key] == null ) {
+                    class = ' null';
+                }
+                %>
+                <td class='data<%= class %>'><%= value %></td>
             <% }
         } %>
     </tr>
