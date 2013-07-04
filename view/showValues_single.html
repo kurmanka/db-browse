@@ -2,6 +2,7 @@
 
 <% for (var i = 0; i < Math.min(values.length, limit); i++) { %>
 
+<p><%= i+1 %>:</p>
 <table class='light'>
     <% for (var key in values[0]) {
         if (key == 'parse' || key == '_typeCast') { continue; } 
