@@ -126,12 +126,10 @@ function showValueRequest(connection, table, column, value, doneReturn) {
 }
 
 function getSQL (connection, sql, doneReturn){
-    async.waterfall([
-        function (done){
-            connection.query(sql, function(err, result) {
-                if (err) {
-                    err = err + " in request '" + sql + "'";
-                }
+    connection.query(sql, function(err, result) {
+        if (err) {
+            err = err + " in request '" + sql + "'";
+        }
 
         if (result) {
             doneReturn(err, result.rows);
