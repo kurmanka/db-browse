@@ -3,13 +3,13 @@
 <table class='light'>
     <% for (var key in values[0]) {
         // skip the parse and _typeCast columns
-        if (key == 'parse' || key == '_typeCast') { continue; } 
+        if (key == 'parse' || key == '_typeCast') { continue; }
         %>
             <tr>
                 <th><%=key%></th>
-                <% 
+                <%
                 for (var i = 0; i < Math.min(values.length, limit); i++) {
-                    if (key == 'parse' || key == '_typeCast') { continue; } 
+                    if (key == 'parse' || key == '_typeCast') { continue; }
 
                     var _class = '';
                     var value = values[i][key];

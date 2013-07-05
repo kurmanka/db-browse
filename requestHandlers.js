@@ -274,10 +274,11 @@ function showValue(req, res) {
     var l = res.locals;
     var template;
 
-    if ( /\?v\=col/.exec(l.pathname) ) {
+
+    if ( req.param('v') == 'col' ) {
         template = 'showValues_col';
     }
-    else if ( /\?v\=single/.exec(l.pathname) ) {
+    else if ( req.param('v') == 'single' ) {
         template = 'showValues_single';
     }
     else {

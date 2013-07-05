@@ -157,8 +157,7 @@ app.get('/logout', function(req, res){ //logout
 
 // former parameters_determination()
 function prepare_req_params(req, res, next) {
-    //var pathname = url.parse(req.url).pathname;
-    var pathname = req.url;
+    var pathname = url.parse(req.url).pathname;
     req.params.path = pathname.replace(/\/$/, '');
 
     var sqlId = /(\d+)$/.exec(pathname);
@@ -185,7 +184,6 @@ app.post('/:db_id/:table',
 app.get('/:db_id/:table/:column', middleware, requestHandlers.showColumn); //run method showColumn
 
 app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue); //run method showValue
-
 
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
