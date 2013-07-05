@@ -120,12 +120,10 @@ app.post('/*', function(req, res){ //get and check users data
         }
     ],  function (err, result) {
             if (err) {
-                requestHandlers.showError(req, res, err);
+                return requestHandlers.showError(req, res, err);
             }
 
-            if (result == false) {
-                requestHandlers.login(res, pathname, loginError);
-            } else {
+            if (result) {
                 req.session.authentication = true;
                 req.session.user = req.body.user;
 
@@ -134,6 +132,8 @@ app.post('/*', function(req, res){ //get and check users data
                 } else {
                     res.redirect('/');
                 }
+            } else {
+                requestHandlers.login(res, pathname, loginError);
             }
         }
     );
