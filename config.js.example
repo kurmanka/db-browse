@@ -56,12 +56,12 @@ var db = {
     }
 };
 
-exports.authenticate = function (user, pass) { //if you don't waunt to use authentication do not use this function
+exports.authenticate = function (user, pass, done) { //if you don't waunt to use authentication do not use this function
     if (user == 'browse' && pass == 'db') { //it's possible to use other criteria to validate a login and a password
-        return true;
+        done(null, true);
+    } else {
+        done(null, false);
     }
-
-    return false;
 }
 
 var addons = {};
