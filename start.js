@@ -94,17 +94,11 @@ if ( config.authenticate_userfile && !config.authenticate ) {
                 requestHandlers.readFile(config.authenticate_userfile, done1);
             },
 
-            function (text, done1){
-                requestHandlers.getArrayOfStrings(text, done1);
-            }
+            requestHandlers.getArrayOfStrings, // (text,done)
+
         ],  function (err, arr) {
-            if (arr.indexOf(search_string) != -1) {
-                doneReturn(err, true);
-            } else {
-                doneReturn(err, false);
-            }
-        }
-        );
+            doneReturn( err, (arr.indexOf(search_string) != -1) );
+        });
     }
 }
 
@@ -115,10 +109,6 @@ app.post('/*', function(req, res){ //get and check users data
     var pathname = url.parse(req.url).pathname;
 
     async.waterfall([
-        function (done){
-            done(null);
-        },
-
         function (done){
             config.authenticate(req.body.user, req.body.pass, done);
         }
