@@ -170,6 +170,16 @@ function getArrayOfStrings(string, done) {
     done(null, array);
 }
 
+function mysqlChecker (res, methodRun, attrList, done) {
+    var l = res.locals;
+
+    if (l.dbType == 'mysql') {
+        methodRun(attrList, done, res);//get last string of request 'show create table'
+    } else {
+        done(null, attrList);
+    }
+}
+
 function showTable(req, res, next) {
     var db;
     var l = res.locals;
@@ -182,27 +192,15 @@ function showTable(req, res, next) {
 
         function (attrList, done){
             l.create_table = attrList[1];
-            if (l.dbType == 'mysql') {
-                getCreateTableDetails(attrList, done, res);//get last string of request 'show create table'
-            } else {
-                done(null, attrList);
-            }
+            mysqlChecker(res, getCreateTableDetails, attrList, done);//get last string of request 'show create table' for tables of db mysql
         },
 
         function (attrList, done){
-            if (l.dbType == 'mysql') {
-                getIndexes(attrList, done);
-            } else {
-                done(null, attrList);
-            }
+            mysqlChecker(res, getIndexes, attrList, done);//get Indexes for tables of db mysql
         },
 
         function (attrList, done){
-            if (l.dbType == 'mysql') {
-                addCollateCharset(attrList, done);
-            } else {
-                done(null, attrList);
-            }
+            mysqlChecker(res, addCollateCharset, attrList, done);//added columns Collate and Charset for tables of db mysql
         },
 
         function (results, done){
@@ -236,16 +234,19 @@ function showTable(req, res, next) {
     );
 }
 
-function getCreateTableDetails(attrList, done, res) {
-    var request = attrList[1];
-
-    for (var key in request[0]) {
-        if (key == 'Create Table') {
-            var text = request[0][key];
+function getValueFromKey (keyName, array) {
+    for (var key in array) {
+        if (key == keyName) {
+            return array[key];
         }
     }
+    return null;
+}
 
-    var lastString = /(\).+)$/.exec(text);
+function getCreateTableDetails(attrList, done, res) {
+    var request = getValueFromKey('Create Table', attrList[1][0]);
+
+    var lastString = /(\).+)$/.exec(request);
 
     res.locals.lastStringReq = lastString[0].replace(/\)/, '');
     done (null, attrList);
@@ -253,18 +254,13 @@ function getCreateTableDetails(attrList, done, res) {
 
 function getIndexes(attrList, done) {
     var resultArr = [];
-    var rows = attrList[1];
     var i = 0;
 
-    for (var key in rows[0]) {
-        if (key == 'Create Table') {
-            var text = rows[0][key];
-        }
-    }
+    var request = getValueFromKey('Create Table', attrList[1][0]);
 
-    while ( /\s.*KEY.+,*/.exec(text) ) {
-        resultArr[i] = /\s.*KEY.+,*/.exec(text);
-        text = text.replace(/\s.*KEY.+,*/, '');
+    while ( /\s.*KEY.+,*/.exec(request) ) {
+        resultArr[i] = /\s.*KEY.+,*/.exec(request);
+        request = request.replace(/\s.*KEY.+,*/, '');
         i++;
     }
 
@@ -319,11 +315,7 @@ function searchCollateCharset(data, done) {
 }
 
 function searchObject(data, obType) {
-    for (var key in data[0]) {
-        if (key == 'input') {
-            var dataText = data[0][key];
-        }
-    }
+    var request = getValueFromKey('input', data[0]);
 
     var checker = /CHARACTER SET/;
     if (obType == 'COLLATE') {
@@ -332,12 +324,12 @@ function searchObject(data, obType) {
 
     var objects = [];
     var i = 0;
-    while (checker.exec(dataText)) {
+    while (checker.exec(request)) {
         var object = '';
         if (obType == 'COLLATE') {
-            object = /.+COLLATE\s+[^\s]+/.exec(dataText);
+            object = /.+COLLATE\s+[^\s]+/.exec(request);
         } else {
-            object = /.+CHARACTER SET\s+[^\s]+/.exec(dataText);
+            object = /.+CHARACTER SET\s+[^\s]+/.exec(request);
         }
 
         var key = /\`.+\`/.exec(object);
@@ -359,7 +351,7 @@ function searchObject(data, obType) {
             objects[key] = object;
             i++;
         }
-        dataText = dataText.replace(checker, '');
+        request = request.replace(checker, '');
     }
 
     return objects;
