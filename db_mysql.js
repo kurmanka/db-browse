@@ -40,7 +40,7 @@ function showTableRequest(connection, table, doneReturn) {
     async.parallel([
         function(done){
             connection.query('SHOW COLUMNS FROM ' + mysql.escapeId(table),
-                             function(err, rows, fields) {
+                            function(err, rows, fields) {
                                 done(err, rows);
                             });
         },
@@ -48,11 +48,7 @@ function showTableRequest(connection, table, doneReturn) {
         function(done){
             connection.query('show create table ' + mysql.escapeId(table),
                             function(err, rows, fields) {
-                                if (err) {
-                                    doneReturn(err);
-                                } else {
-                                    getIndexes(rows, done);
-                                }
+                                done(err, rows);
                             });
         },
 
@@ -68,25 +64,6 @@ function showTableRequest(connection, table, doneReturn) {
                             });
         }
     ],doneReturn);
-}
-
-function getIndexes(rows, done) {
-    var resultArr = [];
-    var i = 0;
-
-    for (var key in rows[0]) {
-        if (key == 'Create Table') {
-            var text = rows[0][key];
-        }
-    }
-
-    while ( /\s.*KEY.+,*/.exec(text) ) {
-        resultArr[i] = /\s.*KEY.+,*/.exec(text);
-        text = text.replace(/\s.*KEY.+,*/, '');
-        i++;
-    }
-
-    done(null, resultArr);
 }
 
 function showColumnRequest(connection, column, table, limit, doneReturn) {
