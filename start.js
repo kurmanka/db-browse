@@ -114,8 +114,7 @@ if ( config.authenticate_userfile && !config.authenticate ) {
 
 // XXX this needs to be fixed.
 // Login form should submit to a separate URL.
-app.post('/*', function(req, res){ //get and check users data
-    var pathname = url.parse(req.url).pathname;
+app.post('/login', function(req, res) { //get and check users data
 
     async.waterfall([
         function (done){
@@ -123,6 +122,7 @@ app.post('/*', function(req, res){ //get and check users data
         }
     ],  function (err, result) {
             if (err) {
+                console.log('err:', err);
                 return requestHandlers.showError(req, res, err);
             }
 
@@ -132,13 +132,16 @@ app.post('/*', function(req, res){ //get and check users data
                 req.session.user = req.body.user;
 
                 console.log( 'redirect...' );
-                if (pathname) {
-                    res.redirect(pathname);
-                } else {
-                    res.redirect('/');
+                var to = req.param('to');
+
+                // if the 'to' var is '/login' or is empty, set it to '/'
+                if ( to == '/login' || !to ) {
+                    to = '/';
                 }
+                res.redirect( to );
+                console.log( 'redirected to ', to );
             } else {
-                requestHandlers.login(res, pathname, loginError);
+                requestHandlers.login(req, res, loginError);
             }
         }
     );
@@ -156,8 +159,8 @@ app.get('/logout', function(req, res){ //logout
         if(err) {
             console.log(err);
         }
-   });
-   requestHandlers.login(res, "/", '');
+    });
+    res.redirect('/');
 });
 
 // former parameters_determination()
@@ -281,7 +284,7 @@ function loadUser(req, res, next) {
     if (req.session.authentication) {
         next();
     } else {
-        requestHandlers.login(res, pathname, '');
+        requestHandlers.login(req, res, '');
     }
 }
 

@@ -86,11 +86,8 @@ function finish( req, res, template, data, cb) {
 }
 
 
-function login (res, pathname, errmsg) {
-    if (!pathname) {
-        pathname = '/';
-    }
-    respond( res, 'login', { errormsg: errmsg, path: pathname} );
+function login( req, res, errmsg ) {
+    respond( res, 'login', { req: req, errormsg: errmsg, path: '/'} );
 }
 
 function selectDatabase (req, res) {

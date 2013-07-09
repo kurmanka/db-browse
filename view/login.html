@@ -1,6 +1,7 @@
 <%! parent { title: 'login' } %>
 
-<form method="post" action=<%=path%> id="loginform">
+<form method="post" action='/login' id="loginform">
+    <input type='hidden' name='to' value='<%= req.url %>' >
     <div align="center">
         <p><%=errormsg%></p>
         <table>
