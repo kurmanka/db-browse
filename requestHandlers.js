@@ -32,23 +32,24 @@ function prepare_locals (req, res, next) {
     }
 
     res.locals( {
-        req:          req,
-        authenticate: authenticate,
-        databaseList: config.db,
-        path:         req.params.path,
-        config:       config,
-        connection:   req.params.connect,
-        pathname:     req.params.path,
-        dbType:       req.params.dbType,
-        table:        req.params.table,
-        column:       req.params.column,
-        value:        req.params.value,
-        dbId:         req.params.db_id,
-        sql:          (req.body.sql) ? req.body.sql.replace(/;/, ''): '',
-        reqName:      req.body.name,
-        user:         (req.session) ? req.session.user : null,
-        comment:      req.body.comment || '',
-        sqlId:        req.params.sqlId,
+        req:           req,
+        authenticate:  authenticate,
+        databaseList:  config.db,
+        path:          req.params.path,
+        config:        config,
+        connection:    req.params.connect,
+        pathname:      req.params.path,
+        dbType:        req.params.dbType,
+        table:         req.params.table,
+        column:        req.params.column,
+        value:         req.params.value,
+        dbId:          req.params.db_id,
+        sql:           (req.body.sql) ? req.body.sql.replace(/;/, ''): '',
+        reqName:       req.body.name,
+        user:          (req.session) ? req.session.user : null,
+        comment:       req.body.comment || '',
+        sqlId:         req.params.sqlId,
+        lastStringReq: '',
     } );
     next();
 }
@@ -182,6 +183,14 @@ function showTable(req, res, next) {
         function (attrList, done){
             l.create_table = attrList[1];
             if (l.dbType == 'mysql') {
+                getCreateTableDetails(attrList, done, res);//get last string of request 'show create table'
+            } else {
+                done(null, attrList);
+            }
+        },
+
+        function (attrList, done){
+            if (l.dbType == 'mysql') {
                 getIndexes(attrList, done);
             } else {
                 done(null, attrList);
@@ -225,6 +234,21 @@ function showTable(req, res, next) {
             }
         }
     );
+}
+
+function getCreateTableDetails(attrList, done, res) {
+    var request = attrList[1];
+
+    for (var key in request[0]) {
+        if (key == 'Create Table') {
+            var text = request[0][key];
+        }
+    }
+
+    var lastString = /(\).+)$/.exec(text);
+
+    res.locals.lastStringReq = lastString[0].replace(/\)/, '');
+    done (null, attrList);
 }
 
 function getIndexes(attrList, done) {
