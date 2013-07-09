@@ -15,6 +15,15 @@ var config = require('./config.js');
 // create the express app
 var app = express();
 
+if (0) {
+    // enable if debugging is needed
+    // https://github.com/devoidfury/express-debug
+    app.configure('development', function() {
+        var edt = require('express-debug');
+        edt(app, {/* settings */});
+    });
+}
+
 app.use(express.bodyParser());
 app.use(express.cookieParser());
 
