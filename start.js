@@ -83,6 +83,32 @@ app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sql
 });
 
 
+// handle the authenticate_userfile config setting
+
+if ( config.authenticate_userfile && !config.authenticate ) {
+    config.authenticate = function (name, password, doneReturn) {
+        var search_string = name + ':' + password;
+
+        async.waterfall([
+            function (done1){
+                requestHandlers.readFile(config.authenticate_userfile, done1);
+            },
+
+            function (text, done1){
+                requestHandlers.getArrayOfStrings(text, done1);
+            }
+        ],  function (err, arr) {
+            if (arr.indexOf(search_string) != -1) {
+                doneReturn(err, true);
+            } else {
+                doneReturn(err, false);
+            }
+        }
+        );
+    }
+}
+
+
 // XXX this needs to be fixed.
 // Login form should submit to a separate URL.
 app.post('/*', function(req, res){ //get and check users data
@@ -90,28 +116,6 @@ app.post('/*', function(req, res){ //get and check users data
 
     async.waterfall([
         function (done){
-            if ( config.authenticate_userfile && !config.authenticate ) {
-                config.authenticate = function (name, password, doneReturn) {
-                    var search_string = name + ':' + password;
-
-                    async.waterfall([
-                        function (done1){
-                            requestHandlers.readFile(config.authenticate_userfile, done1);
-                        },
-
-                        function (text, done1){
-                            requestHandlers.getArrayOfStrings(text, done1);
-                        }
-                    ],  function (err, arr) {
-                            if (arr.indexOf(search_string) != -1) {
-                                doneReturn(err, true);
-                            } else {
-                                doneReturn(err, false);
-                            }
-                        }
-                    );
-                }
-            }
             done(null);
         },
 
@@ -124,9 +128,11 @@ app.post('/*', function(req, res){ //get and check users data
             }
 
             if (result) {
+                console.log( 'authenticated successfully' );
                 req.session.authentication = true;
                 req.session.user = req.body.user;
 
+                console.log( 'redirect...' );
                 if (pathname) {
                     res.redirect(pathname);
                 } else {
