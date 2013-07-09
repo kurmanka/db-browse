@@ -32,23 +32,24 @@ function prepare_locals (req, res, next) {
     }
 
     res.locals( {
-        req:          req,
-        authenticate: authenticate,
-        databaseList: config.db,
-        path:         req.params.path,
-        config:       config,
-        connection:   req.params.connect,
-        pathname:     req.params.path,
-        dbType:       req.params.dbType,
-        table:        req.params.table,
-        column:       req.params.column,
-        value:        req.params.value,
-        dbId:         req.params.db_id,
-        sql:          (req.body.sql) ? req.body.sql.replace(/;/, ''): '',
-        reqName:      req.body.name,
-        user:         (req.session) ? req.session.user : null,
-        comment:      req.body.comment || '',
-        sqlId:        req.params.sqlId,
+        req:           req,
+        authenticate:  authenticate,
+        databaseList:  config.db,
+        path:          req.params.path,
+        config:        config,
+        connection:    req.params.connect,
+        pathname:      req.params.path,
+        dbType:        req.params.dbType,
+        table:         req.params.table,
+        column:        req.params.column,
+        value:         req.params.value,
+        dbId:          req.params.db_id,
+        sql:           (req.body.sql) ? req.body.sql.replace(/;/, ''): '',
+        reqName:       req.body.name,
+        user:          (req.session) ? req.session.user : null,
+        comment:       req.body.comment || '',
+        sqlId:         req.params.sqlId,
+        lastStringReq: '',
     } );
     next();
 }
@@ -166,6 +167,16 @@ function getArrayOfStrings(string, done) {
     done(null, array);
 }
 
+function mysqlChecker (res, methodRun, attrList, done) {
+    var l = res.locals;
+
+    if (l.dbType == 'mysql') {
+        methodRun(attrList, done, res);//get last string of request 'show create table'
+    } else {
+        done(null, attrList);
+    }
+}
+
 function showTable(req, res, next) {
     var db;
     var l = res.locals;
@@ -175,7 +186,21 @@ function showTable(req, res, next) {
             db = getDbType(l.dbType);
             db.showTableRequest(l.connection, l.table, done);
         },
-        function (results,done){
+
+        function (attrList, done){
+            l.create_table = attrList[1];
+            mysqlChecker(res, getCreateTableDetails, attrList, done);//get last string of request 'show create table' for tables of db mysql
+        },
+
+        function (attrList, done){
+            mysqlChecker(res, getIndexes, attrList, done);//get Indexes for tables of db mysql
+        },
+
+        function (attrList, done){
+            mysqlChecker(res, addCollateCharset, attrList, done);//added columns Collate and Charset for tables of db mysql
+        },
+
+        function (results, done){
             var data = {attrList: results[0], indexesArr: results[1], statusArr: results[2]};
 
             if (l.dbType == 'postgres') {
@@ -187,24 +212,146 @@ function showTable(req, res, next) {
             done(null);
         }
 
-    ], function (err, data) {
-        // err is most likely being "Table xxx not found". at least, that's
-        // what we assume here
-        if (err) {
-            // call the next chained function, specifically, check for an addon feature
-            // of the same name
-            next();
-        } else {
-            // provide a custom callback for the template
-            var handler = finish(req, res, 'tableDetails', {},
-                function(error, html) {
-                showPageTotalRecords(req, res, error, html, db);
-            });
-            handler(err,data);
+    ],  function (err, data) {
+            // err is most likely being "Table xxx not found". at least, that's
+            // what we assume here
+            if (err) {
+                // call the next chained function, specifically, check for an addon feature
+                // of the same name
+                next();
+            } else {
+                // provide a custom callback for the template
+                var handler = finish(req, res, 'tableDetails', {},
+                    function(error, html) {
+                    showPageTotalRecords(req, res, error, html, db);
+                });
+                handler(err,data);
+            }
+        }
+    );
+}
+
+function getValueFromKey (keyName, array) {
+    for (var key in array) {
+        if (key == keyName) {
+            return array[key];
         }
     }
-    );
+    return null;
+}
 
+function getCreateTableDetails(attrList, done, res) {
+    var request = getValueFromKey('Create Table', attrList[1][0]);
+
+    var lastString = /(\).+)$/.exec(request);
+
+    res.locals.lastStringReq = lastString[0].replace(/\)/, '');
+    done (null, attrList);
+}
+
+function getIndexes(attrList, done) {
+    var resultArr = [];
+    var i = 0;
+
+    var request = getValueFromKey('Create Table', attrList[1][0]);
+
+    while ( /\s.*KEY.+,*/.exec(request) ) {
+        resultArr[i] = /\s.*KEY.+,*/.exec(request);
+        request = request.replace(/\s.*KEY.+,*/, '');
+        i++;
+    }
+
+    attrList[1] = resultArr;
+    done(null, attrList);
+}
+
+function addCollateCharset(attrList, doneReturn) {
+    var resultArr = [];
+    var rows = attrList[0];
+
+    async.waterfall([
+        function (done){
+            searchCollateCharset(attrList[1], done);
+        },
+
+        function (CollateCharsetArr, done){
+            for ( var i = 0; i < rows.length; i++ ) {
+                var tempArr = [];
+                var j = 0;
+                var columnName;
+                for ( var key in rows[0] ) {
+                    if (j == 0) {
+                        columnName = rows[i][key];
+                    }
+                    if (j == 2) {
+                        tempArr.Charset = CollateCharsetArr.charset[columnName] || '';
+                        tempArr.Collate = CollateCharsetArr.collate[columnName] || '';
+                    }
+                    tempArr[key] = rows[i][key];
+                    j++;
+                }
+                resultArr[i] = tempArr;
+            }
+            attrList[0] = resultArr;
+            doneReturn(null, attrList);
+        }
+    ]);
+}
+
+function searchCollateCharset(data, done) {
+    var dataText;
+    var resultArr = [];
+
+    var collates = searchObject(data, 'COLLATE');
+    var charsets = searchObject(data, 'CHARACTER SET');
+
+    resultArr['collate'] = collates;
+    resultArr['charset'] = charsets;
+
+    done(null, resultArr);
+}
+
+function searchObject(data, obType) {
+    var request = getValueFromKey('input', data[0]);
+
+    var checker = /CHARACTER SET/;
+    if (obType == 'COLLATE') {
+        checker = /COLLATE/;
+    }
+
+    var objects = [];
+    var i = 0;
+    while (checker.exec(request)) {
+        var object = '';
+        if (obType == 'COLLATE') {
+            object = /.+COLLATE\s+[^\s]+/.exec(request);
+        } else {
+            object = /.+CHARACTER SET\s+[^\s]+/.exec(request);
+        }
+
+        var key = /\`.+\`/.exec(object);
+        if (key) {
+            key = key.join().replace(/\`/g, '');
+
+            if (obType == 'COLLATE') {
+                object = /COLLATE\s+[^\s]+/.exec(object);
+            } else {
+                object = /CHARACTER SET\s+[^\s]+/.exec(object);
+            }
+
+            if (obType == 'COLLATE') {
+                object = object.join().replace(/COLLATE\s+/, '');
+            } else {
+                object = object.join().replace(/CHARACTER SET\s+/, '');
+            }
+
+            objects[key] = object;
+            i++;
+        }
+        request = request.replace(checker, '');
+    }
+
+    return objects;
 }
 
 function noSuchTable (req, res, next) {
