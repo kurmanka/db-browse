@@ -112,8 +112,9 @@ if ( config.authenticate_userfile && !config.authenticate ) {
 }
 
 
-// XXX this needs to be fixed.
-// Login form should submit to a separate URL.
+// Login form's action attribute now points to /login
+// while the 'to' parameter commands, where to redirect to
+// in case of success.
 app.post('/login', function(req, res) { //get and check users data
 
     async.waterfall([
@@ -122,7 +123,6 @@ app.post('/login', function(req, res) { //get and check users data
         }
     ],  function (err, result) {
             if (err) {
-                console.log('err:', err);
                 return requestHandlers.showError(req, res, err);
             }
 
@@ -131,7 +131,6 @@ app.post('/login', function(req, res) { //get and check users data
                 req.session.authentication = true;
                 req.session.user = req.body.user;
 
-                console.log( 'redirect...' );
                 var to = req.param('to');
 
                 // if the 'to' var is '/login' or is empty, set it to '/'
@@ -139,7 +138,8 @@ app.post('/login', function(req, res) { //get and check users data
                     to = '/';
                 }
                 res.redirect( to );
-                console.log( 'redirected to ', to );
+                console.log( 'redirecting to ', to );
+
             } else {
                 requestHandlers.login(req, res, loginError);
             }
