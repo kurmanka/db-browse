@@ -3,6 +3,7 @@
 var FileStore = require('connect-session-file');
 
 var authenticate_userfile = 'users.txt';
+var pg_dump_path = "\"C:\\Program Files\\PostgreSQL\\9.1\\bin\\pg_dump.exe\"";
 
 var listen = {
     host: '127.0.0.1',
@@ -72,3 +73,4 @@ exports.db = db;
 exports.listen = listen;
 exports.session_config = session_config;
 exports.authenticate_userfile = authenticate_userfile;
+exports.pg_dump_path = pg_dump_path;

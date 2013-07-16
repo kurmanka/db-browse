@@ -472,12 +472,12 @@ function showPage (res, error, content, type) {
     res.send(content);
 }
 
-function showError (req, res, msg, bc_path) {
+function showError (req, res, msg, bc_path, title) {
     var pathname = bc_path || req.params.path;
 
     just.render('msg', {
             breadcrumbs_path: pathname,
-            title: "Error",
+            title: title || "Error",
             authenticate: authenticate,
             msg: msg },
 
@@ -560,10 +560,7 @@ function sqlHistory (req, res) {
     var l = res.locals;
 
     async.waterfall([
-        function (done){
-            sqlite.history(done);
-        },
-
+        sqlite.history,
         function (result, done){
             l.values = result;
             done(null);
@@ -605,7 +602,7 @@ function sqlSave (req, res) {
     ],
     finish ( req, res, 'msg', { breadcrumbs_path: bc_path,
                                 title: 'Saving status',
-                                 msg: 'Saving was successful!' }
+                                msg: 'Saving was successful!' }
            )
     );
 }
@@ -627,6 +624,27 @@ function sqlRemove (req, res) {
     );
 }
 
+function show_db_schema (req, res) {
+    var l = res.locals;
+    var exec = require("child_process").exec;
+    var pg_path = config.pg_dump_path || "pg_dump.exe";
+    var user = config.db[l.dbId].user;
+    var db_name = config.db[l.dbId].database;
+
+    if (l.dbType == 'postgres') {
+        async.waterfall([
+            function (done){
+                exec( pg_path + " -U " + user + " -s " + db_name, { env: { PGPASSWORD: 12345678 } }, function (err, stdout, stderr) {
+                    l.schema = stdout;
+                    done(err);
+                });
+            }
+        ],  finish ( req, res, 'db_schema', { breadcrumbs_path: l.pathname } ));
+    } else {
+        showError(req, res, 'This option is absent for databases of ' + l.dbType + ' type', l.pathname, "db_schema");
+    }
+}
+
 exports.start             = start;
 exports.login             = login;
 exports.showTable         = showTable;
@@ -643,3 +661,4 @@ exports.sqlSave           = sqlSave;
 exports.sqlRemove         = sqlRemove;
 exports.readFile          = readFile;
 exports.getArrayOfStrings = getArrayOfStrings;
+exports.show_db_schema    = show_db_schema;

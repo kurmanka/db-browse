@@ -176,6 +176,8 @@ function prepare_req_params(req, res, next) {
     next();
 }
 
+app.get('/:db_id/.schema', middleware, requestHandlers.show_db_schema); //show db schema. Run show_db_schema.
+
 app.get('/:db_id', middleware, requestHandlers.start); //run method start
 
 app.get('/:db_id/:table',
