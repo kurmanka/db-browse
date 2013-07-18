@@ -225,7 +225,6 @@ function prepare_dbconnection( req, res, next ) {
                 "Error connecting to the database with id '" + dbId + "'. " + err);
 
         } else {
-            console.log('... connected');
             // save connection into request
             req.params.connect = req.dbconnection = database[dbId];
             // call next handler
