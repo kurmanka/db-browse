@@ -4,8 +4,6 @@ var config = require("./config");
 var JUST      = require('just');
 var just_usecache = false; // or true
 var just      = new JUST({ root: './view', useCache: just_usecache, ext: '.html' });
-var justStyle = new JUST({ root: './view', useCache: just_usecache, ext: '.css' });
-var justJS    = new JUST({ root: './view', useCache: just_usecache, ext: '.js' });
 
 var mysql    = require('./db_mysql.js');
 var postgres = require('./db_postgres.js');
@@ -494,12 +492,6 @@ function showError (req, res, msg, bc_path, title) {
     );
 }
 
-function cssConnect (req, res) {
-    justStyle.render('style', function(error, html) {
-        showPage(res, error, html, 'css');
-    });
-}
-
 function sqlRequest(req, res) {
     var l = res.locals;
     var path = l.pathname.replace(/:/, '/');
@@ -653,10 +645,12 @@ function show_db_schema (req, res) {
         extra_params = " -p " + dbconfig.port;
     }
 
+    var command = pg_path + " -U " + user + extra_params + " -s " + db_name;
+    console.log( 'db_schema command:', command );
 
     async.waterfall([
             function (done){
-                exec( pg_path + " -U " + user + extra_params + " -s " + db_name, 
+                exec( command, 
                     { env: { PGPASSWORD: pass, maxBuffer: maxBuffer } }, 
                     function (err, stdout, stderr) {
                         l.schema = stdout;
@@ -673,7 +667,6 @@ exports.start             = start;
 exports.login             = login;
 exports.showTable         = showTable;
 exports.noSuchTable       = noSuchTable;
-exports.cssConnect        = cssConnect;
 exports.showColumn        = showColumn;
 exports.showError         = showError;
 exports.selectDatabase    = selectDatabase;
