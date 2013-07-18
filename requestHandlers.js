@@ -11,7 +11,9 @@ var mysql    = require('./db_mysql.js');
 var postgres = require('./db_postgres.js');
 var sqlite   = require('./sqliteDB.js');
 
-var async = require('async');
+var async    = require('async');
+var child_process = require('child_process');
+
 
 var authenticate = false;
 if (config.authenticate) {
@@ -625,34 +627,46 @@ function sqlRemove (req, res) {
 }
 
 function show_db_schema (req, res) {
-    var l = res.locals;
-    var exec = require("child_process").exec;
-    var pg_path = config.pg_dump_path || "pg_dump.exe";
-    var user = config.db[l.dbId].user;
-    var db_name = config.db[l.dbId].database;
-    var pass = config.db[l.dbId].password;
+    var l         = res.locals;
+
+    if (l.dbType != 'postgres') {
+        showError(req, res, 'This option is absent for databases of ' + l.dbType + ' type', 
+            l.pathname, "db_schema");
+        return;
+    }
+
+    var exec      = child_process.exec;
+    var pg_path   = config.pg_dump_path || "pg_dump";
+
+    var dbconfig  = req.dbconfig; // same as config.db[l.dbId]
+    var user      = dbconfig.user;
+    var db_name   = dbconfig.database;
+    var pass      = dbconfig.password;
+    var maxBuffer = dbconfig.dump_buffer || 2000;
     var extra_params = '';
 
-    if (config.db[l.dbId].host) {
-        extra_params = " -h " + config.db[l.dbId].host;
+    if (dbconfig.host) {
+        extra_params = " -h " + dbconfig.host;
     }
 
-    if (config.db[l.dbId].port) {
-        extra_params = " -p " + config.db[l.dbId].port;
+    if (dbconfig.port) {
+        extra_params = " -p " + dbconfig.port;
     }
 
-    if (l.dbType == 'postgres') {
-        async.waterfall([
+
+    async.waterfall([
             function (done){
-                exec( pg_path + " -U " + user + extra_params + " -s " + db_name, { env: { PGPASSWORD: pass, maxBuffer: 10000*1024 } }, function (err, stdout, stderr) {
-                    l.schema = stdout;
-                    done(err);
+                exec( pg_path + " -U " + user + extra_params + " -s " + db_name, 
+                    { env: { PGPASSWORD: pass, maxBuffer: maxBuffer } }, 
+                    function (err, stdout, stderr) {
+                        l.schema = stdout;
+                        done(err);
                 });
             }
-        ],  finish ( req, res, 'db_schema', { breadcrumbs_path: l.pathname } ));
-    } else {
-        showError(req, res, 'This option is absent for databases of ' + l.dbType + ' type', l.pathname, "db_schema");
-    }
+        ],  
+        finish ( req, res, 'db_schema', { breadcrumbs_path: l.pathname } )
+    );
+
 }
 
 exports.start             = start;
