@@ -188,15 +188,18 @@ function showTable(req, res, next) {
 
         function (attrList, done){
             l.create_table = attrList[1];
-            mysqlChecker(res, getCreateTableDetails, attrList, done);//get last string of request 'show create table' for tables of db mysql
+            // get last string of request 'show create table' for tables of db mysql
+            mysqlChecker(res, getCreateTableDetails, attrList, done);
         },
 
         function (attrList, done){
-            mysqlChecker(res, getIndexes, attrList, done);//get Indexes for tables of db mysql
+            // get Indexes for tables of db mysql
+            mysqlChecker(res, getIndexes, attrList, done); 
         },
 
         function (attrList, done){
-            mysqlChecker(res, addCollateCharset, attrList, done);//added columns Collate and Charset for tables of db mysql
+            // added columns Collate and Charset for tables of db mysql
+            mysqlChecker(res, addCollateCharset, attrList, done); 
         },
 
         function (results, done){
