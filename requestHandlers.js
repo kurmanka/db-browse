@@ -12,7 +12,6 @@ var sqlite   = require('./sqliteDB.js');
 var async    = require('async');
 var child_process = require('child_process');
 
-
 var authenticate = false;
 if (config.authenticate) {
     authenticate = true;
