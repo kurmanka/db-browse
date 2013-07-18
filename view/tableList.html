@@ -32,10 +32,14 @@
         <div class='name'><a>The name of sql-request:</a><div>
         <input type='text' name='name'>
         <div class='sqlText'>
-		    <a>Input sql-request in textarea. This is a required field * :</a>
-		</div>
+            <a>Input sql-request in textarea. This is a required field * :</a>
+        </div>
         <textarea name='sql'></textarea>
         <div class='submit'><button type='submit'>Execute</button></div>
 </form>
+
+<% if (dbType == 'postgres') { %>
+    <p><a href="/<%=dbId%>/.schema">Full schema listing</a></p>
+<% } %>
 
 <div id="history"><a href="/:sql" >History of previous SQL</a></div>

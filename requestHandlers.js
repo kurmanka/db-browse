@@ -121,7 +121,7 @@ function start(req, res) {
             done(null);
         }
     ], finish( req, res, 'tableList',
-                { path_sql: l.pathname + ":sql" })
+                { path_sql: l.pathname + ":sql", dbType: l.dbType })
     );
 }
 
@@ -630,11 +630,21 @@ function show_db_schema (req, res) {
     var pg_path = config.pg_dump_path || "pg_dump.exe";
     var user = config.db[l.dbId].user;
     var db_name = config.db[l.dbId].database;
+    var pass = config.db[l.dbId].password;
+    var extra_params = '';
+
+    if (config.db[l.dbId].host) {
+        extra_params = " -h " + config.db[l.dbId].host;
+    }
+
+    if (config.db[l.dbId].port) {
+        extra_params = " -p " + config.db[l.dbId].port;
+    }
 
     if (l.dbType == 'postgres') {
         async.waterfall([
             function (done){
-                exec( pg_path + " -U " + user + " -s " + db_name, { env: { PGPASSWORD: 12345678 } }, function (err, stdout, stderr) {
+                exec( pg_path + " -U " + user + extra_params + " -s " + db_name, { env: { PGPASSWORD: pass, maxBuffer: 10000*1024 } }, function (err, stdout, stderr) {
                     l.schema = stdout;
                     done(err);
                 });
