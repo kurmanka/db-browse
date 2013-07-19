@@ -16,7 +16,7 @@
         <td>user: <%= d.user
             %><% if (d.table_groups) { %>, grouped<% }%> </td>
         <td><%= d.type %></td>
-        <td><a href='<%= key %>/.schema'>full schema</a></td>
+        <td><% if (d.type=='postgres') { %><a href='<%= key %>/.schema'>full schema</a><% } %></td>
     </tr>
     <% } %>
 </table>
