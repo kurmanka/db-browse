@@ -28,6 +28,10 @@
     <% }
 } %>
 
+<% if (dbType == 'postgres') { %>
+    <p><a href="/<%= dbId %>/.schema">Full schema listing</a></p>
+<% } %>
+
 <form method="post" action=<%=path_sql%> id="sql_request">
         <div class='name'><a>The name of sql-request:</a><div>
         <input type='text' name='name'>
@@ -37,9 +41,5 @@
         <textarea name='sql'></textarea>
         <div class='submit'><button type='submit'>Execute</button></div>
 </form>
-
-<% if (dbType == 'postgres') { %>
-    <p><a href="/<%=dbId%>/.schema">Full schema listing</a></p>
-<% } %>
 
 <div id="history"><a href="/:sql" >History of previous SQL</a></div>
