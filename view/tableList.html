@@ -1,5 +1,21 @@
 <%! parent { title: 'Tables in ' + dbId, breadcrumbs_path: "/" } %>
 
+<div style='float:right' id='sql-form'>
+
+<form method="post" action="<%= path_sql %>" id="sql_request">
+    <p>A name for your sql query or command?<br/>
+        <input type='text' name='name'>
+    </p>
+    <p>Type your sql here:<br/>
+        <textarea name='sql'></textarea>
+    </p>
+    <button type='submit'>Execute it</button>
+</form>
+
+<div id="history"><a href="/:sql" >History of previous SQL</a></div>
+
+</div>
+
 <% for (var i = 0; i < tableGr.length; i++) {
     var index = tablesList.join().search(tableGr[i]);
     if (/\s/.exec(tableGr[i])) { %>
@@ -32,14 +48,3 @@
     <p><a href="/<%= dbId %>/.schema">Full schema listing</a></p>
 <% } %>
 
-<form method="post" action=<%=path_sql%> id="sql_request">
-        <div class='name'><a>The name of sql-request:</a><div>
-        <input type='text' name='name'>
-        <div class='sqlText'>
-            <a>Input sql-request in textarea. This is a required field * :</a>
-        </div>
-        <textarea name='sql'></textarea>
-        <div class='submit'><button type='submit'>Execute</button></div>
-</form>
-
-<div id="history"><a href="/:sql" >History of previous SQL</a></div>
