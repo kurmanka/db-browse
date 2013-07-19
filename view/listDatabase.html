@@ -6,6 +6,7 @@
         <th>db name and host</th>
         <th>details</th>
         <th>type</th>
+        <th>schema</th>
     </tr>
 
     <% for (var key in databaseList) { var d = databaseList[key]; %>
@@ -15,6 +16,7 @@
         <td>user: <%= d.user
             %><% if (d.table_groups) { %>, grouped<% }%> </td>
         <td><%= d.type %></td>
+        <td><a href='<%= key %>/.schema'>full schema</a></td>
     </tr>
     <% } %>
 </table>
