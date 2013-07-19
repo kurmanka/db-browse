@@ -636,7 +636,7 @@ function show_db_schema (req, res) {
     var user      = dbconfig.user;
     var db_name   = dbconfig.database;
     var pass      = dbconfig.password;
-    var maxBuffer = dbconfig.dump_buffer || 2000;
+    var buffer    = dbconfig.dump_buffer || 2000;
     var extra_params = '';
 
     if (dbconfig.host) {
@@ -649,11 +649,12 @@ function show_db_schema (req, res) {
 
     var command = pg_path + " -U " + user + extra_params + " -s " + db_name;
     console.log( 'db_schema command:', command );
+    console.log( 'db_schema buffer:', buffer );
 
     async.waterfall([
             function (done){
                 exec( command, 
-                    { env: { PGPASSWORD: pass, maxBuffer: maxBuffer } }, 
+                    { env: { PGPASSWORD: pass }, maxBuffer: buffer * 1024 }, 
                     function (err, stdout, stderr) {
                         l.schema = stdout;
                         done(err);
