@@ -521,7 +521,7 @@ function showPage (res, error, content, type) {
     res.send(content);
 }
 
-function showError (req, res, msg, bc_path, title) {
+function showError (req, res, msg, title) {
     breadcrumbs( req, res );
 
     just.render('msg', {
@@ -543,20 +543,13 @@ function showError (req, res, msg, bc_path, title) {
 
 function sqlRequest(req, res) {
     var l = res.locals;
-    var path = l.pathname.replace(/:/, '/');
-    var type = '';
-
-    if(req.params.path_breadcrumbs) {
-        path = req.params.path_breadcrumbs;
-        type='total change';
-    }
 
     console.log( 'sql:', l.sql );
 
     async.waterfall([
         function (done){
             if ( /ALTER|create|drop/i.exec(l.sql) ) {
-                showError(req, res, "Request '" + l.sql + "' can not be executed", path);
+                showError(req, res, "Request '" + l.sql + "' can not be executed");
             } else {
                 done(null);
             }
@@ -569,7 +562,7 @@ function sqlRequest(req, res) {
 
     ], function (err, results) {
         if (err) {
-            showError(req, res, err, path);
+            showError(req, res, err);
         } else {
             async.waterfall([
                 function(done){
@@ -583,7 +576,7 @@ function sqlRequest(req, res) {
 
                 function(done){
                     just.render('showSqlRequest',
-                        { authenticate: authenticate, path: path, sql: l.sql, results: results },
+                        { authenticate: authenticate, sql: l.sql, results: results },
                         function(error, html) {
                             showPage (res, error, html);
                             done(null);
@@ -591,7 +584,7 @@ function sqlRequest(req, res) {
                 }
             ], function (err, results) {
                 if (err) {
-                    showError(req, res, err, path);
+                    showError(req, res, err);
                 }
             });
         }
@@ -609,7 +602,9 @@ function sqlHistory (req, res) {
             done(null);
         },
     ], 
-        finish_jade( req, res, 'sqlHistory', { limit: limit })
+        finish( req, res, 'sqlHistory', { limit: limit })
+// jade template for this is yet unfinished XXX
+//        finish_jade( req, res, 'sqlHistory', { limit: limit })
     );
 }
 
@@ -633,7 +628,6 @@ function sqlDetails (req, res) {
 
 function sqlSave (req, res) {
     var l = res.locals;
-    var bc_path = '/' + l.dbId + '/:sql/' + req.params.sql_id + '/saved';
 
     async.waterfall([
         function (done){
@@ -642,7 +636,7 @@ function sqlSave (req, res) {
         }
 
     ],
-    finish ( req, res, 'msg', { breadcrumbs_path: bc_path,
+    finish ( req, res, 'msg', { 
                                 title: 'Saving status',
                                 msg: 'Saving was successful!' }
            )
@@ -651,7 +645,6 @@ function sqlSave (req, res) {
 
 function sqlRemove (req, res) {
     var l = res.locals;
-    var bc_path = '/' + l.dbId + '/:sql/' + req.params.sql_id;
 
     async.waterfall([
         function (done){
@@ -659,7 +652,7 @@ function sqlRemove (req, res) {
         }
 
     ],
-    finish ( req, res, 'msg', { breadcrumbs_path: bc_path,
+    finish ( req, res, 'msg', { 
                                  title: 'Removing status',
                                 msg: 'Removing was successful!' }
             )
@@ -670,8 +663,7 @@ function show_db_schema (req, res) {
     var l         = res.locals;
 
     if (l.dbType != 'postgres') {
-        showError(req, res, 'This option is absent for databases of ' + l.dbType + ' type', 
-            l.pathname, "db_schema");
+        showError(req, res, 'This option is absent for databases of ' + l.dbType + ' type' );
         return;
     }
 
@@ -707,7 +699,7 @@ function show_db_schema (req, res) {
                 });
             }
         ],  
-        finish ( req, res, 'db_schema', { breadcrumbs_path: l.pathname } )
+        finish( req, res, 'db_schema', {} )
     );
 
 }

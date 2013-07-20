@@ -75,8 +75,6 @@ app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sql
 
     if (req.body.sql) {
         if (req.body.run == 'Execute') {
-            req.params.path_breadcrumbs = '/' + req.params.db_id + '/:sql/'
-                                             + req.params.sql_id + '/show';
             requestHandlers.sqlRequest(req, res);
         }
         else if (req.body.run == 'Save'){
