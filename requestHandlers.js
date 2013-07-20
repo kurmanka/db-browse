@@ -49,7 +49,10 @@ function prepare_locals (req, res, next) {
         comment:       req.body.comment || '',
         sqlId:         req.params.sqlId,
         lastStringReq: '',
+        breadcrumbs:   []
     } );
+    // prepare breadcrumbs}}{}
+    breadcrumbs(req, res);
     next();
 }
 
@@ -84,6 +87,46 @@ function finish( req, res, template, data, cb) {
         }
     };
 }
+
+function finish_jade( req, res, template, data, cb) {
+    // return a function
+    return function (err, result) {
+        if (err) {
+            showError(req, res, err);
+        } else {
+            res.render( template, data, cb );
+        }
+    };
+}
+
+
+function breadcrumbs(req, res, next) {
+    var l = res.locals;
+    var bc = [];
+    var db_id = req.params.db_id,
+      table   = req.params.table,
+      column  = req.params.column,
+      value   = req.params.value;
+    if (db_id || req.params.path != '') {
+        bc.push({u: '', t:'Home'});
+    }
+    if (table) {
+        bc.push({u: db_id, t: db_id });
+    }
+    if (column) {
+        bc.push({u: db_id + '/' + table, t: table });
+    }
+    if (value) {
+        bc.push({u: db_id + '/' + table + '/' + column, t: column });
+    }
+    if (req.params.sql_id) {
+        bc.push({u: ':sql', t: 'SQL' });        
+    }
+
+    l.breadcrumbs = bc;
+    if (next) next();
+}
+
 
 
 function login( req, res, errmsg ) {
@@ -479,10 +522,10 @@ function showPage (res, error, content, type) {
 }
 
 function showError (req, res, msg, bc_path, title) {
-    var pathname = bc_path || req.params.path;
+    breadcrumbs( req, res );
 
     just.render('msg', {
-            breadcrumbs_path: pathname,
+            breadcrumbs: res.locals.breadcrumbs,
             title: title || "Error",
             authenticate: authenticate,
             msg: msg },
@@ -565,9 +608,8 @@ function sqlHistory (req, res) {
             l.values = result;
             done(null);
         },
-    ],
-    finish( req, res, 'sqlHistory',
-                { limit: limit })
+    ], 
+        finish_jade( req, res, 'sqlHistory', { limit: limit })
     );
 }
 

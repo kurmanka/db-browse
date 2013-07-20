@@ -1,0 +1,12 @@
+extends page
+
+block title
+  | History of previous SQL
+
+block content
+  if values.length
+    table.light
+      tr: each k in values[0]
+        if k!= 'id'
+          th= k
+

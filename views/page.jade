@@ -9,7 +9,15 @@ html
     #topnav
       if authenticate
         a(href="/logout") Logout <<<
+
+    p.breadcrumbs
+      each crumb,i in breadcrumbs
+        if i > 0
+          |  / 
+        a(href="/" + crumb.u)= crumb.t
+
     #content
       h1 
         block title
       block content
+

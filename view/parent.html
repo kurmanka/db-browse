@@ -13,21 +13,9 @@
             </div>
 
             <p class='breadcrumbs'>
-                <% if (breadcrumbs_path) {
-                    breadcrumbs_path = breadcrumbs_path.replace(/\/[^\/]*$/, ''); %>
-                    <a href = "/">Home</a>
-                    <% global_ref = "" %>
-                    <% while (breadcrumbs_path) { %>
-                        <a>/</a>
-                        <% ref = /\/[^\/]+/.exec(breadcrumbs_path); %>
-                        <% global_ref = global_ref + ref; %>
-                        <% breadcrumbs_path = breadcrumbs_path.replace(/\/[^\/]+/, ''); %>
-                        <% ref_name = /[^\/]+/.exec(ref); %>
-                        <% if ( /\:sql/.exec(ref_name) ) {
-                            ref_name = 'SQL';
-                        } %>
-                        <a href = <%=global_ref%> > <%=ref_name%> </a>
-                    <% } %>
+                <% for (var i in breadcrumbs) {
+                      var b = breadcrumbs[i]; %>
+                      <a href="/<%= b.u %>"><%= b.t %></a> / 
                 <% } %>
             </p>
         <% } %>
