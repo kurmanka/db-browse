@@ -1,0 +1,39 @@
+extends page
+
+block title
+  | Databases
+
+block content
+
+  table.light
+    tr
+      th id
+      th db name and host
+      th details
+      th type
+      th schema
+
+    each d,key in databaseList
+      tr
+        td= key
+        td 
+          a(href=key)= d.database
+          |  at #{ d.host }
+        td
+          | user: #{ d.user }
+          if d.table_groups
+            | , grouped
+        td= d.type
+        if d.type == 'postgres'
+          td: a(href="#{key}/.schema") full schema
+        else 
+          td
+
+  h2 Add-ons
+  ul
+    each a,key in addons
+      li: a(href='/ao/#{key}/')= key
+
+  #history
+    a(href='/:sql') History of previous SQL
+

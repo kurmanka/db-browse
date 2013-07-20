@@ -1,6 +1,6 @@
 var config = require("./config");
 
-// templating engine
+// Just templating engine, https://github.com/baryshev/just
 var JUST      = require('just');
 var just_usecache = false; // or true
 var just      = new JUST({ root: './view', useCache: just_usecache, ext: '.html' });
@@ -92,7 +92,11 @@ function login( req, res, errmsg ) {
 
 function selectDatabase (req, res) {
     console.log( 'selectDatabase()' );
-    respond( res, 'listDatabase', { addons: res.app.addons } );
+    if (req.param('just')) {
+        respond( res, 'listDatabase', { addons: res.app.addons } );
+    } else {
+        res.render( 'listDatabase.jade', { addons: res.app.addons } );
+    }
 }
 
 function start(req, res) {

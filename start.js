@@ -47,6 +47,12 @@ app.use(express.session(config.session_config));
 
 app.use( '/_/', express.static('./static') );
 
+// this is for Jade templates, they are in the views/ directory.
+// while the view/ directory holds Just templates (see 
+// requestHandlers.js for details).
+app.set('views', __dirname + '/views');
+
+
 var database = {};
 
 var loginError = 'This login & password combination is not allowed.';

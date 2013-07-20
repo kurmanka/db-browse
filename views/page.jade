@@ -1,0 +1,15 @@
+html
+  head
+    title
+      block title
+    link(rel="stylesheet", href="/_/css/style.css")
+    script(src="//ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js")
+  body
+    #topnav
+      if authenticate
+        a(href="/logout") Logout <<<
+    #content
+      h1 
+        block content-title
+          block title
+      block content
