@@ -89,6 +89,13 @@ function finish( req, res, template, data, cb) {
 }
 
 function finish_jade( req, res, template, data, cb) {
+    if (!template.match(/\.jade$/)) {
+        template = template + '.jade';
+    }
+
+    cb = (cb) ? cb
+              : function(error, html) { showPage(res, error, html); };
+
     // return a function
     return function (err, result) {
         if (err) {
@@ -130,7 +137,7 @@ function breadcrumbs(req, res, next) {
 
 
 function login( req, res, errmsg ) {
-    respond( res, 'login', { req: req, errormsg: errmsg, path: '/'} );
+    res.render( 'login.jade', { req: req, errormsg: errmsg } );
 }
 
 function selectDatabase (req, res) {
