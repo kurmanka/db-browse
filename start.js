@@ -168,7 +168,7 @@ function set_sql_id (req,res,n) {
     n();
 }
 
-var sql_middleware = [prepare_req_params,  set_sql_id, loadUser,, requestHandlers.prepare_locals];
+var sql_middleware = [prepare_req_params,  set_sql_id, loadUser, requestHandlers.prepare_locals];
 
 app.get(/(\/\:sql)$/, sql_middleware, requestHandlers.sqlHistory); //History of previous SQL
 
