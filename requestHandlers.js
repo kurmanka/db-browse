@@ -561,18 +561,18 @@ function sqlRequest(req, res) {
             db.getSQL(l.connection, l.sql, done);
         },
 
-        function (done){
+        function (results,done){
+            l.results = results;
             if (req.params.sql_id) {
                 sqlite.changeRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done,
                                      req.params.sql_id, 'execute');
             } else {
                 sqlite.saveRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done);
             }
-        },
+        }, 
     ], 
-    
-    finish( req, res, 'showSqlRequest',
-            { authenticate: authenticate, sql: l.sql, results: results } ) 
+
+        finish( req, res, 'showSqlRequest' ) 
     );
 }
 
