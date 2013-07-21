@@ -547,6 +547,7 @@ function sqlRequest(req, res) {
     console.log( 'sql:', l.sql );
 
     async.waterfall([
+
         function (done){
             if ( /ALTER|create|drop/i.exec(l.sql) ) {
                 showError(req, res, "Request '" + l.sql + "' can not be executed");
@@ -558,29 +559,21 @@ function sqlRequest(req, res) {
         function (done){
             var db = getDbType(l.dbType);
             db.getSQL(l.connection, l.sql, done);
-        }
+        },
 
-    ], function (err, results) {
-        if (err) {
-            showError(req, res, err);
-        } else {
-            async.waterfall([
-                function(done){
-                    if (req.params.sql_id) {
-                        sqlite.changeRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done,
-                                             req.params.sql_id, 'execute');
-                    } else {
-                        sqlite.saveRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done);
-                    }
-                },
-
-             ], 
-             finish( req, res, 'showSqlRequest',
-                    { authenticate: authenticate, sql: l.sql, results: results }
-             )
-            );
-        }
-    });
+        function (done){
+            if (req.params.sql_id) {
+                sqlite.changeRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done,
+                                     req.params.sql_id, 'execute');
+            } else {
+                sqlite.saveRequest(l.sql, l.dbId, l.reqName, l.user, l.comment, done);
+            }
+        },
+    ], 
+    
+    finish( req, res, 'showSqlRequest',
+            { authenticate: authenticate, sql: l.sql, results: results } ) 
+    );
 }
 
 function sqlHistory (req, res) {
