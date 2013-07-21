@@ -574,14 +574,9 @@ function sqlRequest(req, res) {
                     }
                 },
 
-                function(done){
-                    just.render('showSqlRequest',
-                        { authenticate: authenticate, sql: l.sql, results: results },
-                        function(error, html) {
-                            showPage (res, error, html);
-                            done(null);
-                        });
-                }
+                finish( req, res, 'showSqlRequest',
+                    { authenticate: authenticate, sql: l.sql, results: results }
+                )
             ], function (err, results) {
                 if (err) {
                     showError(req, res, err);
