@@ -70,29 +70,38 @@ app.get('/', prepare_req_params,
              requestHandlers.selectDatabase); //run method selectDatabase
 
 
-app.post(/^\/(\w+):sql\/*(\d)*/, middleware, function(req, res){ //select to sqlite db
-    req.params.sql_id = req.params[1];
+app.post(/^\/(\w+):sql\/*(\d)*/, 
+    function (req,res,n) {
+        // the following is not needed, 
+        // because prepare_req_params() does it for us
+        //req.params.db_id  = req.params[0];
+        // but this is needed:
+        req.params.sql_id = req.params[1];
+        n();
+    },
+    middleware, 
+    function(req,res){ //select to sqlite db
 
-    if (req.body.sql) {
-        if (req.body.run == 'Execute') {
-            requestHandlers.sqlRequest(req, res);
-        }
-        else if (req.body.run == 'Save'){
-            requestHandlers.sqlSave(req, res);
-        }
-        else if (req.body.run == 'Remove'){
-            requestHandlers.sqlRemove(req, res);
-        }
-        else {
-            requestHandlers.sqlRequest(req, res);
-        }
-    } else {
-        if (req.body.run) {
-            res.redirect('/:sql/' + req.params.sql_id);
+        if (req.body.sql) {
+            if (req.body.run == 'Execute') {
+                requestHandlers.sqlRequest(req, res);
+            }
+            else if (req.body.run == 'Save'){
+                requestHandlers.sqlSave(req, res);
+            }
+            else if (req.body.run == 'Remove'){
+                requestHandlers.sqlRemove(req, res);
+            }
+            else {
+                requestHandlers.sqlRequest(req, res);
+            }
         } else {
-            res.redirect('/' + req.params.db_id);
+            if (req.body.run) {
+                res.redirect('/:sql/' + req.params.sql_id);
+            } else {
+                res.redirect('/' + req.params.db_id);
+            }
         }
-    }
 });
 
 
@@ -151,11 +160,19 @@ app.post('/login', function(req, res) { //get and check users data
     );
 });
 
-app.get(/(\/\:sql)$/, prepare_req_params, loadUser, requestHandlers.prepare_locals,
-        requestHandlers.sqlHistory); //History of previous SQL
 
-app.get(/\/\:sql\/\d+/, prepare_req_params, loadUser, requestHandlers.prepare_locals,
-        requestHandlers.sqlDetails); //Sql details page-form
+function set_sql_id (req,res,n) {
+    if (req.params[0]) {
+        req.params.sql_id = req.params[0];
+    }
+    n();
+}
+
+var sql_middleware = [prepare_req_params,  set_sql_id, loadUser,, requestHandlers.prepare_locals];
+
+app.get(/(\/\:sql)$/, sql_middleware, requestHandlers.sqlHistory); //History of previous SQL
+
+app.get(/\/\:sql\/(\d+)$/, sql_middleware, requestHandlers.sqlDetails); //Sql details page-form
 
 app.get('/logout', function(req, res){ //logout
     req.session.authentication = false;
@@ -171,11 +188,6 @@ app.get('/logout', function(req, res){ //logout
 function prepare_req_params(req, res, next) {
     var pathname = url.parse(req.url).pathname;
     req.params.path = pathname.replace(/\/$/, '');
-
-    var sqlId = /(\d+)$/.exec(pathname);
-    if (sqlId) {
-        req.params.sqlId = sqlId[0];
-    }
 
     next();
 }

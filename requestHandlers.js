@@ -47,7 +47,7 @@ function prepare_locals (req, res, next) {
         reqName:       req.body.name,
         user:          (req.session) ? req.session.user : null,
         comment:       req.body.comment || '',
-        sqlId:         req.params.sqlId,
+        sql_id:        req.params.sql_id,
         lastStringReq: '',
         breadcrumbs:   []
     } );
@@ -613,7 +613,7 @@ function sqlDetails (req, res) {
 
     async.waterfall([
         function (done){
-            sqlite.details(done, l.sqlId);
+            sqlite.details(done, req.params.sql_id);
         },
 
         function (result, done){
@@ -621,8 +621,7 @@ function sqlDetails (req, res) {
             done(null);
         },
     ],
-    finish( req, res, 'sqlDetails',
-                { sqlId: l.sqlId })
+    finish( req, res, 'sqlDetails' )
     );
 }
 
