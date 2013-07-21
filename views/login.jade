@@ -1,0 +1,20 @@
+extends page
+
+block title
+  | login
+
+block content
+  form#loginform(method='post', action='/login')
+    input(type='hidden', name='to', value=req.url)
+    div(align='center')
+      p= errormsg
+      table
+        tr
+          td: label(for="user") User: 
+          td: input(type="text", name="user")
+        tr
+          td: label(for="pass") Password: 
+          td: input(type="password", name="pass")
+        tr
+          td
+          td: button(type="submit") Login
