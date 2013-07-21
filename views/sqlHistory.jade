@@ -5,14 +5,20 @@ block title
 
 block content
   if values.length
+    first = values[0]
     table.light
-      tr: each k in values[0]
+      tr: each v,k in first
         if k != 'id'
           th= k
 
-      each r in values
+      each row, i in values
         tr
-          each k in values[0]
+          each v,k in first
             if k != 'id'
-              td.data: a(href="/:sql/#{r.id}")= r[k]
-              
+              td.data
+                if k == 'sql'
+                  a(href="/:sql/#{row.id}")= row[k]
+                else 
+                  = row[k]
+  else
+    p History is empty

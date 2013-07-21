@@ -587,9 +587,7 @@ function sqlHistory (req, res) {
             done(null);
         },
     ], 
-        finish( req, res, 'sqlHistory', { limit: limit })
-// jade template for this is yet unfinished XXX
-//        finish_jade( req, res, 'sqlHistory', { limit: limit })
+        finish_jade( req, res, 'sqlHistory.jade', { limit: limit })
     );
 }
 
