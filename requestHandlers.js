@@ -142,11 +142,7 @@ function login( req, res, errmsg ) {
 
 function selectDatabase (req, res) {
     console.log( 'selectDatabase()' );
-    if (req.param('just')) {
-        respond( res, 'listDatabase', { addons: res.app.addons } );
-    } else {
-        res.render( 'listDatabase.jade', { addons: res.app.addons } );
-    }
+    res.render( 'listDatabase.jade', { addons: res.app.addons } );
 }
 
 function start(req, res) {
