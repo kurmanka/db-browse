@@ -7,6 +7,12 @@ block content
   if values.length
     table.light
       tr: each k in values[0]
-        if k!= 'id'
+        if k != 'id'
           th= k
 
+      each r in values
+        tr
+          each k in values[0]
+            if k != 'id'
+              td.data: a(href="/:sql/#{r.id}")= r[k]
+              
