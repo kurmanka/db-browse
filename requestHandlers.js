@@ -578,7 +578,7 @@ function sqlRequest(req, res) {
              finish( req, res, 'showSqlRequest',
                     { authenticate: authenticate, sql: l.sql, results: results }
              )
-            });
+            );
         }
     });
 }
