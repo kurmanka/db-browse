@@ -574,13 +574,10 @@ function sqlRequest(req, res) {
                     }
                 },
 
-                finish( req, res, 'showSqlRequest',
+             ], 
+             finish( req, res, 'showSqlRequest',
                     { authenticate: authenticate, sql: l.sql, results: results }
-                )
-            ], function (err, results) {
-                if (err) {
-                    showError(req, res, err);
-                }
+             )
             });
         }
     });
