@@ -1,0 +1,43 @@
+extends page
+
+block title
+  | Tables in #{dbId}
+
+block content
+  
+  div(style="float:right")#sql-form
+
+    form(method='post',action=path_sql)#sql_request
+      p A name for your sql query or command?
+        br
+        input(type='text',name='name')
+
+      p Type your sql here:
+        br
+        textarea(name='sql')
+
+      button(type='submit') Execute it
+
+    div: a(href="/:sql") History of previous SQL
+
+
+  if groups
+    each g in groups
+      h3= g.name
+      ul
+        each table in g.list
+          if tables[table]
+            li: a(href="/#{dbId}/#{table}")= table
+          else
+            li= table
+
+    if the_rest.length
+      h3 The rest
+      ul
+        each table in the_rest
+          li: a(href="/#{dbId}/#{table}")= table
+
+  else 
+    ul
+      each table in tablesList
+        li: a(href="/#{dbId}/#{table}")= table

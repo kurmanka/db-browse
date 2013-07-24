@@ -148,7 +148,6 @@ function selectDatabase (req, res) {
 function start(req, res) {
     var l = res.locals;
 
-    var tabGr = [];
     async.waterfall([
         function (done){
             readFile(req.params.groups, done);
@@ -159,7 +158,6 @@ function start(req, res) {
         },
 
         function (tableGroups, done){
-            //tabGr = tableGroups;
             l.tableGr = tableGroups;
             var db = getDbType(l.dbType);
             db.showAllTable(l.connection, done);
@@ -167,9 +165,60 @@ function start(req, res) {
 
         function (tablesList, done) {
             l.tablesList = tablesList;
+
+            // get all actual tables names in an index, the tables variable 
+            // object.
+            // make two identical indexes.
+            var tables = {};
+            var the_rest_obj = {};  // this one will have items removed from later
+  
+            for (var i in tablesList) {
+                var t = tablesList[i];
+                tables[t] = 1;
+                the_rest_obj[t] = 1;
+            }
+            l.tables = tables;
+
+  
+            // if table groups are defined...
+            if (l.tableGr.length) {
+                var groups =  l.groups = [],
+                    g;
+
+                // go through the tableGr array
+                // which is an array of strings
+                for (var i = 0; i < l.tableGr.length; i++) {
+                    t = l.tableGr[i];
+
+                    // skip empty lines
+                    if (t.length== 0) { continue; }
+
+                    // if line starts with a space, it is a group start
+                    if (t.charAt(0) == " ") {
+                        // new group
+                        g = {name:t,list:[]};
+                        groups.push(g);
+
+                    // else it is a group entry
+                    } else if (g) {
+                        g.list.push(t);
+                        delete the_rest_obj[t];
+
+                    // no group to add an entry to? non-sense.
+                    } else {
+                        console.log( 'no group to add '+t+' to.' );
+                    }
+
+                };
+
+                // the list of tables existing in the db, but not mentioned
+                // in the groups file
+                l.the_rest = Object.keys(the_rest_obj);
+            }
+
             done(null);
-        }
-    ], finish( req, res, 'tableList',
+        },
+    ], finish_jade( req, res, 'tableList',
                 { path_sql: l.pathname + ":sql", dbType: l.dbType })
     );
 }
