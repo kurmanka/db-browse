@@ -1,5 +1,9 @@
 var config = require("./config");
 
+var Memcached = require('memcached');
+var memcached = ( config.cache ) ? new Memcached(config.cache_memcached)
+                                 : null;
+
 // Just templating engine, https://github.com/baryshev/just
 var JUST      = require('just');
 var just_usecache = false; // or true
@@ -11,6 +15,7 @@ var sqlite   = require('./sqliteDB.js');
 
 var async    = require('async');
 var child_process = require('child_process');
+var checksum = require('checksum');
 
 var authenticate = false;
 if (config.authenticate) {
@@ -694,12 +699,53 @@ function sqlRemove (req, res) {
 }
 
 function show_db_schema (req, res) {
-    var l         = res.locals;
+    var l = res.locals;
 
     if (l.dbType != 'postgres') {
         showError(req, res, 'This option is absent for databases of ' + l.dbType + ' type' );
         return;
     }
+
+    var cache_params = {
+        u: req.url,
+    };
+
+    var cache_key = checksum(JSON.stringify(cache_params));
+    console.log( 'cache key:', cache_key );
+
+    // accepts (err,anything)
+    var render = finish( req, res, 'db_schema' );
+
+    var r = function(err,schema) {
+        l.schema = schema; 
+        render(err);
+        if (memcached) {
+            console.log( 'save to cache:', cache_key );
+            memcached.set(cache_key,schema,10000000000,
+                function(err) { console.log('set:', err ? err : 'success'); });
+        }        
+    };
+
+    if (memcached) {
+        var cl = memcached.get(cache_key, function (err,data) {
+            if (data) {
+                console.log('got it from cache');
+                l.schema = data;
+                render();
+            } else {
+                console.log('not in cache');
+                produce_db_schema(req, res, r);
+            }
+        });
+    } else {
+        produce_db_schema(req, res, r);
+    }
+
+ 
+}
+
+
+function produce_db_schema (req, res, next) {
 
     var exec      = child_process.exec;
     var pg_path   = config.pg_dump_path || "pg_dump";
@@ -723,17 +769,10 @@ function show_db_schema (req, res) {
     console.log( 'db_schema command:', command );
     console.log( 'db_schema buffer:', buffer );
 
-    async.waterfall([
-            function (done){
-                exec( command, 
-                    { env: { PGPASSWORD: pass }, maxBuffer: buffer * 1024 }, 
-                    function (err, stdout, stderr) {
-                        l.schema = stdout;
-                        done(err);
-                });
-            }
-        ],  
-        finish( req, res, 'db_schema', {} )
+    exec( command, 
+        { env: { PGPASSWORD: pass }, maxBuffer: buffer * 1024 }, 
+        // function (err, stdout, stderr) {...}
+        next
     );
 
 }
