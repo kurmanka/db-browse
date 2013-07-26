@@ -698,52 +698,6 @@ function sqlRemove (req, res) {
     );
 }
 
-function show_db_schema (req, res) {
-    var l = res.locals;
-
-    if (l.dbType != 'postgres') {
-        showError(req, res, 'This option is absent for databases of ' + l.dbType + ' type' );
-        return;
-    }
-
-    var cache_params = {
-        u: req.url,
-    };
-
-    var cache_key = checksum(JSON.stringify(cache_params));
-    console.log( 'cache key:', cache_key );
-
-    // accepts (err,anything)
-    var render = finish( req, res, 'db_schema' );
-
-    var r = function(err,schema) {
-        l.schema = schema; 
-        render(err);
-        if (memcached) {
-            console.log( 'save to cache:', cache_key );
-            memcached.set(cache_key,schema,10000000000,
-                function(err) { console.log('set:', err ? err : 'success'); });
-        }        
-    };
-
-    if (memcached) {
-        var cl = memcached.get(cache_key, function (err,data) {
-            if (data) {
-                console.log('got it from cache');
-                l.schema = data;
-                render();
-            } else {
-                console.log('not in cache');
-                produce_db_schema(req, res, r);
-            }
-        });
-    } else {
-        produce_db_schema(req, res, r);
-    }
-
- 
-}
-
 
 function produce_db_schema (req, res, next) {
 
@@ -771,11 +725,97 @@ function produce_db_schema (req, res, next) {
 
     exec( command, 
         { env: { PGPASSWORD: pass }, maxBuffer: buffer * 1024 }, 
-        // function (err, stdout, stderr) {...}
-        next
+        function (err, stdout, stderr) {
+            res.locals.schema = stdout;
+            next(err);
+        }
     );
 
 }
+
+produce_db_schema.cache_key = function(req) { return [req.params.db_id]; }
+
+produce_db_schema.produce_locals = ['schema'];
+
+produce_db_schema.template = 'db_schema';
+
+
+function show_db_schema (req, res) {
+    cache_wrapper(req,res,produce_db_schema);
+}
+
+function cache_wrapper (req, res, handler) {
+    var l = res.locals;
+
+    // handler is the function that does the main job
+    // of processing the request. It sets some keys in 
+    // locals.
+
+    var cache_params = handler.cache_key(req);
+
+    var cache_key = handler.name + checksum(JSON.stringify(cache_params));
+    console.log( 'cache key:', cache_key );
+
+    var template = handler.template;
+
+    // accepts (err,anything)
+    var render = finish( req, res, template );
+
+    var the_locals = handler.produce_locals;
+
+    var r = function(err,schema) {
+        // produce a response
+        render(err);
+
+        // cache it, if it is not an error and there is somewhere to cache it in
+        if (! err && memcached) {
+            // prepare the cacheable data.
+            // cache_val_o is the container.
+            var cache_val_o = [];
+            for ( var i in the_locals ) {
+                var k = the_locals[i];
+                cache_val_o[i] = l[k];
+                console.log('take '+k+' from locals');
+            }
+            //console.log( 'cache_val_o:', cache_val_o );
+            // serialize the container
+            var string = JSON.stringify(cache_val_o);
+            // store it
+            console.log( 'save to cache:', cache_key );
+            memcached.set( cache_key, string, 10000000000,
+                function(err) { console.log('set:', err ? err : 'success'); });
+        }        
+    };
+
+    if (memcached) {
+        // check the cache        
+        var cl = memcached.get(cache_key, function (err,string) {
+            if (string) {
+                console.log('cache: hit!');
+                // deserialize
+                var cache_val_o = JSON.parse(string);
+                // transfer to locals
+                for ( var i in the_locals ) {
+                    var k = the_locals[i];
+                    l[k] = cache_val_o[i];
+                    console.log('set '+k+' in locals');
+                }
+                // render the template to produce the response
+                render();
+
+            } else {
+                console.log('cache: miss:', err);
+                handler(req, res, r);
+            }
+        });
+    } else {
+        handler(req, res, r);
+    }
+
+}
+
+
+
 
 exports.start             = start;
 exports.login             = login;
