@@ -499,7 +499,7 @@ function showPageTotalRecords (req, res, error, html, db) {
     );
 }
 
-function showColumn(req, res) {
+function _showColumn(req, res, next) {
     var limit = 20;
     var db;
     var l = res.locals;
@@ -513,10 +513,19 @@ function showColumn(req, res) {
             l.columnData = columnData;
             done(null);
         }
-
-    ], finish(req, res, 'columnData' )
+    ], 
+      next
     );
 }
+
+_showColumn.cache_key      = function(req) { return req.url; }
+_showColumn.produce_locals = ['columnData'];
+_showColumn.template       = 'columnData';
+
+function showColumn(req, res) {
+    cache_wrapper(req, res, _showColumn);
+}
+
 
 function showValue(req, res) {
     var limit = 10;
@@ -758,12 +767,16 @@ function cache_wrapper (req, res, handler) {
 
     var template = handler.template;
 
-    // accepts (err,anything)
-    var render = finish( req, res, template );
+    var render = (handler.jade) ? finish_jade( req, res, template )
+                                : finish( req, res, template );
 
     var the_locals = handler.produce_locals;
 
-    var r = function(err,schema) {
+    // in seconds
+    var cache_ttl  = handler.cache_ttl || 600;
+
+    // accepts (err,anything)
+    var r = function(err,something) {
         // produce a response
         render(err);
 
@@ -782,7 +795,7 @@ function cache_wrapper (req, res, handler) {
             var string = JSON.stringify(cache_val_o);
             // store it
             console.log( 'save to cache:', cache_key );
-            memcached.set( cache_key, string, 10000000000,
+            memcached.set( cache_key, string, cache_ttl,
                 function(err) { console.log('set:', err ? err : 'success'); });
         }        
     };
