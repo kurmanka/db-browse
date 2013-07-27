@@ -760,17 +760,19 @@ function cache_wrapper (req, res, handler) {
     // of processing the request. It sets some keys in 
     // locals.
 
-    var cache_params = handler.cache_key(req);
+    var cache_key_core = handler.cache_key(req);
 
-    var cache_key = handler.name + checksum(JSON.stringify(cache_params));
+    var cache_key = handler.name + checksum(JSON.stringify(cache_key_core));
     console.log( 'cache key:', cache_key );
 
     var template = handler.template;
+    if (typeof template == 'function') { template = template(req) }
 
     var render = (handler.jade) ? finish_jade( req, res, template )
                                 : finish( req, res, template );
 
     var the_locals = handler.produce_locals;
+    if (typeof the_locals == 'function') { the_locals = the_locals(req) }
 
     // in seconds
     var cache_ttl  = handler.cache_ttl || 600;
