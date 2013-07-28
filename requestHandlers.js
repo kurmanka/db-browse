@@ -151,7 +151,7 @@ function selectDatabase (req, res) {
     res.render( 'listDatabase.jade', { addons: res.app.addons } );
 }
 
-function start(req, res) {
+function list_tables(req, res) {
     var l = res.locals;
 
     async.waterfall([
@@ -792,7 +792,7 @@ function cache_wrapper (req, res, handler) {
 
 
 
-exports.start             = start;
+exports.list_tables       = list_tables;
 exports.login             = login;
 exports.showTable         = showTable;
 exports.noSuchTable       = noSuchTable;
