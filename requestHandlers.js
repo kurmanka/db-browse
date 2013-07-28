@@ -12,6 +12,7 @@ var just      = new JUST({ root: './view', useCache: just_usecache, ext: '.html'
 var mysql    = require('./db_mysql.js');
 var postgres = require('./db_postgres.js');
 var sqlite   = require('./sqliteDB.js');
+var util     = require('./util.js');
 
 var async    = require('async');
 var child_process = require('child_process');
@@ -155,11 +156,11 @@ function start(req, res) {
 
     async.waterfall([
         function (done){
-            readFile(req.params.groups, done);
+            util.readFile(req.params.groups, done);
         },
 
         function (tableGroups, done){
-            getArrayOfStrings(tableGroups, done);
+            util.getArrayOfStrings(tableGroups, done);
         },
 
         function (tableGroups, done){
@@ -228,47 +229,6 @@ function start(req, res) {
     );
 }
 
-function readFile(fileName, done) {
-    var fs = require('fs');
-
-    if (fileName) {
-        fs.open(fileName, "r+", 0644, function(err, file_handle) {
-            if (!err) {
-                // read 100 kilobytes from the beginning of the file in ascii
-                fs.read(file_handle, 100000, null, 'ascii', function(err, data) {
-                    if (!err) {
-                        fs.close(file_handle);
-                        done(null, data);
-                    } else {
-                        done(err, '');
-                    }
-                });
-            } else {
-                console.log('Can not read file ' + fileName);
-                done(err, '');
-            }
-        });
-    } else {
-        console.log('File with groups of tables is absent in the file config.js');
-        done(null, '');
-    }
-}
-
-function getArrayOfStrings(string, done) {
-    var array = [];
-    var i = 0;
-
-    while (/\S/.exec(string)) {
-        var temp = /[^\n]+[\n\r]*/.exec(string);
-        if (/\S/.exec(temp)) {
-            array[i] = temp.join().replace(/\n|\r/g, '');
-            i++;
-        }
-        string = string.replace(/[^\n]+[\n\r]*/, '');
-    }
-
-    done(null, array);
-}
 
 function mysqlChecker (res, methodRun, attrList, done) {
     var l = res.locals;
@@ -845,6 +805,4 @@ exports.sqlHistory        = sqlHistory;
 exports.sqlDetails        = sqlDetails;
 exports.sqlSave           = sqlSave;
 exports.sqlRemove         = sqlRemove;
-exports.readFile          = readFile;
-exports.getArrayOfStrings = getArrayOfStrings;
 exports.show_db_schema    = show_db_schema;

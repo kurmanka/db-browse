@@ -8,6 +8,7 @@ var express = require('express');
 // some modules
 var requestHandlers = require('./requestHandlers.js');
 var sqlt = require('./sqlt.js');
+var util = require('./util.js');
 
 // configuration
 var config = require('./config.js');
@@ -113,10 +114,9 @@ if ( config.authenticate_userfile && !config.authenticate ) {
 
         async.waterfall([
             function (done1){
-                requestHandlers.readFile(config.authenticate_userfile, done1);
+                util.readFile(config.authenticate_userfile, done1);
             },
-
-            requestHandlers.getArrayOfStrings, // (text,done)
+            util.getArrayOfStrings, // (text,done)
 
         ],  function (err, arr) {
             doneReturn( err, (arr.indexOf(search_string) != -1) );
