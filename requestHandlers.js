@@ -183,8 +183,10 @@ function selectDatabase (req, res) {
     res.render( 'listDatabase.jade', { addons: res.app.addons } );
 }
 
-function list_tables(req, res) {
+function _list_tables(req, res, next) {
     var l = res.locals;
+    // this is to be refactored soon XXX
+    l.path_sql = l.pathname + ":sql";
 
     async.waterfall([
         function (done){
@@ -256,11 +258,19 @@ function list_tables(req, res) {
 
             done(null);
         },
-    ], finish_jade( req, res, 'tableList',
-                { path_sql: l.pathname + ":sql", dbType: l.dbType })
+    ], next
     );
 }
 
+_list_tables.cache_key = function(r) {return r.url;}
+_list_tables.template = 'tablesList';
+_list_tables.jade = true;
+                           // in the order of appearance:
+_list_tables.produce_locals = [ 'path_sql', 'tableGr', 'tables', 'groups', 'the_rest', ];
+
+function list_tables (req, res, next) {
+    cache_wrapper( req, res, _list_tables);
+}
 
 function mysqlChecker (res, methodRun, attrList, done) {
     var l = res.locals;
