@@ -112,6 +112,38 @@ function finish_jade( req, res, template, data, cb) {
     };
 }
 
+function showPage (res, error, content, type) {
+    if (error) {
+        console.log(error);
+    }
+
+    if (!type) {
+        type = 'html';
+    }
+
+    res.set('Content-Type', 'text/' + type );
+    res.send(content);
+}
+
+function showError (req, res, msg, title) {
+    breadcrumbs( req, res );
+
+    just.render('msg', {
+            breadcrumbs: res.locals.breadcrumbs,
+            title: title || "Error",
+            authenticate: authenticate,
+            msg: msg },
+
+        function(error, html) {
+            if (error) {
+                console.log(error);
+            }
+
+            console.log(msg);
+            res.send(500, html);
+        }
+    );
+}
 
 function breadcrumbs(req, res, next) {
     var l = res.locals;
@@ -532,39 +564,6 @@ function getDbType (dbType) {
     }
 
     return db;
-}
-
-function showPage (res, error, content, type) {
-    if (error) {
-        console.log(error);
-    }
-
-    if (!type) {
-        type = 'html';
-    }
-
-    res.set('Content-Type', 'text/' + type );
-    res.send(content);
-}
-
-function showError (req, res, msg, title) {
-    breadcrumbs( req, res );
-
-    just.render('msg', {
-            breadcrumbs: res.locals.breadcrumbs,
-            title: title || "Error",
-            authenticate: authenticate,
-            msg: msg },
-
-        function(error, html) {
-            if (error) {
-                console.log(error);
-            }
-
-            console.log(msg);
-            res.send(500, html);
-        }
-    );
 }
 
 function sqlRequest(req, res) {
