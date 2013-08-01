@@ -14,6 +14,12 @@ body {
     margin: 2em;
 }
 
+#footer {
+    background: #eee;
+    padding: 2em;
+    text-align: center;
+}
+
 table.light {
     border: 1px solid #ccc;
     border-collapse: collapse;
