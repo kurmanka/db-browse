@@ -502,9 +502,10 @@ function showPageTotalRecords (req, res, error, html, db) {
 }
 
 function _showColumn(req, res, next) {
-    var limit = 20;
+    var limit = parseInt(req.query.limit, 10) || 20;
     var db;
     var l = res.locals;
+    l.nextlimit = limit + 20;
 
     async.waterfall([
         function (done){
@@ -521,7 +522,7 @@ function _showColumn(req, res, next) {
 }
 
 _showColumn.cache_key      = function(req) { return req.url; }
-_showColumn.produce_locals = ['columnData'];
+_showColumn.produce_locals = ['columnData','nextlimit'];
 _showColumn.template       = 'columnData';
 
 function showColumn(req, res) {
