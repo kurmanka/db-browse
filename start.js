@@ -294,10 +294,6 @@ function db_connect( req, dbId, done ) {
 function loadUser(req, res, next) {
     if (!config.authenticate) { return next(); }
 
-    var pathname = req.params.path;
-    if ( /^\/(\w+):sql\/*(\d)*/.exec(pathname) ) {
-        pathname = '/';
-    }
     if (req.session.authentication) {
         next();
     } else {
@@ -334,7 +330,7 @@ function init_addons (app, config) {
             var s = fs.statSync( path+'/static' );
             if (s) {
                 if (s.isDirectory()) {
-                    app.use('/ao/'+i, express.static(path+'/static'));
+                    app.use('/ao/'+i, loadUser, express.static(path+'/static'));
                     console.log( '/ao/' + i );
                     console.log( ' -> ' + path + '/static' );
                 }
