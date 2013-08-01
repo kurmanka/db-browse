@@ -330,7 +330,9 @@ function init_addons (app, config) {
             var s = fs.statSync( path+'/static' );
             if (s) {
                 if (s.isDirectory()) {
-                    app.use('/ao/'+i, loadUser, express.static(path+'/static'));
+                    // make the directory available, but only to signed-in users
+                    app.use('/ao/'+i, loadUser );
+                    app.use('/ao/'+i, express.static(path+'/static'));
                     console.log( '/ao/' + i );
                     console.log( ' -> ' + path + '/static' );
                 }
