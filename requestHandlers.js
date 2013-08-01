@@ -535,15 +535,15 @@ function showValue(req, res) {
     var l = res.locals;
     var template;
 
-
-    if ( req.param('v') == 'col' ) {
-        template = 'showValues_col';
-    }
-    else if ( req.param('v') == 'single' ) {
+    var v = req.param('v');
+    if ( v == 'single' ) {
         template = 'showValues_single';
     }
+    else if ( v == 'row' ) {
+        template = 'showValues_row';
+    }
     else {
-        template = 'showValues';
+        template = 'showValues_col';
     }
 
     async.waterfall([
