@@ -26,6 +26,9 @@ body {
     color: #999;
   }
 
+h1,h2,h3 { font-weight: normal; }
+
+
 table.light {
     border: 1px solid #ccc;
     border-collapse: collapse;
