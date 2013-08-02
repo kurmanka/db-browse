@@ -184,13 +184,12 @@ app.get('/logout', function(req, res){ //logout
     res.redirect('/');
 });
 
-// former parameters_determination()
-function prepare_req_params(req, res, next) {
-    var pathname = url.parse(req.url).pathname;
-    req.params.path = pathname.replace(/\/$/, '');
+app.get('/_exit', function (req,res) {
+   res.send('ok');
+   process.exit(0);
+});
 
-    next();
-}
+
 
 app.get('/:db_id/.schema', middleware, requestHandlers.show_db_schema); //show db schema. Run show_db_schema.
 
@@ -213,6 +212,17 @@ app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue);
 
 app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
+
+
+// make req.params.path
+function prepare_req_params(req, res, next) {
+    var pathname = url.parse(req.url).pathname;
+    req.params.path = pathname.replace(/\/$/, '');
+
+    next();
+}
+
+
 
 function prepare_dbconnection( req, res, next ) {
     //console.log( 'prepare_dbconnection(): start' );
