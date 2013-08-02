@@ -15,10 +15,16 @@ body {
 }
 
 #footer {
+    margin-top: 6em;
     background: #eee;
     padding: 2em;
     text-align: center;
+    color: #999;
 }
+
+  #footer a {
+    color: #999;
+  }
 
 table.light {
     border: 1px solid #ccc;
