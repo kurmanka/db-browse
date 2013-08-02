@@ -331,9 +331,14 @@ function init_addons (app, config) {
             if (s) {
                 if (s.isDirectory()) {
                     // make the directory available, but only to signed-in users
-                    app.use('/ao/'+i, loadUser );
-                    app.use('/ao/'+i, express.static(path+'/static'));
-                    console.log( '/ao/' + i );
+                    var prefix = '/ao/' + i + '/';
+                    // request authentication on the addon homepage
+                    app.use( function (req, res, next) {
+                        if (req.url == prefix) { loadUser(req,res,next); } 
+                        else next(); 
+                    } );
+                    app.use( prefix, express.static(path+'/static'));
+                    console.log( prefix + i );
                     console.log( ' -> ' + path + '/static' );
                 }
             }
