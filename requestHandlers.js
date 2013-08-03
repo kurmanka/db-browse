@@ -112,16 +112,11 @@ function finish_jade( req, res, template, data, cb) {
     };
 }
 
-function showPage (res, error, content, type) {
+function showPage (res, error, content) {
     if (error) {
         console.log(error);
     }
 
-    if (!type) {
-        type = 'html';
-    }
-
-    res.set('Content-Type', 'text/' + type );
     res.send(content);
 }
 
