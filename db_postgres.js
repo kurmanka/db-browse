@@ -121,7 +121,7 @@ function showValueRequest(connection, table, column, value, doneReturn) {
     connection.query("select * from " + escape(table) + " where "
                     + escape(column) + "=$1", [value],
                     function (err, result) {
-                        doneReturn(err, result.rows);
+                        doneReturn(err, result ? result.rows : null);
                     });
 }
 
