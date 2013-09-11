@@ -261,7 +261,7 @@ _list_tables.cache_key = function(r) {return r.url;}
 _list_tables.template = 'tableList';
 _list_tables.jade = true;
                            // in the order of appearance:
-_list_tables.produce_locals = [ 'path_sql', 'tableGr', 'tables', 'groups', 'the_rest', ];
+_list_tables.produce_locals = [ 'path_sql', 'tableGr', 'tablesList', 'tables', 'groups', 'the_rest', ];
 
 function list_tables (req, res, next) {
     cache_wrapper( req, res, _list_tables);
