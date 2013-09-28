@@ -184,9 +184,9 @@ app.get('/logout', function(req, res){ //logout
     res.redirect('/');
 });
 
-app.get('/_exit', function (req,res) {
+app.get('/_exit', loadUser, function (req,res) {
    res.send('ok');
-   process.exit(0);
+   if (process.uptime() > 5) process.exit(0);
 });
 
 

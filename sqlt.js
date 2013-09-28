@@ -35,6 +35,7 @@ function run_sqlt( sqlt, req, res, next ) {
 		sqlt = sqlt( req, res, 
 			function (err) { res.send( 500, err); } );
 	}
+
 	// save sqlt for the view
 	res.locals.sqlt = sqlt;
 	var values = {};
@@ -52,6 +53,9 @@ function run_sqlt( sqlt, req, res, next ) {
 
 	// process the template, produce a valid SQL query
 	var sa = apply_values( sqlt.sqlt, sqlt.params, values, replacer );
+
+	// make the query text readable
+	sa.sql = sa.sql.replace(/\s+/g," ");
 
 	if ( sa.missing ) {
 		// error
