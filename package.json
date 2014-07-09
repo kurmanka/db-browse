@@ -18,9 +18,9 @@
     "just":    "~0.1.8",
     "mysql":   "~2.0.0-alpha7",
     "connect-session-file": "~1.0.4",
-    "jade":      null,
-    "memcached": null,
-    "checksum":  null,
+    "jade":      "*",
+    "memcached": "*",
+    "checksum":  "*",
     "sqlite3": "~2.1.7",
     "ect":     "~0.5.2"
   }
