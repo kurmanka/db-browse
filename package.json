@@ -9,7 +9,7 @@
   },
   "license": "BSD",
   "devDependencies": {
-    "njst":    "~0.2.1",
+    "njst":    "~0.2.1"
   },
   "dependencies": {
     "pg":      "~0.14.1",
