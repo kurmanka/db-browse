@@ -248,7 +248,8 @@ function prepare_dbconnection( req, res, next ) {
         if (err) {
             // handle the error
             requestHandlers.showError(req, res,
-                "Error connecting to the database with id '" + dbId + "'. " + err);
+                "Error connecting to the database '" + dbId + "'. " + err);
+            delete database[dbId];
 
         } else {
             // save connection into request
