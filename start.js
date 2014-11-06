@@ -185,8 +185,12 @@ app.get('/logout', function(req, res){ //logout
 });
 
 app.get('/_exit', loadUser, function (req,res) {
+   // TODO: a redirect could be useful here;
+   // or a page with a timer with a redirect to homepage
    res.send('ok');
-   if (process.uptime() > 5) process.exit(0);
+   // exit gracefully, 
+   // http://stackoverflow.com/questions/5263716/graceful-shutdown-of-a-node-js-http-server
+   if (process.uptime() > 5) app.close;
 });
 
 
