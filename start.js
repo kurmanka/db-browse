@@ -15,6 +15,7 @@ var config = require('./config.js');
 
 // create the express app
 var app = express();
+var server; // .listen() returns that
 
 if (0) {
     // enable if debugging is needed
@@ -168,7 +169,7 @@ function set_sql_id (req,res,n) {
     n();
 }
 
-var sql_middleware = [prepare_req_params,  set_sql_id, loadUser, requestHandlers.prepare_locals];
+var sql_middleware = [prepare_req_params, set_sql_id, loadUser, requestHandlers.prepare_locals];
 
 app.get(/\/\:sql$/, sql_middleware, requestHandlers.sqlHistory); //History of previous SQL
 
@@ -184,13 +185,48 @@ app.get('/logout', function(req, res){ //logout
     res.redirect('/');
 });
 
+// Action /_exit
+//
+// This action was supposed to stop the current server process,
+// to have it close all open database connections and re-read the 
+// configuration.
+//
+// It assumes that some other facility would start another copy of
+// the process if is needed. 
+//
+// For some reason on crunch server it doesn't really work for 
+// closing database connections. Maybe it is because of the forever.js,
+// which is responsible for server restart. 
+
 app.get('/_exit', loadUser, function (req,res) {
-   // TODO: a redirect could be useful here;
-   // or a page with a timer with a redirect to homepage
-   res.send('ok');
-   // exit gracefully, 
-   // http://stackoverflow.com/questions/5263716/graceful-shutdown-of-a-node-js-http-server
-   if (process.uptime() > 5) app.close;
+    res.send('ok');
+    
+    // no exit gracefully, 
+    // http://stackoverflow.com/questions/5263716/graceful-shutdown-of-a-node-js-http-server
+    
+    // this check it to avoid circular exits. I'm not sure this is useful.
+    if (process.uptime() > 0.05) {
+        console.log( "close server...\n" );
+        server.close();
+    }
+});
+
+// Action /_reset
+//
+// call database_connection.end() for each connected database;
+// go through the database array elements, close connection on
+// each of them.
+
+app.get('/_reset', loadUser, function (req,res) {
+    for (var id in database) {
+        var db = database[id];
+        if (db) {
+            db.end();
+        }
+    }
+    database = {};
+    res.redirect('/'); 
+    res.send('reset done')
 });
 
 
@@ -214,7 +250,7 @@ app.get('/:db_id/:table/:column', middleware, requestHandlers.showColumn); //run
 
 app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue); //run method showValue
 
-app.listen(config.listen.port, config.listen.host);
+server = app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
 
 
