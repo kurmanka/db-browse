@@ -10,6 +10,10 @@ body {
     border-bottom: 1px solid #ccc;
 }
 
+#topnav a {
+    text-decoration: none;
+}
+
 #content {
     margin: 2em;
 }
@@ -23,9 +27,9 @@ body {
     clear: both;
 }
 
-  #footer a {
+#footer a {
     color: #999;
-  }
+}
 
 h1,h2,h3 { font-weight: normal; }
 
@@ -212,3 +216,4 @@ textarea[name='comment'] {
 .sql {
     margin: 0px 0px 20px 0px;
 }
+
