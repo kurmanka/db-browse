@@ -4,9 +4,23 @@ block title
   | Tables in #{dbId}
 
 block content
-  
-  div(style="float:right")#sql-form
 
+  - addonlist = req.dbconfig.addons
+  if addonlist
+    #addons.addon-features(style="float:right")
+      h3 Addons
+      each aname in addonlist
+        p: a(href="/#{dbId}/!#{aname}")= aname
+        - feat = req.app.addons[aname].features
+        if feat
+          ul
+            each f,name in feat
+              li: a(href="/#{dbId}/#{name}")= name
+
+
+  div(style="float:right; clear: right;")#sql-form
+
+    h3 Direct SQL
     form(method='post',action=path_sql)#sql_request
       p A name for your sql query or command?
         br

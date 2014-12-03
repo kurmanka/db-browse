@@ -36,7 +36,9 @@ addon.init( app, config, path );
 addon.setup( app, config, path );
   - setup the app routes, if any (app.get, app.post, etc.)
 
-addon.features = {};  -- a map of features, in the name: function format 
+addon.features = {};  -- a map of features, in the name: function format
+
+addon.feature_map = [ 'table:feature', 'other_table:feature1,feature2' ]
 
 addon.sqlt = {}; -- a map of sql templates, in this format:
 

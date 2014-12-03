@@ -438,7 +438,17 @@ function addon_feature (req,res,next) {
     console.log( 'addon_feature: start');
 
     var feature = req.params.table;
-    if (req.app.addon_features[ feature ]) {
+    if (feature.charAt(0) == '!') {
+        var addon_name = feature.substring(1);
+        console.log( "Called addon " + addon_name + " on db " + req.params.db_id );
+        var addon = req.app.addons[ addon_name ];
+        if (addon && addon.root) {
+            addon.root( req, res, next );
+        } else {
+            console.log( "...but addon does not have a root()" );
+            res.send( "ok; nothing else" );
+        }
+    } else if (req.app.addon_features[ feature ]) {
         //
         console.log( 'feature ' + feature );
         req.app.addon_features[ feature ](req,res,next)

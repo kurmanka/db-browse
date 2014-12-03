@@ -182,6 +182,7 @@ function _list_tables(req, res, next) {
     var l = res.locals;
     // this is to be refactored soon XXX
     l.path_sql = l.pathname + ":sql";
+    
 
     async.waterfall([
         function (done){
@@ -261,7 +262,7 @@ _list_tables.cache_key = function(r) {return r.url;}
 _list_tables.template = 'tableList';
 _list_tables.jade = true;
                            // in the order of appearance:
-_list_tables.produce_locals = [ 'path_sql', 'tableGr', 'tablesList', 'tables', 'groups', 'the_rest', ];
+_list_tables.produce_locals = [ 'path_sql', 'tableGr', 'tablesList', 'tables', 'groups', 'the_rest', 'addons' ];
 
 function list_tables (req, res, next) {
     cache_wrapper( req, res, _list_tables);
@@ -280,6 +281,9 @@ function mysqlChecker (res, methodRun, attrList, done) {
 function showTable(req, res, next) {
     var db;
     var l = res.locals;
+
+    // if the table name starts with !, skip this altogether
+    if(l.table.charAt(0) == '!') { return next(); } 
 
     async.waterfall([
         function (done){
