@@ -289,41 +289,28 @@ function get_table_details_mysql( req, res, next ) {
         },
 
         function (data, done){
+
             // in case of mysql db type, data is an array of 
             // [show_columns_rows, create_table_rows, select_technical_details_rows]
             table_details.columns      = data[0];
-            table_details.create_table = data[1];
+            table_details.create_table = data[1][0]['Create Table'];
             table_details.tech_details = data[2];
             l.create_table = data[1];
 
-            //    ...
-            //    addCollateCharset(attrList);
-            //    ...
+            var last_line = /(\).+)$/.exec(table_details.create_table);
+            table_details.lastStringReq = last_line[0].replace(/\)/, '');
 
-            // get last string of the 'show create table' response for mysql tables
-            // it may look like:
-            // ENGINE=MyISAM DEFAULT CHARSET=latin1
-            if_mysql_do(res, getCreateTableDetails, data, done);
-        },
-
-        function (data, done){            
-            // get Indexes for tables of db mysql
-            if_mysql_do(res, getIndexes, data, done);
-        },
-
-        function (data, done){
-            // added columns Collate and Charset for tables of db mysql
-            //if_mysql_do(res, addCollateCharset, attrList, done); 
+            getIndexes( table_details );
             addCollateCharset( table_details );
-            done();
-            //done(attrList);
-        },
 
-        function (done){
             var _data = { attrList:   table_details.columns, 
-                          indexesArr: table_details.create_table, 
+                          indexesArr: table_details.indexes, 
                           statusArr:  table_details.tech_details 
             };
+
+            if (table_details.lastStringReq) {
+                _data.lastStringReq = table_details.lastStringReq;
+            }
 
             if (l.dbType == 'postgres') {
                 _data.referenced = data[3];
@@ -400,6 +387,8 @@ function showTable(req, res, next) {
             //if_mysql_do(res, addCollateCharset, attrList, done); 
             if (l.dbType == 'mysql') {
                 addCollateCharset( data, done );
+            } else {
+                done(null,data);  
             }
             //done(attrList);
         },
@@ -447,11 +436,11 @@ function getCreateTableDetails(attrList, done, res) {
     done (null, attrList);
 }
 
-function getIndexes(attrList, done) {
+function getIndexes(t_details) {
     var resultArr = [];
     var i = 0;
 
-    var request = attrList[1][0]['Create Table'];
+    var request = t_details.create_table;
 
     while ( /\s.*KEY.+,*/.exec(request) ) {
         resultArr[i] = /\s.*KEY.+,*/.exec(request);
@@ -459,15 +448,16 @@ function getIndexes(attrList, done) {
         i++;
     }
 
-    attrList[1] = resultArr;
-    done(null, attrList);
+    t_details.indexes = resultArr;
+    return;
+    //done(null, attrList);
     // return(attrList);
 }
 
 function addCollateCharset(t_details) {
     var resultArr = [];
     var rows = t_details.columns;
-    var create_table_sql = t_details.create_table[0]['Create Table'];
+    var create_table_sql = t_details.create_table;
     //console.log('addCollateCharset:');
     //console.log(create_table_sql);
 
