@@ -312,11 +312,6 @@ function get_table_details_mysql( req, res, next ) {
                 _data.lastStringReq = table_details.lastStringReq;
             }
 
-            if (l.dbType == 'postgres') {
-                _data.referenced = data[3];
-                _data.triggers   = data[4];
-                _data.foreignKey = data[5];
-            }
             res.locals(_data);
             done();
         }
@@ -358,42 +353,8 @@ function showTable(req, res, next) {
         },
 
         function (data, done){
-            // in case of mysql db type, data is an array of 
-            // [show_columns_rows, create_table_rows, select_technical_details_rows]
-            if (l.dbType == 'mysql') {
-                table_details['columns']      = data[0];
-                table_details['create_table'] = data[1];
-                table_details['tech_details'] = data[2];
-            }
             l.create_table = data[1];
             
-            //    ...
-            //    addCollateCharset(attrList);
-            //    ...
-
-            // get last string of the 'show create table' response for mysql tables
-            // it may look like:
-            // ENGINE=MyISAM DEFAULT CHARSET=latin1
-            if_mysql_do(res, getCreateTableDetails, data, done);
-        },
-
-        function (data, done){            
-            // get Indexes for tables of db mysql
-            if_mysql_do(res, getIndexes, data, done);
-        },
-
-        function (data, done){
-            // added columns Collate and Charset for tables of db mysql
-            //if_mysql_do(res, addCollateCharset, attrList, done); 
-            if (l.dbType == 'mysql') {
-                addCollateCharset( data, done );
-            } else {
-                done(null,data);  
-            }
-            //done(attrList);
-        },
-
-        function (data, done){
             var _data = {attrList: data[0], indexesArr: data[1], statusArr: data[2]};
 
             if (l.dbType == 'postgres') {
