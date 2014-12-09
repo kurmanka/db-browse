@@ -267,7 +267,7 @@ function list_tables (req, res, next) {
     cache_wrapper( req, res, _list_tables);
 }
 
-function mysqlChecker (res, methodRun, attrList, done) {
+function if_mysql_do( res, methodRun, attrList, done ) {
     var l = res.locals;
 
     if (l.dbType == 'mysql') {
@@ -289,18 +289,20 @@ function showTable(req, res, next) {
 
         function (attrList, done){
             l.create_table = attrList[1];
-            // get last string of request 'show create table' for tables of db mysql
-            mysqlChecker(res, getCreateTableDetails, attrList, done);
+            // get last string of the 'show create table' response for mysql tables
+            // it may look like:
+            // ENGINE=MyISAM DEFAULT CHARSET=latin1
+            if_mysql_do(res, getCreateTableDetails, attrList, done);
         },
 
-        function (attrList, done){
+        function (attrList, done){            
             // get Indexes for tables of db mysql
-            mysqlChecker(res, getIndexes, attrList, done); 
+            if_mysql_do(res, getIndexes, attrList, done);
         },
 
         function (attrList, done){
             // added columns Collate and Charset for tables of db mysql
-            mysqlChecker(res, addCollateCharset, attrList, done); 
+            if_mysql_do(res, addCollateCharset, attrList, done); 
         },
 
         function (results, done){
@@ -343,8 +345,10 @@ function getValueFromKey (keyName, array) {
     return null;
 }
 
+// this is only for Mysql databases, for some reason:
+
 function getCreateTableDetails(attrList, done, res) {
-    var request = getValueFromKey('Create Table', attrList[1][0]);
+    var request = attrList[1][0]['Create Table'];
 
     var lastString = /(\).+)$/.exec(request);
 
@@ -356,7 +360,7 @@ function getIndexes(attrList, done) {
     var resultArr = [];
     var i = 0;
 
-    var request = getValueFromKey('Create Table', attrList[1][0]);
+    var request = attrList[1][0]['Create Table'];
 
     while ( /\s.*KEY.+,*/.exec(request) ) {
         resultArr[i] = /\s.*KEY.+,*/.exec(request);
@@ -366,6 +370,7 @@ function getIndexes(attrList, done) {
 
     attrList[1] = resultArr;
     done(null, attrList);
+    // return(attrList);
 }
 
 function addCollateCharset(attrList, doneReturn) {
@@ -412,10 +417,11 @@ function searchCollateCharset(data, done) {
     resultArr['charset'] = charsets;
 
     done(null, resultArr);
+    //return( resultArr );
 }
 
 function searchObject(data, obType) {
-    var request = getValueFromKey('input', data[0]);
+    var request = data[0]['input'];
 
     var checker = /CHARACTER SET/;
     if (obType == 'COLLATE') {
