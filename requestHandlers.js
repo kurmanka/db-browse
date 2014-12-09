@@ -282,6 +282,7 @@ function showTable(req, res, next) {
     var db;
     var l = res.locals;
 
+    // hmm, this is for issue #10
     // if the table name starts with !, skip this altogether
     if(l.table.charAt(0) == '!') { return next(); } 
 
