@@ -36,6 +36,12 @@ function rowsCounter(connection, table, done) {
                     });
 }
 
+// get table details
+
+// this should result in a doneReturn function call, called as:
+// doneReturn( null, [show_columns_rows, create_table_rows, select_technical_details_rows] );
+// or 
+// doneReturn( err, something );
 function showTableRequest(connection, table, doneReturn) {
     async.parallel([
         function(done){

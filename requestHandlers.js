@@ -277,9 +277,92 @@ function if_mysql_do( res, methodRun, attrList, done ) {
     }
 }
 
-function showTable(req, res, next) {
+function get_table_details_mysql( req, res, next ) {
     var db;
     var l = res.locals;
+    var table_details = {};
+    
+    async.waterfall([
+        function (done){
+            db = getDbType(l.dbType);
+            db.showTableRequest(l.connection, l.table, done);
+        },
+
+        function (data, done){
+            // in case of mysql db type, data is an array of 
+            // [show_columns_rows, create_table_rows, select_technical_details_rows]
+            table_details.columns      = data[0];
+            table_details.create_table = data[1];
+            table_details.tech_details = data[2];
+            l.create_table = data[1];
+
+            //    ...
+            //    addCollateCharset(attrList);
+            //    ...
+
+            // get last string of the 'show create table' response for mysql tables
+            // it may look like:
+            // ENGINE=MyISAM DEFAULT CHARSET=latin1
+            if_mysql_do(res, getCreateTableDetails, data, done);
+        },
+
+        function (data, done){            
+            // get Indexes for tables of db mysql
+            if_mysql_do(res, getIndexes, data, done);
+        },
+
+        function (data, done){
+            // added columns Collate and Charset for tables of db mysql
+            //if_mysql_do(res, addCollateCharset, attrList, done); 
+            addCollateCharset( table_details );
+            done();
+            //done(attrList);
+        },
+
+        function (done){
+            var _data = { attrList:   table_details.columns, 
+                          indexesArr: table_details.create_table, 
+                          statusArr:  table_details.tech_details 
+            };
+
+            if (l.dbType == 'postgres') {
+                _data.referenced = data[3];
+                _data.triggers   = data[4];
+                _data.foreignKey = data[5];
+            }
+            res.locals(_data);
+            done();
+        }
+
+    ],  function (err, data) {
+            // err is most likely being "Table xxx not found". at least, that's
+            // what we assume here
+            if (err) {
+                // call the next chained function, specifically, check for an addon feature
+                // of the same name
+                next();
+            } else {
+                // provide a custom callback for the template
+                var handler = finish(req, res, 'tableDetails', {},
+                    function(error, html) {
+                    showPageTotalRecords(req, res, error, html, db);
+                });
+                handler(err,data);
+            }
+        }
+    );
+
+}
+
+function showTable(req, res, next) {
+
+    var db;
+    var l = res.locals;
+    var table_details = {};
+
+    if (l.dbType == 'mysql') {
+        return get_table_details_mysql( req, res, next );
+    }
 
     async.waterfall([
         function (done){
@@ -287,33 +370,49 @@ function showTable(req, res, next) {
             db.showTableRequest(l.connection, l.table, done);
         },
 
-        function (attrList, done){
-            l.create_table = attrList[1];
+        function (data, done){
+            // in case of mysql db type, data is an array of 
+            // [show_columns_rows, create_table_rows, select_technical_details_rows]
+            if (l.dbType == 'mysql') {
+                table_details['columns']      = data[0];
+                table_details['create_table'] = data[1];
+                table_details['tech_details'] = data[2];
+            }
+            l.create_table = data[1];
+            
+            //    ...
+            //    addCollateCharset(attrList);
+            //    ...
+
             // get last string of the 'show create table' response for mysql tables
             // it may look like:
             // ENGINE=MyISAM DEFAULT CHARSET=latin1
-            if_mysql_do(res, getCreateTableDetails, attrList, done);
+            if_mysql_do(res, getCreateTableDetails, data, done);
         },
 
-        function (attrList, done){            
+        function (data, done){            
             // get Indexes for tables of db mysql
-            if_mysql_do(res, getIndexes, attrList, done);
+            if_mysql_do(res, getIndexes, data, done);
         },
 
-        function (attrList, done){
+        function (data, done){
             // added columns Collate and Charset for tables of db mysql
-            if_mysql_do(res, addCollateCharset, attrList, done); 
+            //if_mysql_do(res, addCollateCharset, attrList, done); 
+            if (l.dbType == 'mysql') {
+                addCollateCharset( data, done );
+            }
+            //done(attrList);
         },
 
-        function (results, done){
-            var data = {attrList: results[0], indexesArr: results[1], statusArr: results[2]};
+        function (data, done){
+            var _data = {attrList: data[0], indexesArr: data[1], statusArr: data[2]};
 
             if (l.dbType == 'postgres') {
-                data.referenced = results[3];
-                data.triggers   = results[4];
-                data.foreignKey = results[5];
+                _data.referenced = data[3];
+                _data.triggers   = data[4];
+                _data.foreignKey = data[5];
             }
-            res.locals(data);
+            res.locals(_data);
             done(null);
         }
 
@@ -336,14 +435,6 @@ function showTable(req, res, next) {
     );
 }
 
-function getValueFromKey (keyName, array) {
-    for (var key in array) {
-        if (key == keyName) {
-            return array[key];
-        }
-    }
-    return null;
-}
 
 // this is only for Mysql databases, for some reason:
 
@@ -373,55 +464,50 @@ function getIndexes(attrList, done) {
     // return(attrList);
 }
 
-function addCollateCharset(attrList, doneReturn) {
+function addCollateCharset(t_details) {
     var resultArr = [];
-    var rows = attrList[0];
+    var rows = t_details.columns;
+    var create_table_sql = t_details.create_table[0]['Create Table'];
+    //console.log('addCollateCharset:');
+    //console.log(create_table_sql);
 
-    async.waterfall([
-        function (done){
-            searchCollateCharset(attrList[1], done);
-        },
+    var collate_charset = searchCollateCharset(create_table_sql);
 
-        function (CollateCharsetArr, done){
-            for ( var i = 0; i < rows.length; i++ ) {
-                var tempArr = [];
-                var j = 0;
-                var columnName;
-                for ( var key in rows[0] ) {
-                    if (j == 0) {
-                        columnName = rows[i][key];
-                    }
-                    if (j == 2) {
-                        tempArr.Charset = CollateCharsetArr.charset[columnName] || '';
-                        tempArr.Collate = CollateCharsetArr.collate[columnName] || '';
-                    }
-                    tempArr[key] = rows[i][key];
-                    j++;
-                }
-                resultArr[i] = tempArr;
+    for ( var i = 0; i < rows.length; i++ ) {
+        var tempArr = [];
+        var j = 0;
+        var columnName;
+        for ( var key in rows[0] ) {
+            if (j == 0) {
+                columnName = rows[i][key];
             }
-            attrList[0] = resultArr;
-            doneReturn(null, attrList);
+            if (j == 2) {
+                tempArr.Charset = collate_charset.charset[columnName] || '';
+                tempArr.Collate = collate_charset.collate[columnName] || '';
+            }
+            tempArr[key] = rows[i][key];
+            j++;
         }
-    ]);
+        resultArr[i] = tempArr;
+    }
+    //console.log( resultArr );
+    t_details.columns = resultArr;
 }
 
-function searchCollateCharset(data, done) {
-    var dataText;
+function searchCollateCharset(string, done) {
     var resultArr = [];
 
-    var collates = searchObject(data, 'COLLATE');
-    var charsets = searchObject(data, 'CHARACTER SET');
+    var collates = searchObject(string, 'COLLATE');
+    var charsets = searchObject(string, 'CHARACTER SET');
 
     resultArr['collate'] = collates;
     resultArr['charset'] = charsets;
 
-    done(null, resultArr);
-    //return( resultArr );
+    if (done) done(null, resultArr);
+    else return( resultArr );
 }
 
-function searchObject(data, obType) {
-    var request = data[0]['input'];
+function searchObject(string, obType) {
 
     var checker = /CHARACTER SET/;
     if (obType == 'COLLATE') {
@@ -430,12 +516,12 @@ function searchObject(data, obType) {
 
     var objects = [];
     var i = 0;
-    while (checker.exec(request)) {
+    while (checker.exec(string)) {
         var object = '';
         if (obType == 'COLLATE') {
-            object = /.+COLLATE\s+[^\s]+/.exec(request);
+            object = /.+COLLATE\s+[^\s]+/.exec(string);
         } else {
-            object = /.+CHARACTER SET\s+[^\s]+/.exec(request);
+            object = /.+CHARACTER SET\s+[^\s]+/.exec(string);
         }
 
         var key = /\`.+\`/.exec(object);
@@ -457,7 +543,7 @@ function searchObject(data, obType) {
             objects[key] = object;
             i++;
         }
-        request = request.replace(checker, '');
+        string = string.replace(checker, '');
     }
 
     return objects;
