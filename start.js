@@ -237,8 +237,8 @@ app.get('/:db_id', middleware, requestHandlers.list_tables); // list tables
 
 app.get('/:db_id/:table',
         middleware,
-        requestHandlers.showTable, // show table details, if that's a table
-        addon_feature,             // run addon feature, if that's a feature
+        requestHandlers.table_details, // show table details, if that's a table
+        addon_feature,                 // run addon feature, if that's a feature
         requestHandlers.noSuchTable );
 
 app.post('/:db_id/:table',

@@ -37,7 +37,9 @@ function rowsCounter(connection, table, done) {
                     });
 }
 
-function showTableRequest(connection, table, doneReturn) {
+
+exports.getTableDetails = 
+function getTableDetails(connection, table, doneReturn) {
     async.parallel([
         function(done){
             connection.query("SELECT column_name as Column, data_type as Type, " +
@@ -146,7 +148,6 @@ function escape (text) {
 }
 
 exports.showAllTable = showAllTable;
-exports.showTableRequest = showTableRequest;
 exports.showColumnRequest = showColumnRequest;
 exports.showValueRequest = showValueRequest;
 exports.rowsCounter = rowsCounter;

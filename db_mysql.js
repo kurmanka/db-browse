@@ -42,7 +42,9 @@ function rowsCounter(connection, table, done) {
 // doneReturn( null, [show_columns_rows, create_table_rows, select_technical_details_rows] );
 // or 
 // doneReturn( err, something );
-function showTableRequest(connection, table, doneReturn) {
+exports.getTableDetails = 
+function getTableDetails(connection, table, doneReturn) {
+
     async.parallel([
         function(done){
             connection.query('SHOW COLUMNS FROM ' + mysql.escapeId(table),
@@ -103,7 +105,6 @@ function getSQL (connection, sql, doneReturn){
 }
 
 exports.showAllTable = showAllTable;
-exports.showTableRequest = showTableRequest;
 exports.showColumnRequest = showColumnRequest;
 exports.showValueRequest = showValueRequest;
 exports.rowsCounter = rowsCounter;

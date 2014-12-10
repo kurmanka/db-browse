@@ -167,16 +167,26 @@ function breadcrumbs(req, res, next) {
     if (next) next();
 }
 
-
+//
+// LOGIN
+//
 
 function login( req, res, errmsg ) {
     res.render( 'login.jade', { req: req, errormsg: errmsg } );
 }
 
+//
+// DATABASE LIST PAGE
+//
+
 function selectDatabase (req, res) {
     console.log( 'selectDatabase()' );
     res.render( 'listDatabase.jade', { addons: res.app.addons } );
 }
+
+// 
+// TABLES LIST PAGE
+//
 
 function _list_tables(req, res, next) {
     var l = res.locals;
@@ -267,113 +277,78 @@ function list_tables (req, res, next) {
     cache_wrapper( req, res, _list_tables);
 }
 
-function if_mysql_do( res, methodRun, attrList, done ) {
-    var l = res.locals;
+// 
+// TABLE DETAILS PAGE
+//
 
-    if (l.dbType == 'mysql') {
-        methodRun(attrList, done, res);//get last string of request 'show create table'
-    } else {
-        done(null, attrList);
+function prepare_table_details_mysql( req, res, data ){
+
+    var table_details = res.locals.table_details;
+
+    // in case of mysql db type, data is an array of 
+    // [show_columns_rows, create_table_rows, select_technical_details_rows]
+    table_details.columns      = data[0];
+    table_details.create_table = data[1][0]['Create Table'];
+    table_details.tech_details = data[2];
+
+    res.locals.create_table    = data[1];
+
+    var last_line = /(\).+)$/.exec(table_details.create_table);
+    table_details.lastStringReq = last_line[0].replace(/\)/, '');
+
+    getIndexes( table_details );
+    addCollateCharset( table_details );
+
+    var _data = { attrList:   table_details.columns, 
+                  indexesArr: table_details.indexes, 
+                  statusArr:  table_details.tech_details 
+    };
+
+    if (table_details.lastStringReq) {
+        _data.lastStringReq = table_details.lastStringReq;
     }
+
+    res.locals(_data);
 }
 
-function get_table_details_mysql( req, res, next ) {
-    var db;
+
+function table_details(req, res, next) {
+
     var l = res.locals;
-    var table_details = {};
+    var table_details = l.table_details = {};
+
+    async.waterfall([
+        function (done){
+            var db = getDbType(l.dbType);
+            db.getTableDetails(l.connection, l.table, done);
+        },
+
+    ],  function (err, data) {
+            // err is most likely being "Table xxx not found". at least, that's
+            // what we assume here
+            if (err) {
+                // call the next chained function, specifically, check for an addon feature
+                // of the same name
+                next();
+ 
+            } else {
+               
+                if (l.dbType == 'mysql') {
+                    prepare_table_details_mysql( req, res, data );
+                }
     
-    async.waterfall([
-        function (done){
-            db = getDbType(l.dbType);
-            db.showTableRequest(l.connection, l.table, done);
-        },
+                if (l.dbType == 'postgres') {
+                    l.create_table = data[1];
+                    
+                    var _data = {attrList: data[0], indexesArr: data[1], statusArr: data[2]};
+    
+                    _data.referenced = data[3];
+                    _data.triggers   = data[4];
+                    _data.foreignKey = data[5];
+    
+                    res.locals(_data);
+                }
 
-        function (data, done){
-
-            // in case of mysql db type, data is an array of 
-            // [show_columns_rows, create_table_rows, select_technical_details_rows]
-            table_details.columns      = data[0];
-            table_details.create_table = data[1][0]['Create Table'];
-            table_details.tech_details = data[2];
-            l.create_table = data[1];
-
-            var last_line = /(\).+)$/.exec(table_details.create_table);
-            table_details.lastStringReq = last_line[0].replace(/\)/, '');
-
-            getIndexes( table_details );
-            addCollateCharset( table_details );
-
-            var _data = { attrList:   table_details.columns, 
-                          indexesArr: table_details.indexes, 
-                          statusArr:  table_details.tech_details 
-            };
-
-            if (table_details.lastStringReq) {
-                _data.lastStringReq = table_details.lastStringReq;
-            }
-
-            res.locals(_data);
-            done();
-        }
-
-    ],  function (err, data) {
-            // err is most likely being "Table xxx not found". at least, that's
-            // what we assume here
-            if (err) {
-                // call the next chained function, specifically, check for an addon feature
-                // of the same name
-                next();
-            } else {
-                // provide a custom callback for the template
-                var handler = finish(req, res, 'tableDetails', {},
-                    function(error, html) {
-                    showPageTotalRecords(req, res, error, html, db);
-                });
-                handler(err,data);
-            }
-        }
-    );
-
-}
-
-function showTable(req, res, next) {
-
-    var db;
-    var l = res.locals;
-    var table_details = {};
-
-    if (l.dbType == 'mysql') {
-        return get_table_details_mysql( req, res, next );
-    }
-
-    async.waterfall([
-        function (done){
-            db = getDbType(l.dbType);
-            db.showTableRequest(l.connection, l.table, done);
-        },
-
-        function (data, done){
-            l.create_table = data[1];
-            
-            var _data = {attrList: data[0], indexesArr: data[1], statusArr: data[2]};
-
-            if (l.dbType == 'postgres') {
-                _data.referenced = data[3];
-                _data.triggers   = data[4];
-                _data.foreignKey = data[5];
-            }
-            res.locals(_data);
-            done(null);
-        }
-
-    ],  function (err, data) {
-            // err is most likely being "Table xxx not found". at least, that's
-            // what we assume here
-            if (err) {
-                // call the next chained function, specifically, check for an addon feature
-                // of the same name
-                next();
-            } else {
                 // provide a custom callback for the template
                 var handler = finish(req, res, 'tableDetails', {},
                     function(error, html) {
@@ -386,16 +361,7 @@ function showTable(req, res, next) {
 }
 
 
-// this is only for Mysql databases, for some reason:
-
-function getCreateTableDetails(attrList, done, res) {
-    var request = attrList[1][0]['Create Table'];
-
-    var lastString = /(\).+)$/.exec(request);
-
-    res.locals.lastStringReq = lastString[0].replace(/\)/, '');
-    done (null, attrList);
-}
+// these 4 functions are only needed for Mysql databases:
 
 function getIndexes(t_details) {
     var resultArr = [];
@@ -504,6 +470,9 @@ function noSuchTable (req, res, next) {
     res.send('No such table: ' + req.params.table);
 }
 
+// 
+// ROW COUNT 
+//
 
 function showPageTotalRecords (req, res, error, html, db) {
     var l = res.locals;
@@ -539,6 +508,10 @@ function showPageTotalRecords (req, res, error, html, db) {
     );
 }
 
+// 
+//  COLUMN DETAILS (VALUES) PAGE
+//
+
 function _showColumn(req, res, next) {
     var limit = parseInt(req.query.limit, 10) || 20;
     var db;
@@ -567,6 +540,9 @@ function showColumn(req, res) {
     cache_wrapper(req, res, _showColumn);
 }
 
+// 
+//  RECORD DETAIL PAGE
+//
 
 function showValue(req, res) {
     var limit = 10;
@@ -605,6 +581,10 @@ function showValue(req, res) {
     );
 }
 
+//
+//  getDbType() UTILITY FUNCTION
+//
+
 function getDbType (dbType) {
     var db = mysql;
 
@@ -614,6 +594,10 @@ function getDbType (dbType) {
 
     return db;
 }
+
+//
+//  DIRECT SQL FEATURE
+// 
 
 function sqlRequest(req, res) {
     var l = res.locals;
@@ -715,6 +699,9 @@ function sqlRemove (req, res) {
     );
 }
 
+//
+//  DATABASE SCHEMA PAGE
+//
 
 function produce_db_schema (req, res, next) {
 
@@ -760,6 +747,10 @@ produce_db_schema.template = 'db_schema';
 function show_db_schema (req, res) {
     cache_wrapper(req,res,produce_db_schema);
 }
+
+//
+//  CACHE WRAPPER
+//
 
 function cache_wrapper (req, res, handler) {
     var l = res.locals;
@@ -837,12 +828,12 @@ function cache_wrapper (req, res, handler) {
 
 }
 
-
-
-
+//
+//  EPILOGUE. EXPORTS
+//
 exports.list_tables       = list_tables;
 exports.login             = login;
-exports.showTable         = showTable;
+exports.table_details     = table_details;
 exports.noSuchTable       = noSuchTable;
 exports.showColumn        = showColumn;
 exports.showError         = showError;
