@@ -281,7 +281,7 @@ function list_tables (req, res, next) {
 // TABLE DETAILS PAGE
 //
 
-function prepare_table_details_mysql( req, res, data ){
+function prepare_table_details_mysql( res, data ){
 
     var table_details = res.locals.table_details;
 
@@ -290,8 +290,6 @@ function prepare_table_details_mysql( req, res, data ){
     table_details.columns      = data[0];
     table_details.create_table = data[1][0]['Create Table'];
     table_details.tech_details = data[2];
-
-    res.locals.create_table    = data[1];
 
     var last_line = /(\).+)$/.exec(table_details.create_table);
     table_details.lastStringReq = last_line[0].replace(/\)/, '');
@@ -333,12 +331,13 @@ function table_details(req, res, next) {
  
             } else {
                
+                l.create_table = data[1];
+
                 if (l.dbType == 'mysql') {
-                    prepare_table_details_mysql( req, res, data );
+                    prepare_table_details_mysql( res, data );
                 }
     
                 if (l.dbType == 'postgres') {
-                    l.create_table = data[1];
                     
                     var _data = {attrList: data[0], indexesArr: data[1], statusArr: data[2]};
     
@@ -349,12 +348,16 @@ function table_details(req, res, next) {
                     res.locals(_data);
                 }
 
+                //res.send( "OK" );
+
                 // provide a custom callback for the template
                 var handler = finish(req, res, 'tableDetails', {},
                     function(error, html) {
-                    showPageTotalRecords(req, res, error, html, db);
-                });
+                        showPageTotalRecords(req, res, error, html, db);
+                    }
+                );
                 handler(err,data);
+
             }
         }
     );
