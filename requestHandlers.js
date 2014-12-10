@@ -312,12 +312,13 @@ function prepare_table_details_mysql( res, data ){
 
 function table_details(req, res, next) {
 
+    var db;
     var l = res.locals;
     var table_details = l.table_details = {};
 
     async.waterfall([
         function (done){
-            var db = getDbType(l.dbType);
+            db = getDbType(l.dbType);
             db.getTableDetails(l.connection, l.table, done);
         },
 
@@ -330,7 +331,7 @@ function table_details(req, res, next) {
                 next();
  
             } else {
-               
+
                 l.create_table = data[1];
 
                 if (l.dbType == 'mysql') {
@@ -352,8 +353,10 @@ function table_details(req, res, next) {
 
                 // provide a custom callback for the template
                 var handler = finish(req, res, 'tableDetails', {},
+                    // this function actually outputs the tableDetails page
+                    // and then it adds some more javascript
                     function(error, html) {
-                        showPageTotalRecords(req, res, error, html, db);
+                        showPageTotalRecords(req, res, error, html);
                     }
                 );
                 handler(err,data);
@@ -477,8 +480,10 @@ function noSuchTable (req, res, next) {
 // ROW COUNT 
 //
 
-function showPageTotalRecords (req, res, error, html, db) {
+function showPageTotalRecords (req, res, error, html) {
     var l = res.locals;
+    var db = getDbType(l.dbType);
+
 
     async.waterfall([
         function (done) {
@@ -488,10 +493,7 @@ function showPageTotalRecords (req, res, error, html, db) {
             // send the main part of the page
             res.writeHead(200, {"Content-Type": "text/html"});
             res.write(html);
-            done(null);
-        },
 
-        function (done) {
             db.rowsCounter(l.connection, l.table, done);
         },
 
