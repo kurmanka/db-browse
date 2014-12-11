@@ -119,9 +119,23 @@ function resultReturn(err, result, done, doneReturn) {
     }
 }
 
-function showValueRequest(connection, table, column, value, doneReturn) {
-    connection.query("select * from " + escape(table) + " where "
-                    + escape(column) + "=$1", [value],
+function showValueRequest(connection, table, where, doneReturn) {
+    var condition = '';
+    var values = [];
+    var num = 1;
+    for( var col in where ) {
+        var val = where[col];
+        if (num > 1) {
+            condition += " AND ";
+        }
+        condition += escape(col) + "=$" + num + " ";
+        values.push(val);
+        num++;
+    }
+
+    console.log( "BUILD CONDITION: ", condition );
+
+    connection.query("select * from " + escape(table) + " where " + condition, values,
                     function (err, result) {
                         doneReturn(err, result ? result.rows : null);
                     });
