@@ -546,45 +546,68 @@ function showColumn(req, res) {
 }
 
 // 
-//  RECORD DETAIL PAGE
+//  FIND AND SHOW SOME RECORDS (OR JUST ONE RECORD)
+//  (RECORD DETAIL PAGE)
 //
+exports.show_rows = 
+function show_rows(req, res) {
 
-function showValue(req, res) {
-    var limit = 10;
-    var db;
     var l = res.locals;
-    var template;
+    l.limit = req.params.limit || 30; // records to show
 
-    var v = req.param('v');
-    if ( v == 'single' ) {
+    var template;
+    var view = req.params.view;
+
+    // if the view param looks like an integer number, take it as a limit
+    if (/^\d+$/.test(view)) {
+        l.limit = view;
+        view = '';
+    }
+
+    // choose the template
+    if ( view == 'one' ) {       // record by record, row by row
         template = 'showValues_single';
     }
-    else if ( v == 'row' ) {
+    else if ( view == 'hor' ) {  // horizontal
         template = 'showValues_row';
     }
-    else {
+    else if ( view == 'ver' ) {  // vertical
         template = 'showValues_col';
     }
+    else {                       // default, vertical
+        view = 'ver';
+        template = 'showValues_col';
+    }
+    l.view = view;
 
+    // get the data
     async.waterfall([
         function (done){
-            db = getDbType(l.dbType);
-            db.showValueRequest(l.connection, l.table, l.column, l.value, done);
+            var db = getDbType(l.dbType);
+            var where = req.query;
+            where[l.column] = l.value;
+            db.showValueRequest(l.connection, l.table, where, done);
         },
 
         function (results, done) {
             if (results == 0) {
                 // error
-                done( "The value '" + l.value + "' is not present in column '" +
+                if (Object.keys(req.query).length == 1) {
+                    done( "The value '" + l.value + "' is not present in column '" +
                       l.column + "'" );
+                } else {
+                    done( "No records found to match your filters." );
+                }
             } else {
                 l.values = results;
                 done(null);
             }
         }
-    ], finish( req, res, template, { limit: limit } )
+    ], finish( req, res, template )
     );
 }
+
+
 
 //
 //  getDbType() UTILITY FUNCTION
@@ -843,7 +866,7 @@ exports.noSuchTable       = noSuchTable;
 exports.showColumn        = showColumn;
 exports.showError         = showError;
 exports.selectDatabase    = selectDatabase;
-exports.showValue         = showValue;
+// show_rows is added to exports above.
 exports.sqlRequest        = sqlRequest;
 exports.sqlHistory        = sqlHistory;
 exports.sqlDetails        = sqlDetails;

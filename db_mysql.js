@@ -83,9 +83,27 @@ function showColumnRequest(connection, column, table, limit, doneReturn) {
                     });
 }
 
-function showValueRequest(connection, table, column, value, doneReturn) {
+function showValueRequest(connection, table, where, doneReturn) {
+
+    // this is copy-paste-adapted from db_postgres.js
+    var condition = '';
+    var values = [];
+    var num = 1;
+    for( var col in where ) {
+        var val = where[col];
+        if (num > 1) {
+            condition += " AND ";
+        }
+        // mysql-specific escape and the placeholder
+        condition += mysql.escapeId(col) + "=?";
+        values.push(val);
+        num++;
+    }
+
+    console.log( "BUILD CONDITION: ", condition );
+
     connection.query("select * from " + mysql.escapeId(table) +
-                    " where " + mysql.escapeId(column) + "=?", [value],
+                    " where " + condition, values,
                     function(err, rows, fields) {
                         doneReturn(err, rows);
                     });

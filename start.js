@@ -248,7 +248,10 @@ app.post('/:db_id/:table',
 
 app.get('/:db_id/:table/:column', middleware, requestHandlers.showColumn); //run method showColumn
 
-app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue); //run method showValue
+// fetch & show a single table row or a bunch of them
+//app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue); 
+app.get('/:db_id/:table/:column/:value/:view?/:limit?', middleware, requestHandlers.show_rows); 
+
 
 server = app.listen(config.listen.port, config.listen.host);
 console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
