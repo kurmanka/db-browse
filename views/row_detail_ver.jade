@@ -10,8 +10,8 @@ block data
         - var i = 0
         
         while i < rows_show
-          if values[1+i][key]==null 
-            td.null null
+          if values[i][key]!=null 
+            td.data= values[i][key]
           else 
-            td.data= values[1+i][key]
+            td.data.null null
           - i++
