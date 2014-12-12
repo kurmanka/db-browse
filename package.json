@@ -1,15 +1,14 @@
 {
-  "name": "db_browser",
-  "version": "0.0.0",
-  "description": "View the tables of database",
-  "main": "index.js",
+  "name": "db-browser",
+  "version": "0.0.1",
+  "description": "Browse a database, with its tables and rows",
+  "main": "start.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node start.js"
   },
   "license": "BSD",
   "devDependencies": {
-    "njst":    "~0.2.1"
   },
   "dependencies": {
     "pg":      "~0.14.1",
@@ -21,7 +20,6 @@
     "jade":      "*",
     "memcached": "*",
     "checksum":  "*",
-    "sqlite3": "~2.1.7",
-    "ect":     "~0.5.2"
+    "sqlite3":   "~2.1.7",
   }
 }
