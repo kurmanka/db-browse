@@ -11,7 +11,7 @@ block data
         
         while i < rows_show
           if values[i][key]!=null 
-            td.data= values[i][key]
+            include ./inc/row_detail_value.jade
           else 
             td.data.null null
           - i++
