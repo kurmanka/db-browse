@@ -7,10 +7,13 @@ html
     script(src="//ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js")
   body
     #topnav
+      block topnav
       if authenticate
         a(href="/logout") Logout <<<
       else
         | &nbsp;
+
+    block topnav2
 
     p.breadcrumbs
       if breadcrumbs
@@ -18,6 +21,7 @@ html
           if i > 0
             |  / 
           a(href="/" + crumb.u)= crumb.t
+        |  / 
 
     #content
       h1 

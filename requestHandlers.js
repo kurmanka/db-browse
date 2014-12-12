@@ -546,6 +546,7 @@ function showColumn(req, res) {
 }
 
 // 
+//  ROW DETAIL VIEW.
 //  FIND AND SHOW SOME RECORDS (OR JUST ONE RECORD)
 //  (RECORD DETAIL PAGE)
 //
@@ -566,19 +567,24 @@ function show_rows(req, res) {
 
     // choose the template
     if ( view == 'one' ) {       // record by record, row by row
-        template = 'showValues_single';
+        template = 'row_detail_one.jade';
     }
     else if ( view == 'hor' ) {  // horizontal
-        template = 'showValues_row';
+        template = 'row_detail_hor.jade';
     }
     else if ( view == 'ver' ) {  // vertical
-        template = 'showValues_col';
+        template = 'row_detail_ver.jade';
     }
     else {                       // default, vertical
         view = 'ver';
-        template = 'showValues_col';
+        template = 'row_detail_ver.jade';
     }
     l.view = view;
+
+    var fin = finish( req, res, template );
+    if ( /\.jade$/.test(template) ) {
+        fin = finish_jade( req, res, template );
+    }
 
     // get the data
     async.waterfall([
@@ -602,13 +608,46 @@ function show_rows(req, res) {
                 }
             } else {
                 l.values = results;
+                l.links  = row_detail_make_links( req, res, results );
                 done(null);
             }
         }
-    ], finish( req, res, template )
+    ], fin
     );
 }
 
+
+function row_detail_make_links( req, res, data ) {
+    var links = {};
+    var l = res.locals;
+    var view = l.view;
+    var limit = l.limit;
+    
+    var base_link = "/" + req.params.db_id 
+                  + "/" + req.params.table
+                  + "/" + req.params.column
+                  + "/" + req.params.value;
+    
+    if (data.length > limit) {
+        if (data.length > limit * 2 ) { 
+            links.more = base_link + "/" + view + "/" + limit * 2;
+        }
+        links.all = base_link + "/" + view + "/" + data.length; 
+    }
+
+    l.table_views = { 'ver': 'vertical', 
+                      'hor': 'horizontal', 
+                      'one': 'one by one' };
+    for ( v in l.table_views ) {
+        if (view == v) {}
+        else {
+            links[v] = base_link + "/" + v + "/" + limit;
+            
+        }
+    }
+    
+    return links;
+}
 
 
 //

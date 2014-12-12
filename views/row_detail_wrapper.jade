@@ -1,0 +1,38 @@
+// this is a common wrapper template for all row_detail_* pages.
+
+extends page
+
+block title
+  | Results from #{table} 
+
+block topnav2
+
+  p.nav2(style='float:right')  
+      - var i = 0
+      - var size = Object.keys(table_views).length
+      each label,code in table_views
+        if links[code]
+          a(href='#{ links[code] }')= label
+        else
+          = label
+        if ++i < size
+          |  · 
+      | &nbsp;
+
+block content
+
+  - var rows_total = values.length
+  - var rows_show  = Math.min(rows_total, limit)
+
+
+
+  block data
+
+  p Total rows: #{rows_total}, shown above: #{rows_show} 
+    if links.more
+      |  · 
+      a(href='#{links.more}') see more
+    if links.all
+      |  · 
+      a(href='#{links.all}') see all
+    
