@@ -584,7 +584,9 @@ function show_rows(req, res) {
     async.waterfall([
         function (done){
             var db = getDbType(l.dbType);
-            var where = req.query;
+            var where = {};
+            // copy req.query content into where
+            for( var k in req.query ) { where[k] = req.query[k]; }
             where[l.column] = l.value;
             db.showValueRequest(l.connection, l.table, where, done);
         },
