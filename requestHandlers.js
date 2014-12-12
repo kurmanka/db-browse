@@ -608,6 +608,7 @@ function show_rows(req, res) {
                 }
             } else {
                 l.values = results;
+                l.links  = row_detail_make_links( req, res, results );
                 done(null);
             }
         }
@@ -615,6 +616,38 @@ function show_rows(req, res) {
     );
 }
 
+
+function row_detail_make_links( req, res, data ) {
+    var links = {};
+    var l = res.locals;
+    var view = l.view;
+    var limit = l.limit;
+    
+    var base_link = "/" + req.params.db_id 
+                  + "/" + req.params.table
+                  + "/" + req.params.column
+                  + "/" + req.params.value;
+    
+    if (data.length > limit) {
+        if (data.length > limit * 2 ) { 
+            links.more = base_link + "/" + view + "/" + limit * 2;
+        }
+        links.all = base_link + "/" + view + "/" + data.length; 
+    }
+
+    l.table_views = { 'ver': 'vertical', 
+                      'hor': 'horizontal', 
+                      'one': 'one by one' };
+    for ( v in l.table_views ) {
+        if (view == v) {}
+        else {
+            links[v] = base_link + "/" + v + "/" + limit;
+            
+        }
+    }
+    
+    return links;
+}
 
 
 //
