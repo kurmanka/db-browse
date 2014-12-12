@@ -546,6 +546,7 @@ function showColumn(req, res) {
 }
 
 // 
+//  ROW DETAIL VIEW.
 //  FIND AND SHOW SOME RECORDS (OR JUST ONE RECORD)
 //  (RECORD DETAIL PAGE)
 //
@@ -566,19 +567,24 @@ function show_rows(req, res) {
 
     // choose the template
     if ( view == 'one' ) {       // record by record, row by row
-        template = 'showValues_single';
+        template = 'row_detail_one.jade';
     }
     else if ( view == 'hor' ) {  // horizontal
-        template = 'showValues_row';
+        template = 'row_detail_hor.jade';
     }
     else if ( view == 'ver' ) {  // vertical
-        template = 'showValues_col';
+        template = 'row_detail_ver.jade';
     }
     else {                       // default, vertical
         view = 'ver';
-        template = 'showValues_col';
+        template = 'row_detail_ver.jade';
     }
     l.view = view;
+
+    var fin = finish( req, res, template );
+    if ( /\.jade$/.test(template) ) {
+        fin = finish_jade( req, res, template );
+    }
 
     // get the data
     async.waterfall([
@@ -605,7 +611,7 @@ function show_rows(req, res) {
                 done(null);
             }
         }
-    ], finish( req, res, template )
+    ], fin
     );
 }
 

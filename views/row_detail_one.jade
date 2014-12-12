@@ -1,0 +1,18 @@
+extends row_detail_wrapper
+
+block data
+
+  - var i = 0 
+  while i < rows_show
+    p #{i+1}:
+    table.light
+      each data,key in values[i]
+
+        tr
+          th= key
+
+          if data==null
+            td.null null
+          else 
+            td.data= data
+    - i++

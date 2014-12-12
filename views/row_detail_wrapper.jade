@@ -1,0 +1,17 @@
+extends page
+
+block title
+  | Results from #{table} 
+
+block content
+
+  - var rows_total = values.length
+  - var rows_show  = Math.min(rows_total, limit)
+
+  block data
+
+  p Total rows: #{rows_total}
+    br
+    | Limit: #{limit}
+    br 
+    | Shown: #{rows_show}
