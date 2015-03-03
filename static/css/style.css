@@ -62,6 +62,10 @@ td.null {
     color: #999;
 }
 
+td.pk {
+    font-weight: bold;
+}
+
 #sqlname {
     min-width: 460px;
 }
