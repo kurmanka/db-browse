@@ -36,7 +36,7 @@ function prepare_locals (req, res, next) {
         req.body.comment = '';
     }
 
-    res.locals( {
+    res.locals = {
         req:           req,
         authenticate:  authenticate,
         databaseList:  config.db,
@@ -56,7 +56,7 @@ function prepare_locals (req, res, next) {
         sql_id:        req.params.sql_id,
         lastStringReq: '',
         breadcrumbs:   []
-    } );
+    };
     // prepare breadcrumbs}}{}
     breadcrumbs(req, res);
     next();
@@ -67,7 +67,7 @@ function prepare_locals (req, res, next) {
 // but use res.locals to store the template data
 function respond(res, template, data, callback) {
     // integrate data into res.locals
-    res.locals(data);
+    for (var p in data) { res.locals[p] = data[p]; }
     // a trick to make locals available to
     // the template
     var locals = {};
@@ -306,12 +306,12 @@ function prepare_table_details_mysql( res, data ){
         _data.lastStringReq = table_details.lastStringReq;
     }
 
-    res.locals(_data);
+    for (var p in _data) { res.locals[p] = _data[p]; }
 }
 
 
 function table_details(req, res, next) {
-
+    //console.log( 'table_details(): enter' );
     var db;
     var l = res.locals;
     var table_details = l.table_details = {};
@@ -323,12 +323,16 @@ function table_details(req, res, next) {
         },
 
     ],  function (err, data) {
+    
+            //console.log( 'table_details(): async epilogue( ' + err + ', ' + data + ' )' );
             // err is most likely being "Table xxx not found". at least, that's
             // what we assume here
             if (err) {
                 // call the next chained function, specifically, check for an addon feature
                 // of the same name
-                next();
+                console.log('table_details(): err: ' + err);
+                //console.log('calling next();');
+                return next();
  
             } else {
 
@@ -346,7 +350,7 @@ function table_details(req, res, next) {
                     _data.triggers   = data[4];
                     _data.foreignKey = data[5];
     
-                    res.locals(_data);
+                    for (var p in _data) { res.locals[p] = _data[p]; }
                 }
 
                 //res.send( "OK" );
