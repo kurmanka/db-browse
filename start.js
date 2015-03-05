@@ -3,7 +3,15 @@ var async = require('async');
 var mysql = require('mysql');
 var pg    = require('pg');
 var fs    = require('fs');
-var express = require('express');
+var express       = require('express')
+, morgan          = require('morgan')
+, serve_static    = require('serve-static')
+, express_session = require('express-session')
+, bodyParser      = require('body-parser')
+, cookieParser    = require('cookie-parser')
+;
+
+
 
 // some modules
 var requestHandlers = require('./requestHandlers.js');
@@ -26,8 +34,9 @@ if (0) {
     });
 }
 
-app.use(express.bodyParser());
-app.use(express.cookieParser());
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
+app.use(cookieParser());
 
 // very simple loging of the incomming requests to console
 // from http://expressjs.com/api.html#app.use
@@ -43,11 +52,11 @@ app.use(function(req, res, next){
 });
 
 // logging with response time
-app.use(express.logger('tiny'));
+app.use(morgan('tiny'));
 // sessions
-app.use(express.session(config.session_config));
+app.use(express_session(config.session_config));
 
-app.use( '/_/', express.static('./static') );
+app.use( '/_/', serve_static('./static') );
 
 // this is for Jade templates, they are in the views/ directory.
 // while the view/ directory holds Just templates (see 
@@ -444,7 +453,7 @@ function addon_feature (req,res,next) {
     if (req.app.addon_features[ feature ]) {
         //
         console.log( 'feature ' + feature );
-        req.app.addon_features[ feature ](req,res,next)
+        req.app.addon_features[ feature ](req,res);
 
     } else {
         next();
