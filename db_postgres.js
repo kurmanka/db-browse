@@ -40,7 +40,7 @@ function rowsCounter(connection, table, done) {
 
 exports.getTableDetails = 
 function getTableDetails(connection, table, doneReturn) {
-    async.parallel([
+    async.series([
         function(done){
             connection.query("SELECT column_name as Column, data_type as Type, " +
                             "character_maximum_length as mLength, " +
@@ -109,7 +109,7 @@ function showColumnRequest(connection, column, table, limit, doneReturn) {
 
 function resultReturn(err, result, done, doneReturn) {
     if (doneReturn && err) {
-        doneReturn(err);
+        return doneReturn(err);
     }
 
     if (result) {
