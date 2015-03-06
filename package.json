@@ -28,6 +28,7 @@
     "jade":      "*",
     "memcached": "*",
     "checksum":  "*",
-    "sqlite3":   "~2.1.7"
+    "sqlite3":   "~2.1.7",
+    "js-yaml":   "*"
   }
 }
