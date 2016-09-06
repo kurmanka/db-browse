@@ -8,27 +8,29 @@
     "start": "node start.js"
   },
   "repository": {
-    "type":"git", 
+    "type": "git",
     "url": "http://github.com/kurmanka/db-browse.git"
   },
-  "license": "BSD",
+  "license": "BSD-3-Clause",
   "devDependencies": {
+    "connect": "^3.4.1",
+    "connect-session-file": "^1.0.4"
   },
   "dependencies": {
-    "pg":              "^0.14.1",
-    "express":         ">=4.12.2",
+    "pg": "^0.14.1",
+    "express": ">=4.12.2",
     "express-session": "^1.10.3",
-    "morgan":          "^1.5.1",
-    "serve-static":    "^1.9.1",
-    "body-parser":     "^1.12.0",
-    "cookie-parser":   "^1.3.4",
-    "async":     ">=0.2.6",
-    "just":      "~0.1.8",
-    "mysql":     "~2.0.1",
-    "jade":      "*",
+    "morgan": "^1.5.1",
+    "serve-static": "^1.9.1",
+    "body-parser": "^1.12.0",
+    "cookie-parser": "^1.3.4",
+    "async": ">=0.2.6",
+    "just": "~0.1.8",
+    "mysql": "~2.0.1",
+    "pug": "2.0.0-alpha6",
     "memcached": "*",
-    "checksum":  "*",
-    "sqlite3":   "~2.1.7",
-    "js-yaml":   "*"
+    "checksum": "*",
+    "sqlite3": "*",
+    "js-yaml": "*"
   }
 }

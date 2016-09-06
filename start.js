@@ -63,6 +63,7 @@ app.use( '/_/', serve_static('./static') );
 // requestHandlers.js for details).
 app.set('views', __dirname + '/views');
 
+app.engine('pug', require('pug').__express)
 
 var database = {};
 

@@ -94,9 +94,9 @@ function finish( req, res, template, data, cb) {
     };
 }
 
-function finish_jade( req, res, template, data, cb) {
-    if (!template.match(/\.jade$/)) {
-        template = template + '.jade';
+function finish_pug( req, res, template, data, cb) {
+    if (!template.match(/\.pug$/)) {
+        template = template + '.pug';
     }
 
     cb = (cb) ? cb
@@ -172,7 +172,7 @@ function breadcrumbs(req, res, next) {
 //
 
 function login( req, res, errmsg ) {
-    res.render( 'login.jade', { req: req, errormsg: errmsg } );
+    res.render( 'login.pug', { req: req, errormsg: errmsg } );
 }
 
 //
@@ -181,7 +181,7 @@ function login( req, res, errmsg ) {
 
 function selectDatabase (req, res) {
     console.log( 'selectDatabase()' );
-    res.render( 'listDatabase.jade', { addons: res.app.addons } );
+    res.render( 'listDatabase.pug', { addons: res.app.addons } );
 }
 
 // 
@@ -269,7 +269,7 @@ function _list_tables(req, res, next) {
 
 _list_tables.cache_key = function(r) {return r.url;}
 _list_tables.template = 'tableList';
-_list_tables.jade = true;
+_list_tables.pug = true;
                            // in the order of appearance:
 _list_tables.produce_locals = [ 'path_sql', 'tableGr', 'tablesList', 'tables', 'groups', 'the_rest', ];
 
@@ -571,23 +571,23 @@ function show_rows(req, res) {
 
     // choose the template
     if ( view == 'one' ) {       // record by record, row by row
-        template = 'row_detail_one.jade';
+        template = 'row_detail_one.pug';
     }
     else if ( view == 'hor' ) {  // horizontal
-        template = 'row_detail_hor.jade';
+        template = 'row_detail_hor.pug';
     }
     else if ( view == 'ver' ) {  // vertical
-        template = 'row_detail_ver.jade';
+        template = 'row_detail_ver.pug';
     }
     else {                       // default, vertical
         view = 'ver';
-        template = 'row_detail_ver.jade';
+        template = 'row_detail_ver.pug';
     }
     l.view = view;
 
     var fin = finish( req, res, template );
-    if ( /\.jade$/.test(template) ) {
-        fin = finish_jade( req, res, template );
+    if ( /\.pug$/.test(template) ) {
+        fin = finish_pug( req, res, template );
     }
 
     // get the data
@@ -718,7 +718,7 @@ function sqlHistory (req, res) {
             done(null);
         },
     ], 
-        finish_jade( req, res, 'sqlHistory.jade', { limit: limit })
+        finish_pug( req, res, 'sqlHistory.pug', { limit: limit })
     );
 }
 
@@ -840,7 +840,7 @@ function cache_wrapper (req, res, handler) {
     var template = handler.template;
     if (typeof template == 'function') { template = template(req) }
 
-    var render = (handler.jade) ? finish_jade( req, res, template )
+    var render = (handler.pug) ? finish_pug( req, res, template )
                                 : finish( req, res, template );
 
     var the_locals = handler.produce_locals;
