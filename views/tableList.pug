@@ -27,7 +27,7 @@ block content
       ul
         each table in g.list
           if tables[table]
-            li: a(href="/${dbId}/${table}")= table
+            li: a(href="/" + dbId + "/" + table)= table
           else
             li= table
 
@@ -35,9 +35,9 @@ block content
       h3 The rest
       ul
         each table in the_rest
-          li: a(href="/${dbId}/${table}")= table
+          li: a(href="/" + dbId + "/" + table)= table
 
   else 
     ul
       each table in tablesList
-        li: a(href="/${dbId}/${table}")= table
+        li: a(href="/" + dbId + "/" + table)= table
