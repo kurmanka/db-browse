@@ -1,0 +1,31 @@
+//- Here we use a db_map (if defined) to reference the related tables in 
+//- the row detail results table, where appropriate. Also, we use our 
+//- knowledge of the primary key, if present, to give a style to the 
+//- table cell.
+
+- var map = req.dbconfig.db_map
+
+if !map || !map[table]
+    td.data= values[i][key]
+
+else 
+    - var tmap = map[table]
+    - var fk
+    - var pk = false
+
+    if tmap.pk && key == tmap.pk
+      - pk = true
+      //- no? then, maybe, a foreign key value?
+    else if tmap.fk
+      - fk = tmap.fk
+
+    //- output
+    if pk
+      td.data.pk= values[i][key]
+    else if fk && fk[key]
+      - var ref = fk[key]
+      td.data.fk
+        a(href="/"+dbId+"/"+ref[0]+"/"+ref[1]+"/"+values[i][key])= values[i][key]
+    else 
+      td.data= values[i][key]
+
