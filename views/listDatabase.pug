@@ -25,14 +25,14 @@ block content
             | , grouped
         td= d.type
         if d.type == 'postgres'
-          td: a(href="#{key}/.schema") full schema
+          td: a(href=key+"/.schema") full schema
         else 
           td
 
   h2 Add-ons
   ul
     each a,key in addons
-      li: a(href='/ao/#{key}/')= key
+      li: a(href='/ao/' + key + '/')= key
 
   #history
     a(href='/:sql') History of previous SQL
