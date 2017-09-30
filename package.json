@@ -17,7 +17,7 @@
     "connect-session-file": "^1.0.4"
   },
   "dependencies": {
-    "pg": "^0.14.1",
+    "pg": "~7.3.0",
     "express": ">=4.12.2",
     "express-session": "^1.10.3",
     "morgan": "^1.5.1",

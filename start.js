@@ -44,7 +44,7 @@ app.use(cookieParser());
 // (which can be handled right away)
 app.use(function(req, res, next){
     if(req.url == '/favicon.ico') {
-        res.send(404,'Not found');
+        res.status(404).send('Not found');
     } else {
         console.log('%s %s', req.method, req.url);
         next();
