@@ -137,7 +137,7 @@ if ( config.authenticate_userfile && !config.authenticate ) {
 
 
 // Login form's action attribute now points to /login
-// while the 'to' parameter commands, where to redirect to
+// while the 'to' parameter tells us, where to redirect to
 // in case of success.
 app.post('/login', function(req, res) { //get and check users data
 

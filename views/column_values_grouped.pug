@@ -1,0 +1,31 @@
+extends page
+
+block title
+
+  | #{table}.#{column} values: 
+
+block content
+
+  if values && values[0]
+
+    table.light
+      tr
+        each data,key in values[0]
+          th= key
+          
+      - var i = 0
+      
+      while i < values.length
+        tr 
+          each data,key in values[i]
+            td.data= data
+
+        - i++
+        
+    div#columnCounter
+      a #{values.length} rows
+      |  · 
+      a(href="?limit="+nextlimit) show more
+
+  else 
+    p No data

@@ -533,7 +533,7 @@ function _showColumn(req, res, next) {
             db.showColumnRequest(l.connection, l.column, l.table, limit, done);
         },
         function( columnData, done ) {
-            l.columnData = columnData;
+            l.values = columnData;
             done(null);
         }
     ], 
@@ -542,8 +542,9 @@ function _showColumn(req, res, next) {
 }
 
 _showColumn.cache_key      = function(req) { return req.url; }
-_showColumn.produce_locals = ['columnData','nextlimit'];
-_showColumn.template       = 'columnData';
+_showColumn.produce_locals = ['values','nextlimit'];
+_showColumn.template       = 'column_values_grouped';
+_showColumn.pug = true;
 
 function showColumn(req, res) {
     cache_wrapper(req, res, _showColumn);
