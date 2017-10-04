@@ -4,9 +4,19 @@
 //- table cell.
 
 - var map = req.dbconfig.db_map
+- var value = values[i][key]
+- var isVarTypeOf = function (_var, _type) {try { return _var.constructor === _type; } catch(ex) { return false; } }
+- var type = '';
+
+if (value !== null && typeof value === 'object')
+  if (isVarTypeOf(value, Date))
+    - type = 'date'
+  else
+    - value = JSON.stringify( value )
+    - type = 'json'
 
 if !map || !map[table]
-    td.data= values[i][key]
+    td(class="data " + type)= value
 
 else 
     - var tmap = map[table]
@@ -21,11 +31,10 @@ else
 
     //- output
     if pk
-      td.data.pk= values[i][key]
+      td(class="data pk " + type)= value
     else if fk && fk[key]
       - var ref = fk[key]
-      td.data.fk
-        a(href="/"+dbId+"/"+ref[0]+"/"+ref[1]+"/"+values[i][key])= values[i][key]
+      td(class="data fk " + type)
+        a(href="/"+dbId+"/"+ref[0]+"/"+ref[1]+"/"+value)= value
     else 
-      td.data= values[i][key]
-
+      td(class="data " + type)= value
