@@ -1,5 +1,11 @@
 var config = require("./config");
 
+const fs      = require('fs');
+
+// https://nodejs.org/docs/latest-v8.x/api/string_decoder.html
+const { StringDecoder } = require('string_decoder');
+const decoder = new StringDecoder('utf8');
+
 var Memcached = require('memcached');
 var memcached = ( config.cache ) ? new Memcached(config.cache_memcached)
                                  : null;
@@ -195,10 +201,12 @@ function _list_tables(req, res, next) {
 
     async.waterfall([
         function (done){
-            util.readFile(req.params.groups, done);
+            if (req.params.groups) fs.readFile(req.params.groups, done);
+            else done(null, new Buffer(0));
         },
 
-        function (tableGroups, done){
+        function (buffer, done){
+            var tableGroups = decoder.write(buffer);
             util.getArrayOfStrings(tableGroups, done);
         },
 
