@@ -11,6 +11,9 @@ var express       = require('express')
 , cookieParser    = require('cookie-parser')
 ;
 
+// https://nodejs.org/docs/latest-v8.x/api/string_decoder.html
+const { StringDecoder } = require('string_decoder');
+const decoder = new StringDecoder('utf8');
 
 
 // some modules
@@ -125,12 +128,17 @@ if ( config.authenticate_userfile && !config.authenticate ) {
 
         async.waterfall([
             function (done1){
-                util.readFile(config.authenticate_userfile, done1);
+                // https://nodejs.org/docs/latest-v8.x/api/fs.html#fs_fs_readfile_path_options_callback
+                fs.readFile(config.authenticate_userfile, done1);
+            },
+            function (buffer, done) {
+                done(null, decoder.write(buffer));
             },
             util.getArrayOfStrings, // (text,done)
 
         ],  function (err, arr) {
-            doneReturn( err, (arr.indexOf(search_string) != -1) );
+            if (err) {console.log (err); }
+            else doneReturn( err, (arr.indexOf(search_string) != -1) );
         });
     }
 }
