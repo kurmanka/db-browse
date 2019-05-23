@@ -202,7 +202,7 @@ function _list_tables(req, res, next) {
     async.waterfall([
         function (done){
             if (req.params.groups) fs.readFile(req.params.groups, done);
-            else done(null, new Buffer(0));
+            else done(null, Buffer.alloc(0));
         },
 
         function (buffer, done){
