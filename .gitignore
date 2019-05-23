@@ -3,3 +3,4 @@ node_modules/
 users.txt
 usersRequests.sqlite
 yarn.lock
+*table_groups.txt
