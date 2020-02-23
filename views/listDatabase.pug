@@ -34,6 +34,7 @@ block content
     each a,key in addons
       li: a(href='/ao/' + key + '/')= key
 
-  #history
-    a(href='/:sql') History of previous SQL
+  if config.allow_clear_sql
+    #history
+      a(href='/:sql') History of previous SQL
 
