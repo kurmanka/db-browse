@@ -97,6 +97,10 @@ app.post(/^\/(\w+):sql\/*(\d)*/,
     middleware, 
     function(req,res){ //select to sqlite db
 
+        if (!config.allow_clear_sql) {
+            return res.status('404').send('not found');
+        }
+
         if (req.body.sql) {
             if (req.body.run == 'Execute') {
                 requestHandlers.sqlRequest(req, res);

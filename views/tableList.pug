@@ -5,20 +5,21 @@ block title
 
 block content
   
-  div(style="float:right")#sql-form
+  if config.allow_clear_sql
+    div(style="float:right")#sql-form
 
-    form(method='post',action=path_sql)#sql_request
-      p A name for your sql query or command?
-        br
-        input(type='text',name='name')
+      form(method='post',action=path_sql)#sql_request
+        p A name for your sql query or command?
+          br
+          input(type='text',name='name')
 
-      p Type your sql here:
-        br
-        textarea(name='sql')
+        p Type your sql here:
+          br
+          textarea(name='sql')
 
-      button(type='submit') Execute it
+        button(type='submit') Execute it
 
-    div: a(href="/:sql") History of previous SQL
+      div: a(href="/:sql") History of previous SQL
 
 
   if groups

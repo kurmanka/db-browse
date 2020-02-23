@@ -5,15 +5,15 @@ block title
 
 block content
   if values.length
-    first = values[0]
     table.light
-      tr: each v,k in first
-        if k != 'id'
-          th= k
+      tr
+        each v,k in values[0]
+          if k != 'id'
+            th= k
 
       each row, i in values
         tr
-          each v,k in first
+          each v,k in values[0]
             if k != 'id'
               td.data
                 if k == 'sql'
