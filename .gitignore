@@ -4,3 +4,4 @@ users.txt
 usersRequests.sqlite
 yarn.lock
 *table_groups.txt
+*table_index.yml
