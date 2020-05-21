@@ -160,6 +160,7 @@ TABLE#statusT {
 
 .data {
     padding: 0px 15px 0px;
+    vertical-align: top;
 }
 
 .paddingText {
@@ -221,3 +222,6 @@ textarea[name='comment'] {
     margin: 0px 0px 20px 0px;
 }
 
+.json {
+    white-space: pre;
+}

@@ -12,7 +12,7 @@ if (value !== null && typeof value === 'object')
   if (isVarTypeOf(value, Date))
     - type = 'date'
   else
-    - value = JSON.stringify( value )
+    - value = JSON.stringify( value, null, 4 )
     - type = 'json'
 
 if !map || !map[table]
