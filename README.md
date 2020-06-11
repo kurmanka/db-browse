@@ -29,3 +29,11 @@ Add-ons
 -------
 
 Add-ons allow adding features, without rewriting the core app. It is an experiment.
+
+
+JSON support
+------------
+
+Currently, the JSON values in a database are output in an indented form, but with no syntax highlighting 
+or anything on top. Would be great to add JSON folding/unfolding support to that, e.g. with 
+https://github.com/pgrabovets/json-view or https://github.com/mohsen1/json-formatter-js
