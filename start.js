@@ -270,6 +270,10 @@ app.post('/:db_id/:table',
 
 app.get('/:db_id/:table/:column', middleware, requestHandlers.showColumn); //run method showColumn
 
+// /submittal/user_account/user_id/_ASC
+// /submittal/user_account/user_id/_DESC/hor/55
+app.get('/:db_id/:table/:column/_:direction/:view?/:limit?', middleware, requestHandlers.show_rows); 
+
 // fetch & show a single table row or a bunch of them
 //app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue); 
 app.get('/:db_id/:table/:column/:value/:view?/:limit?', middleware, requestHandlers.show_rows); 

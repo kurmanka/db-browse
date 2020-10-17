@@ -119,7 +119,7 @@ function resultReturn(err, result, done, doneReturn) {
     }
 }
 
-function showValueRequest(connection, table, where, doneReturn) {
+function showValueRequest(connection, table, where, order_limit_offset, doneReturn) {
     var condition = '';
     var values = [];
     var num = 1;
@@ -133,9 +133,22 @@ function showValueRequest(connection, table, where, doneReturn) {
         num++;
     }
 
-    console.log( "BUILD CONDITION: ", condition );
+    if (condition) console.log( "BUILD CONDITION:", condition );
 
-    connection.query("select * from " + escape(table) + " where " + condition, values,
+    var where = '', order_by = '', limit = '';
+    if( condition ) {
+        where = " where " + condition;
+    }
+
+    if (order_limit_offset) {
+        order_by = " order by " + escape(order_limit_offset.order_by) + " " + order_limit_offset.direction
+        if (order_limit_offset.limit > 0) { limit = " LIMIT " + order_limit_offset.limit; }
+        else { limit = " LIMIT 100 " }
+    }
+
+    console.log( "SQL:", "select * from " + escape(table) + where + order_by + limit)
+
+    connection.query("select * from " + escape(table) + where + order_by + limit, values,
                     function (err, result) {
                         doneReturn(err, result ? result.rows : null);
                     });

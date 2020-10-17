@@ -599,6 +599,17 @@ function show_rows(req, res) {
         fin = finish_pug( req, res, template );
     }
 
+    var order_limit_offset;
+    if ( req.params.direction ) {
+        order_limit_offset = {};
+        order_limit_offset.order_by = l.column;
+        if (req.params.direction == "ASC")  order_limit_offset.direction = 'ASC';
+        if (req.params.direction == "DESC") order_limit_offset.direction = 'DESC';
+        if (l.limit) {
+            order_limit_offset.limit = l.limit;
+        }
+    }
+
     // get the data
     async.waterfall([
         function (done){
@@ -606,8 +617,8 @@ function show_rows(req, res) {
             var where = {};
             // copy req.query content into where
             for( var k in req.query ) { where[k] = req.query[k]; }
-            where[l.column] = l.value;
-            db.showValueRequest(l.connection, l.table, where, done);
+            if (l.value) { where[l.column] = l.value; }
+            db.showValueRequest(l.connection, l.table, where, order_limit_offset, done);
         },
 
         function (results, done) {
