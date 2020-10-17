@@ -646,12 +646,17 @@ function row_detail_make_links( req, res, data ) {
     var l = res.locals;
     var view = l.view;
     var limit = l.limit;
-    
+
+    var value_or_direction = req.params['value'];
+    if (!req.params['value'] && req.params.direction) {
+        value_or_direction = "_" + req.params.direction;
+    }
+
     var base_link = "/" + req.params.db_id 
                   + "/" + req.params.table
                   + "/" + req.params.column
-                  + "/" + req.params.value;
-    
+                  + "/" + value_or_direction;
+
     if (data.length > limit) {
         if (data.length > limit * 2 ) { 
             links.more = base_link + "/" + view + "/" + limit * 2;
