@@ -11,6 +11,7 @@
                 <th>modifiers</th>
             <% }
         } %>
+        <th>sorted listing</th>
     </tr>
 
     <% var flag = 0; %>
@@ -21,6 +22,7 @@
     <tr>
         <% for (var key in attrList[0]) {
             var val = attr[key];
+            var column; 
             if (flag == 0) {
                 firstKey = key;
                 flag = 1;
@@ -28,8 +30,10 @@
             if (key != 'parse' && key != '_typeCast' && key != 'is_nullable'
                 && key != 'column_default' && key != 'mlength') {
                 if (firstKey == key) { %>
-                    <td class = 'data'><a href = <%=path%>/<%= val %>><%= val %></a></td>
-                <% } else {
+                    <td class = 'data'><a href = <%=path%>/<%= val %>><%= val %></a></td>    
+                    <% 
+                    column = val;
+                } else {
                     if (attr.mlength) { %>
                         <td class = 'data'><%= val %>(<%= attr.mlength %>)</td>
                     <% } else { %>
@@ -49,6 +53,11 @@
                 <td class = 'data'></td>
             <% }
         } %>
+        <td class='data'>
+            <a class="arrow" href="<%= path %>/<%= column %>/_ASC">⤴</a> 
+            ·  
+            <a class="arrow" href="<%= path %>/<%= column %>/_DESC">⤵</a>
+        </td>
     </tr>
     <% } %>
 

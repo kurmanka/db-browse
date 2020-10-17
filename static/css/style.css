@@ -225,3 +225,8 @@ textarea[name='comment'] {
 .json {
     white-space: pre;
 }
+
+a:link.arrow {
+    text-decoration: none;
+    font-weight: bold;
+} 
