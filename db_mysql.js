@@ -83,7 +83,7 @@ function showColumnRequest(connection, column, table, limit, doneReturn) {
                     });
 }
 
-function showValueRequest(connection, table, where, doneReturn) {
+function showValueRequest(connection, table, where, order_limit_offset, doneReturn) {
 
     // this is copy-paste-adapted from db_postgres.js
     var condition = '';
@@ -100,10 +100,22 @@ function showValueRequest(connection, table, where, doneReturn) {
         num++;
     }
 
-    console.log( "BUILD CONDITION: ", condition );
+    if (condition) console.log( "BUILD CONDITION: ", condition );
 
-    connection.query("select * from " + mysql.escapeId(table) +
-                    " where " + condition, values,
+    var where = '', order_by = '', limit = '';
+    if( condition ) {
+        where = " where " + condition;
+    }
+
+    if (order_limit_offset) {
+        order_by = " order by " + mysql.escapeId(order_limit_offset.order_by) + " " + order_limit_offset.direction
+        if (order_limit_offset.limit > 0) { limit = " LIMIT " + order_limit_offset.limit; }
+        else { limit = " LIMIT 100 " }
+    }
+
+    console.log( "SQL:", "select * from " + mysql.escapeId(table) + where + order_by + limit)
+
+    connection.query("select * from " + mysql.escapeId(table) + where + order_by + limit, values,
                     function(err, rows, fields) {
                         doneReturn(err, rows);
                     });
