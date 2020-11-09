@@ -5,3 +5,5 @@ usersRequests.sqlite
 yarn.lock
 *table_groups.txt
 *table_index.yml
+tableGroups
+package-lock.json
