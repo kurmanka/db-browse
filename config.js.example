@@ -6,6 +6,10 @@ exports.listen = {
 
 // databases to provide browsing for, postgres & mysql
 
+//var yaml = require('js-yaml'), fs = require('fs');
+// load from yaml
+//var base_db_map = yaml.safeLoad(fs.readFileSync("__table_index.yml"));
+
 exports.db = {
 
     base: {
