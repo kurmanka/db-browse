@@ -32,6 +32,6 @@
     "serve-static": "^1.13.2",
     "session-file-store": "^1.2.0",
     "sql-builder": "0.0.4-beta",
-    "sqlite3": "^4.0.2"
+    "sqlite3": "^4.2.0"
   }
 }
