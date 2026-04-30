@@ -1,6 +1,6 @@
 var url   = require('url');
 var async = require('async');
-var mysql = require('mysql');
+var mysql = require('mysql2');
 var pg    = require('pg');
 var fs    = require('fs');
 var express       = require('express')

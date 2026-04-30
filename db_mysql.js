@@ -1,5 +1,5 @@
 var async = require('async');
-var mysql = require('mysql');
+var mysql = require('mysql2');
 
 function showAllTable(connection, doneReturn) {
     async.waterfall([

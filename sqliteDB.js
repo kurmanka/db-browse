@@ -1,180 +1,117 @@
-//https://github.com/developmentseed/node-sqlite3/wiki/API
-var sqlite = require('sqlite3').verbose();
-var async = require('async');
+const Database = require('better-sqlite3');
 
-var connectStatus = {};
-var db;
+let db = null;
 
-function saveRequest(sql, dbId, reqName, user, comment, doneReturn) {
-    var created_at = getCurrentDate();;
-    var last_used = getCurrentDate();
-    var newId = 1;
-    var used_timeNew = 1;
-    var commentNew = comment;
-    var nameNew = reqName;
-
-    async.waterfall([
-        connectCheck,
-
-        function(done){
-            db.each("SELECT max(id) AS id FROM sql", function(err, row) {
-                if (row.id) {
-                    newId = parseInt(row.id) + 1;
-                }
-                done(err);
-            });
-        },
-
-        function(done){
-            db.each(
-                "SELECT max(used_times) as ut, id, comment, name, created_at "
-                + " FROM sql WHERE sql=?", sql,
-                function(err, row) {
-                    if (row && row.ut) {
-                        used_timeNew = parseInt(row.ut) + 1;
-                        created_at = row.created_at;
-                        newId = row.id;
-                        if (!commentNew) {
-                            commentNew = row.comment;
-                        } if (!nameNew) {
-                            nameNew = row.name;
-                        }
-                        db.run("delete FROM sql WHERE sql=?", sql);
-                    }
-                    done(err);
-                }
-            );
-        }
-    ], function (err) {
-        if (err) {
-            doneReturn(err);
-        }
-        var stmt = db.prepare("INSERT INTO sql VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        stmt.run(newId, sql, nameNew, commentNew, dbId, user, created_at, used_timeNew, last_used);
-        stmt.finalize();
-
-        doneReturn(null);
-    });
-}
-
-function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, type) {
-    var created_at;
-    var last_used;
-    var used_time;
-
-    async.waterfall([
-        connectCheck,
-
-        function(done){
-            db.each(
-                "SELECT max(used_times) as ut, id, comment, name, created_at, last_used "
-                +"FROM sql WHERE id=?", sqlId,
-                function(err, row) {
-                    if (err) {
-                        done(err);
-                    }
-                    if (row.id) {
-                        created_at = row.created_at;
-                        if (type == 'save') {
-                            used_time = row.ut;
-                            last_used = row.last_used;
-                        } else {
-                            used_time = parseInt(row.ut) + 1;
-                            last_used = getCurrentDate();
-                        }
-                        db.run("delete FROM sql WHERE id=?", sqlId );
-                    }
-                    done(null);
-                }
-            );
-        }
-    ], function (err) {
-        if (err) {
-            doneReturn(err);
-        }
-        var stmt = db.prepare("INSERT INTO sql VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        stmt.run(sqlId, sql, reqName, comment, dbId, user, created_at, used_time, last_used);
-        stmt.finalize();
-
-        doneReturn(null);
-    });
-}
-
-
-function connectCheck(done) {
-    if (!connectStatus.db) {
-        connectStatus.db = new sqlite.Database('usersRequests.sqlite');
-        db = connectStatus.db;
-        dbCheck(db, done);
-    } else {
-        done(null);
+function getDb() {
+    if (!db) {
+        db = new Database('usersRequests.sqlite');
+        db.exec(
+            'CREATE TABLE IF NOT EXISTS sql ('
+            + 'id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, '
+            + 'sql TEXT NOT NULL, '
+            + 'name VARCHAR, '
+            + 'comment TEXT, '
+            + 'dbid VARCHAR NOT NULL, '
+            + 'created_by VARCHAR NOT NULL, '
+            + 'created_at DATETIME NOT NULL, '
+            + 'used_times INTEGER NOT NULL DEFAULT 0, '
+            + 'last_used DATETIME NOT NULL)'
+        );
     }
-}
-
-function dbCheck(db, done) {
-    db.serialize(function() {
-        db.run("CREATE TABLE IF NOT EXISTS sql "
-                +"(id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
-                +" sql TEXT NOT NULL, "
-                +" name VARCHAR, "
-                +" comment TEXT, "
-                +" dbid VARCHAR NOT NULL,"
-                +" created_by VARCHAR NOT NULL,"
-                +" created_at DATETIME NOT NULL,"
-                +" used_times INTEGER NOT NULL DEFAULT 0,"
-                +" last_used DATETIME NOT NULL )");
-        done(null);
-    });
+    return db;
 }
 
 function getCurrentDate() {
     var date = new Date();
+    var month = String(date.getMonth() + 1).padStart(2, '0');
+    return date.getFullYear() + '-' + month + '-' + date.getDate()
+         + ' ' + date.getHours() + ':' + date.getMinutes();
+}
 
-    var year = date.getYear() + 1900;
-    var month = date.getMonth() +1 ;
+function saveRequest(sql, dbId, reqName, user, comment, doneReturn) {
+    try {
+        var db       = getDb();
+        var now      = getCurrentDate();
+        var existing = db.prepare(
+            'SELECT max(used_times) as ut, id, comment, name, created_at FROM sql WHERE sql=?'
+        ).get(sql);
 
-    if (month < 10) {
-        month = "0" + month;
+        if (existing && existing.ut) {
+            db.prepare('DELETE FROM sql WHERE sql=?').run(sql);
+            db.prepare('INSERT INTO sql VALUES (?,?,?,?,?,?,?,?,?)').run(
+                existing.id, sql,
+                reqName  || existing.name,
+                comment  || existing.comment,
+                dbId, user, existing.created_at,
+                existing.ut + 1, now
+            );
+        } else {
+            var maxRow = db.prepare('SELECT max(id) AS id FROM sql').get();
+            var newId  = (maxRow && maxRow.id) ? maxRow.id + 1 : 1;
+            db.prepare('INSERT INTO sql VALUES (?,?,?,?,?,?,?,?,?)').run(
+                newId, sql, reqName, comment, dbId, user, now, 1, now
+            );
+        }
+        doneReturn(null);
+    } catch (err) {
+        doneReturn(err);
     }
+}
 
-    var day = date.getDate();
-    var hour = date.getHours();
-    var min = date.getMinutes();
+function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, type) {
+    try {
+        var db  = getDb();
+        var now = getCurrentDate();
+        var row = db.prepare(
+            'SELECT max(used_times) as ut, id, comment, name, created_at, last_used FROM sql WHERE id=?'
+        ).get(sqlId);
 
-    return year + '-' + month + '-' + day + " " + hour + ":" + min;
-    //return year + '-' + month + '-' + day;
+        if (row && row.id) {
+            var used_time = (type === 'save') ? row.ut           : (row.ut || 0) + 1;
+            var last_used = (type === 'save') ? row.last_used    : now;
+            db.prepare('DELETE FROM sql WHERE id=?').run(sqlId);
+            db.prepare('INSERT INTO sql VALUES (?,?,?,?,?,?,?,?,?)').run(
+                sqlId, sql, reqName, comment, dbId, user, row.created_at, used_time, last_used
+            );
+        }
+        doneReturn(null);
+    } catch (err) {
+        doneReturn(err);
+    }
 }
 
 function history(doneReturn) {
-    async.waterfall([
-        connectCheck,
-        function(done){
-            db.all("SELECT id, name, substr(sql, 1, 120) as sql, comment, dbid, " +
-                  "created_by, last_used FROM sql order by used_times desc", doneReturn);
-        }
-    ]);
+    try {
+        var rows = getDb().prepare(
+            'SELECT id, name, substr(sql,1,120) as sql, comment, dbid, created_by, last_used '
+            + 'FROM sql ORDER BY used_times DESC'
+        ).all();
+        doneReturn(null, rows);
+    } catch (err) {
+        doneReturn(err);
+    }
 }
 
 function details(doneReturn, sqlId) {
-    async.waterfall([
-        connectCheck,
-        function(done){
-            db.each("SELECT * FROM sql where id=?", sqlId, doneReturn);
-        }
-    ]);
+    try {
+        var row = getDb().prepare('SELECT * FROM sql WHERE id=?').get(sqlId);
+        doneReturn(null, row);
+    } catch (err) {
+        doneReturn(err);
+    }
 }
 
 function remove(sqlId, doneReturn) {
-    async.waterfall([
-        connectCheck,
-        function(done){
-            db.run("delete FROM sql WHERE id=?", sqlId, doneReturn);
-        }
-    ]);
+    try {
+        getDb().prepare('DELETE FROM sql WHERE id=?').run(sqlId);
+        doneReturn(null);
+    } catch (err) {
+        doneReturn(err);
+    }
 }
 
-exports.saveRequest = saveRequest;
-exports.history = history;
-exports.details = details;
+exports.saveRequest   = saveRequest;
 exports.changeRequest = changeRequest;
-exports.remove = remove;
+exports.history       = history;
+exports.details       = details;
+exports.remove        = remove;
