@@ -85,7 +85,7 @@ app.get('/', prepare_req_params,
              requestHandlers.selectDatabase); //run method selectDatabase
 
 
-app.post(/^\/(\w+):sql\/*(\d)*/, 
+app.post(/^\/([\w\d]+):sql\/*(\d*)/, 
     function (req,res,n) {
         // the following is not needed, 
         // because prepare_req_params() does it for us
@@ -98,8 +98,10 @@ app.post(/^\/(\w+):sql\/*(\d)*/,
     function(req,res){ //select to sqlite db
 
         if (!config.allow_clear_sql) {
-            return res.status('404').send('not found');
+            return res.status(404).send('not found');
         }
+
+        console.dir(req.body);
 
         if (req.body.sql) {
             if (req.body.run == 'Execute') {
