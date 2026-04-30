@@ -1,10 +1,11 @@
 const Database = require('better-sqlite3');
 
+const DB_PATH = process.env.SQLITE_PATH || 'usersRequests.sqlite';
 let db = null;
 
 function getDb() {
     if (!db) {
-        db = new Database('usersRequests.sqlite');
+        db = new Database(DB_PATH);
         db.exec(
             'CREATE TABLE IF NOT EXISTS sql ('
             + 'id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, '
@@ -83,7 +84,7 @@ function changeRequest(sql, dbId, reqName, user, comment, doneReturn, sqlId, typ
 function history(doneReturn) {
     try {
         var rows = getDb().prepare(
-            'SELECT id, name, substr(sql,1,120) as sql, comment, dbid, created_by, last_used '
+            'SELECT id, name, substr(sql,1,120) as sql, comment, dbid, created_by, last_used, used_times '
             + 'FROM sql ORDER BY used_times DESC'
         ).all();
         doneReturn(null, rows);

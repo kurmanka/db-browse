@@ -4,7 +4,9 @@
   "description": "Browse a database, with its tables and rows",
   "main": "start.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node test/run.js",
+    "test:sqlite": "node test/sqlite.js",
+    "test:routes": "node test/routes.js",
     "start": "node start.js"
   },
   "repository": {
