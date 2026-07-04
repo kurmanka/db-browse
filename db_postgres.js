@@ -45,7 +45,9 @@ function getTableDetails(connection, table, doneReturn) {
             connection.query("SELECT column_name as Column, data_type as Type, " +
                             "character_maximum_length as mLength, " +
                             "column_default, is_nullable " +
-                            "FROM information_schema.columns WHERE table_name=$1", [table],
+                            "FROM information_schema.columns WHERE table_name=$1" + 
+                            " ORDER BY ordinal_position"
+                            , [table],
                             function(err, result) {
                                 resultReturn(err, result, done, doneReturn);
                             });
