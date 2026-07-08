@@ -86,20 +86,22 @@ function showColumnRequest(connection, column, table, limit, doneReturn) {
 function showValueRequest(connection, table, where, order_limit_offset, doneReturn) {
 
     // this is copy-paste-adapted from db_postgres.js
-    var condition = '';
+    var conditions = [];
     var values = [];
     var num = 1;
     for( var col in where ) {
         var val = where[col];
-        if (num > 1) {
-            condition += " AND ";
-        }
+        if (val === 'NOTNULL')
+            conditions.push(escape(col) + " IS NOT NULL");
+        else {
         // mysql-specific escape and the placeholder
-        condition += mysql.escapeId(col) + "=?";
-        values.push(val);
-        num++;
+            conditions.push(mysql.escapeId(col) + "=?");
+            values.push(val);
+            num++;
+        }
     }
 
+    const condition = conditions.join(" AND ");
     if (condition) console.log( "BUILD CONDITION: ", condition );
 
     var where = '', order_by = '', limit = '';

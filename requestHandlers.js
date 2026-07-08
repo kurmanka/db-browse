@@ -618,6 +618,10 @@ function show_rows(req, res) {
             // copy req.query content into where
             for( var k in req.query ) { where[k] = req.query[k]; }
             if (l.value) { where[l.column] = l.value; }
+            // if order_limit_offset.order_by, require that col to have a value
+            if (order_limit_offset && order_limit_offset.order_by) {
+                where[order_limit_offset.order_by] = 'NOTNULL';
+            }
             db.showValueRequest(l.connection, l.table, where, order_limit_offset, done);
         },
 
