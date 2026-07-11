@@ -4,7 +4,10 @@ block title
   | Tables in #{dbId}
 
 block content
-  
+
+  if config.db[dbId].comment
+    p.comment= config.db[dbId].comment
+
   if config.allow_clear_sql
     div(style="float:right")#sql-form
 

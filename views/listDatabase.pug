@@ -12,11 +12,12 @@ block content
       th details
       th type
       th schema
+      th comment
 
     each d,key in databaseList
       tr
         td= key
-        td 
+        td
           a(href=key)= d.database
           |  at #{ d.host }
         td
@@ -26,8 +27,9 @@ block content
         td= d.type
         if d.type == 'postgres'
           td: a(href=key+"/.schema") full schema
-        else 
+        else
           td
+        td= d.comment
 
   h2 Add-ons
   ul

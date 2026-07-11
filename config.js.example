@@ -19,6 +19,10 @@ exports.db = {
         password: 'dbbpass',
         database: 'base',
 
+    // optional free-text note, shown on the database list page
+    // and the table list page, handy for telling databases apart
+        //comment: 'staging replica, owned by team X',
+
     // database map enables some neat navigation features
     // for jumping between related records; see views/inc/row_detail_value.jade 
     // for implementation of that.
