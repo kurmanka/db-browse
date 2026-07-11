@@ -39,9 +39,16 @@ exports.db = {
       host:     'localhost',
       user:     'dbb',
       password: 'bulfar542',
-      database: 'anidb',    
+      database: 'anidb',
     },
-    
+
+    localnotes: {
+      type:     'sqlite',
+      // for sqlite, 'database' is the path to the .sqlite file;
+      // host/user/password are unused
+      database: '/path/to/notes.sqlite',
+    },
+
 };
 
 

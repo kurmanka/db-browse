@@ -23,13 +23,13 @@ Every DB route runs this middleware chain:
 prepare_req_params → loadUser → prepare_dbconnection → prepare_locals → [handler]
 ```
 
-`prepare_dbconnection` resolves the DB connection from the `database` object (module-level cache). Pings with `SELECT NOW()` on reuse; reconnects on failure. Connection stored at `req.params.connect` and `req.dbconnection`.
+`prepare_dbconnection` resolves the DB connection from the `database` object (module-level cache). Pings with `SELECT NOW()` on reuse (`SELECT 1` for sqlite); reconnects on failure. Connection stored at `req.params.connect` and `req.dbconnection`.
 
 `prepare_locals` populates `res.locals` with everything templates need: `connection`, `dbType`, `table`, `column`, `value`, `dbId`, `sql`, `user`, breadcrumbs, etc.
 
 ### DB abstraction
 
-`db_mysql.js` and `db_postgres.js` expose the same interface:
+`db_mysql.js`, `db_postgres.js`, and `db_sqlite.js` expose the same interface:
 
 - `showAllTable(connection, done)`
 - `getTableDetails(connection, table, done)`
@@ -38,7 +38,9 @@ prepare_req_params → loadUser → prepare_dbconnection → prepare_locals → 
 - `rowsCounter(connection, table, done)`
 - `getSQL(connection, sql, done)`
 
-`getDbType(dbType)` in `requestHandlers.js` selects the right module. MySQL uses `mysql.escapeId()` for identifiers; postgres uses a local `escape()` regex — not a full escaper.
+`getDbType(dbType)` in `requestHandlers.js` selects the right module. MySQL uses `mysql.escapeId()` for identifiers; postgres uses a local `escape()` regex — not a full escaper; sqlite uses a local `escapeId()` that double-quotes identifiers.
+
+`db_sqlite.js` also exports `createConnection(cc)`, used by `start.js`'s `db_connect()` to wrap a `better-sqlite3` `Database` (sync API) behind the same `connect(done)` / `query(sql, [params], done)` shape `mysql2`/`pg` use — this is unrelated to `sqliteDB.js`, which is the app's own SQL-history store.
 
 ### Two template engines (legacy situation)
 

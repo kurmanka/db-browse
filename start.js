@@ -2,6 +2,7 @@ var url   = require('url');
 var async = require('async');
 var mysql = require('mysql2');
 var pg    = require('pg');
+var db_sqlite = require('./db_sqlite.js');
 var fs    = require('fs');
 var express       = require('express')
 , morgan          = require('morgan')
@@ -332,7 +333,8 @@ function prepare_dbconnection( req, res, next ) {
 
 
     if (database[dbId]) {
-        database[dbId].query("SELECT NOW()", function(err, rows, fields) {
+        var pingSql = (req.dbconfig.type == 'sqlite') ? 'SELECT 1' : 'SELECT NOW()';
+        database[dbId].query(pingSql, function(err, rows, fields) {
             if (err) {
                 // reconnect
                 database[dbId] = false;
@@ -366,6 +368,8 @@ function db_connect( req, dbId, done ) {
         database[dbId] = mysql.createConnection(cc);
     } else if (c.type == 'postgres') {
         database[dbId] = new pg.Client(cc);
+    } else if (c.type == 'sqlite') {
+        database[dbId] = db_sqlite.createConnection(cc);
     } else {
         // unsupported db type
         // XXX configuration error

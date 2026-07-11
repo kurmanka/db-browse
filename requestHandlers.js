@@ -17,6 +17,7 @@ var just      = new JUST({ root: './view', useCache: just_usecache, ext: '.html'
 
 var mysql    = require('./db_mysql.js');
 var postgres = require('./db_postgres.js');
+var db_sqlite = require('./db_sqlite.js');
 var sqlite   = require('./sqliteDB.js');
 var util     = require('./util.js');
 
@@ -351,13 +352,19 @@ function table_details(req, res, next) {
                 }
     
                 if (l.dbType == 'postgres') {
-                    
+
                     var _data = {attrList: data[0], indexesArr: data[1], statusArr: data[2]};
-    
+
                     _data.referenced = data[3];
                     _data.triggers   = data[4];
                     _data.foreignKey = data[5];
-    
+
+                    for (var p in _data) { res.locals[p] = _data[p]; }
+                }
+
+                if (l.dbType == 'sqlite') {
+                    var _data = {attrList: data[0], indexesArr: [], statusArr: data[1]};
+
                     for (var p in _data) { res.locals[p] = _data[p]; }
                 }
 
@@ -692,6 +699,8 @@ function getDbType (dbType) {
 
     if (dbType == 'postgres') {
         db = postgres;
+    } else if (dbType == 'sqlite') {
+        db = db_sqlite;
     }
 
     return db;
