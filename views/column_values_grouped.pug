@@ -18,7 +18,9 @@ block content
       while i < values.length
         tr 
           each data,key in values[i]
-            td.data= data
+            - var url = encodeURIComponent(key) + '/' + encodeURIComponent(data)
+            td.data 
+              a(href=url class="subtle")= data
 
         - i++
         
