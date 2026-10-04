@@ -7,13 +7,24 @@
 'use strict';
 var crypto     = require('crypto');
 var bodyParser = require('body-parser');
-var McpServer  = require('@modelcontextprotocol/sdk/server/mcp.js').McpServer;
-var StreamableHTTPServerTransport =
-        require('@modelcontextprotocol/sdk/server/streamableHttp.js').StreamableHTTPServerTransport;
 
 var pkg = require('./package.json');
-var z      = require('zod').z;
 var mcp_db = require('./mcp_db.js');
+
+// The SDK (and @hono/node-server under it) needs a newer Node than the rest of
+// the app, so it is loaded only when MCP is enabled: mount() with a token.
+var sdk = null;
+function loadSdk() {
+    if (!sdk) {
+        sdk = {
+            McpServer: require('@modelcontextprotocol/sdk/server/mcp.js').McpServer,
+            StreamableHTTPServerTransport:
+                require('@modelcontextprotocol/sdk/server/streamableHttp.js').StreamableHTTPServerTransport,
+            z: require('zod').z
+        };
+    }
+    return sdk;
+}
 
 var db_modules = {
     mysql   : require('./db_mysql.js'),
@@ -113,7 +124,8 @@ function capRows(rows, max) {
 
 
 function buildServer(config) {
-    var server = new McpServer({ name: 'db-browse', version: pkg.version });
+    var z = loadSdk().z;
+    var server = new sdk.McpServer({ name: 'db-browse', version: pkg.version });
     var maxRows = (config.mcp && config.mcp.max_rows) || DEFAULT_MAX_ROWS;
     var db = z.string().describe('database id, from list_databases');
 
@@ -212,14 +224,16 @@ function mount(app, config) {
         return false;
     }
 
+    loadSdk();                        // now, so a problem shows at startup
     var auth = bearerAuth(config.mcp.token);
 
     app.post('/mcp', auth, bodyParser.json(), async function (req, res) {
         var server = buildServer(config);
-        var transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+        var transport = new sdk.StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         res.on('close', function () {
-            transport.close();
-            server.close();
+            // both return promises; an unhandled rejection would end the process
+            transport.close().catch(function () {});
+            server.close().catch(function () {});
         });
         try {
             await server.connect(transport);

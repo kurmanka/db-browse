@@ -643,6 +643,26 @@ async function endpointTests() {
         app.close();
     }
 
+    await ok('the MCP SDK and zod are loaded only once MCP is enabled', () => {
+        // in a fresh process: this one has loaded the SDK client already
+        const script = function () {
+            const loaded = () => Object.keys(require.cache)
+                .filter((k) => /[\\/]node_modules[\\/](@modelcontextprotocol|zod|@hono|hono)[\\/]/.test(k)).length;
+            const mcp = require('./mcp.js');
+            const app = require('express')();
+            mcp.mount(app, { db: {} });
+            mcp.mount(app, { db: {}, mcp: {} });
+            const off = loaded();
+            mcp.mount(app, { db: {}, mcp: { token: 't' } });
+            console.log(JSON.stringify([off, loaded()]));
+        };
+        const out = require('child_process').execFileSync(process.execPath,
+            ['-e', '(' + script.toString() + ')()'], { cwd: path.join(__dirname, '..') });
+        const [off, on] = JSON.parse(out.toString());
+        assert.strictEqual(off, 0, off + ' SDK/zod modules loaded without a token');
+        assert.ok(on > 0, 'not loaded after mounting with a token');
+    });
+
     await ok('no token configured → nothing mounted, /mcp is a 404', async () => {
         const bare = await startApp({ db: {}, mcp: {} });
         try {
