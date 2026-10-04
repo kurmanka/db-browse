@@ -36,13 +36,23 @@ structured or raw, is covered:
 
 | Driver | Enforcement |
 |---|---|
-| SQLite | Open with `readonly: true` (OS-level flag; SQL cannot undo it). |
+| SQLite | Open with `readonly: true`. That alone is not enough (such a handle can still run `VACUUM INTO '<file>'`, create temp tables, and `ATTACH` any SQLite file the process can read), so on a read-only connection `db_sqlite.js` also: refuses every statement for which SQLite's own `sqlite3_stmt_readonly()` (better-sqlite3 `stmt.readonly`) is false — `VACUUM INTO`, `CREATE TEMP ...`, `PRAGMA journal_mode=...`; and after every statement, failed or not, detaches every schema other than `main`/`temp`, so an `ATTACH` (always its own call: better-sqlite3 refuses several statements in one string) is gone before the next call. If detaching fails the handle is closed and reopened on the next call. The web UI never sets `readonly` and is unaffected. |
 | Postgres | Each call: `BEGIN READ ONLY` → `SET LOCAL statement_timeout` → query → `ROLLBACK`. The caller's statement is sent via the extended protocol (`queryMode: 'extended'`), which rejects multi-command strings (closes `COMMIT; BEGIN READ WRITE; ...`). The `rows` query option must not be used for this: pg 8.20 sends no Sync after a failed statement when it is set, and the connection hangs. |
-| MySQL | Each call: `SET SESSION max_execution_time` → `START TRANSACTION READ ONLY` → query → `ROLLBACK`. The timeout is a session variable that survives `ROLLBACK` and that the agent's own SQL could switch off, so it is applied on every call; a failure to set it logs a warning once per connection (MariaDB calls the variable `max_statement_time`, so there the timeout is not applied). mysql2 runs a single statement per call (`multipleStatements` off). |
+| MySQL | Each call: `SET SESSION max_execution_time` → `SET SESSION TRANSACTION READ ONLY` → `START TRANSACTION READ ONLY` → query → `ROLLBACK`. The timeout is a session variable that survives `ROLLBACK` and that the agent's own SQL could switch off, so it is applied on every call; a failure to set it logs a warning once per connection (MariaDB calls the variable `max_statement_time`, so there the timeout is not applied). The session-level `READ ONLY` is for DDL (`DROP`, `TRUNCATE`, `CREATE`, `ALTER`, `RENAME`, `GRANT`, `CREATE USER`, `LOCK TABLES`): MySQL implicitly commits the open transaction before such a statement, so the read-only transaction probably does not cover it, and `ROLLBACK` cannot undo DDL; the session default should. It is set again on every call, and a failure to set it fails the call. **Unverified: none of this has been run against a real MySQL server.** mysql2 runs a single statement per call (`multipleStatements` off). |
 
 Session-level settings alone (`default_transaction_read_only`,
 `SET SESSION TRANSACTION READ ONLY`) are **not** relied on: the agent's own SQL
-can switch them off.
+can switch them off. (MySQL sets the session one again before every call, in
+addition to the transaction.)
+
+**Watchdog.** The per-connection queue is strictly serial, so a statement that
+never returns would stall every later call to that database. `wrap(runner,
+close, timeoutMs)` fails a call whose statement has not answered within
+`timeout_ms` plus a 5 s grace (`STUCK_GRACE_MS`), closes the connection hard
+(pg: destroys the socket; mysql2: `destroy()` and the socket), drops it from the
+cache so the next call opens a new one, lets the queue move on, and ignores the
+dead statement's late answer. SQLite is synchronous and cannot get stuck this
+way (it has no timeout either; see Known limitations).
 
 `callDb` hands each tool call a *view* of the connection; an exception thrown inside a `db_*.js` callback (e.g. `rowsCounter` on a missing table in the Postgres/MySQL modules) rejects the call instead of escaping into the driver and crashing the process.
 
@@ -55,7 +65,9 @@ queries at once).
 **Optional hardening.** If a database entry sets `readonly_user` /
 `readonly_password`, the MCP connection uses those credentials instead of
 `user` / `password`. A DB role with only `SELECT` grants then backs up the
-session-level protection. Off by default; recommended in the README.
+session-level protection. Off by default; strongly recommended in the README
+(without it, an agent's `pg_terminate_backend()` / MySQL `KILL` can also end
+the web UI's connections, which use the same account).
 
 **To verify, not assume:** that Postgres rejects `SET TRANSACTION READ WRITE`
 inside an already read-only transaction. Covered by a test (below) that must
@@ -116,7 +128,8 @@ optionally schema-qualified (`/^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]
 Quoted or mixed-case Postgres names are rejected by the structured tools, even
 though the web UI accepts them (its `escape()` leaves `"` alone); with
 `allow_clear_sql` on, `query` can still be used for such tables. `list_tables`
-shows only the `public` schema, as the existing module does. SQLite and MySQL quote properly.
+shows only the `public` schema, as the existing module does. SQLite and MySQL quote properly
+(`escapeId` in `db_sqlite.js`, `mysql.escapeId` in `db_mysql.js`).
 The database id is validated the same way as in `mcp_db.js`: `dbEntry(config, id)`
 accepts only ids `config.db` defines itself.
 
@@ -135,7 +148,10 @@ exports.mcp = { token: 'long random string' };   // enables /mcp
 
 ### Dependencies
 
-`@modelcontextprotocol/sdk` and its peer `zod`.
+`@modelcontextprotocol/sdk` and its peer `zod`. Both are loaded only in
+`mount()` once a token is configured: the SDK's streamable-HTTP server depends
+on `@hono/node-server`, which declares Node >= 20, and the rest of the app must
+keep starting on older Node versions with MCP off.
 
 ## Testing
 
@@ -151,7 +167,12 @@ SQLite, always run:
 - `list_tables`, `describe_table`, `count_rows`, `column_values`, `browse_rows`
   return expected data.
 - `query` runs a `SELECT`; `INSERT`, `UPDATE`, `DROP TABLE`, and `ATTACH`-based
-  writes are rejected and the file is unchanged afterwards.
+  writes are rejected and the file is unchanged afterwards. `VACUUM INTO` is
+  rejected and writes no file; `CREATE TEMP TABLE` / `VIEW` are rejected; an
+  `ATTACH`ed database is gone in the next call.
+- The watchdog (fake runners, a fake mysql2 connection, and opt-in against a
+  real Postgres), the MySQL driver's statement sequence (fake mysql2), MySQL
+  `NOTNULL` where-key quoting, and that the SDK is not loaded without a token.
 - Result truncation sets `truncated: true`.
 - `query` absent from the tool list when `allow_clear_sql` is false.
 - A failing query returns `isError: true` and the server keeps serving.
@@ -176,13 +197,28 @@ notice otherwise):
 - **Static shared token**, no per-agent identity or revocation beyond changing
   the config and restarting.
 - **The statement timeout is best effort.** Postgres applies it with
-  `SET LOCAL` per call and MySQL re-applies it per call, so an agent cannot
-  disable it for later calls, but its own statement can change the setting for
-  itself. It does not apply to SQLite, and MariaDB is not supported for it.
+  `SET LOCAL` per call; the timer is armed when the statement starts, so the
+  statement cannot switch it off for itself. MySQL re-applies
+  `max_execution_time` per call, but it limits only `SELECT` statements, a
+  `/*+ MAX_EXECUTION_TIME(0) */` hint overrides it for one statement, and it does
+  not cover non-SELECT statements such as `DO SLEEP(...)`. It does not apply to
+  SQLite, and MariaDB is not supported for it. The watchdog (see `mcp_db.js`)
+  drops a connection whose statement has not returned within the timeout plus a
+  few seconds, so such a statement cannot wedge MCP for that database for good.
   Superusers / FILE-privilege accounts can still write files through
   `COPY ... TO PROGRAM` / `INTO OUTFILE` (README tells operators to use a plain
   role).
-- **MySQL is untested against a real server.** Run `DBB_TEST_MYSQL_URL=mysql://user:pass@host:port/scratchdb node test/mcp.js`
+- **MySQL session state persists across agent calls.** All MCP calls to a
+  database share one cached connection. In MySQL, `SET SESSION ...`
+  (`sql_select_limit`, `SET NAMES`, `time_zone`, `sql_mode`), user variables,
+  `CREATE TEMPORARY TABLE` (allowed in a read-only transaction; a temporary
+  table can shadow a real one) and `GET_LOCK()` are not undone by `ROLLBACK`, so
+  one agent call can affect every later MCP call to that database. Postgres
+  `SET` is transactional and undone, but a session-level `pg_advisory_lock()`
+  also survives `ROLLBACK`. Not addressed; a separate `readonly_user` role
+  limits the damage.
+- **MySQL is untested against a real server**, including the read-only
+  protection against DDL. Run `DBB_TEST_MYSQL_URL=mysql://user:pass@host:port/scratchdb node test/mcp.js`
   against a scratch database before relying on it.
 - **Postgres names are restricted** to plain, optionally schema-qualified
   identifiers in the structured tools (see "Identifier handling"), and

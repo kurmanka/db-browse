@@ -90,6 +90,7 @@ exports.addons = {
 
 // MCP interface for agents: read-only database access at POST /mcp.
 // Off unless a token is set. Agents authenticate with "Authorization: Bearer <token>".
+// Enabling it needs Node 20 or newer (the rest of the app does not).
 // Use a long random string, and TLS (a reverse proxy) if agents are not on localhost.
 /*
 exports.mcp = {
@@ -102,5 +103,6 @@ exports.mcp = {
 */
 
 // For MCP, a database entry above can also carry credentials of a role that has
-// only SELECT grants (and is not a superuser / has no FILE privilege):
+// only SELECT grants (and is not a superuser / has no FILE privilege); strongly
+// recommended:
 //   readonly_user: 'dbb_ro', readonly_password: '...',
