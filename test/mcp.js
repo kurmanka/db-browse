@@ -506,6 +506,43 @@ async function toolTests() {
         app.close();
     }
 
+    await ok('postgres identifiers: hostile table / column / order_by / where keys are refused before connecting', async () => {
+        const cfg = Object.assign({}, sqliteConfig, { db: Object.assign({}, sqliteConfig.db, {
+            pgfake: { type: 'postgres', host: 'nowhere.invalid', user: 'u', password: 'p', database: 'd' } }) });
+        const pgapp = await startApp(cfg);
+        const c = await connect(pgapp.port, 'secret-token');
+        const text = (r) => r.content[0].text;
+        const refused = async (tool, args) => {
+            const r = await call(c, tool, Object.assign({ db: 'pgfake' }, args));
+            assert.strictEqual(r.isError, true);
+            assert.match(text(r), /Invalid identifier/, tool + ' ' + JSON.stringify(args));
+        };
+        const accepted = async (tool, args) => {
+            const r = await call(c, tool, Object.assign({ db: 'pgfake' }, args));
+            assert.strictEqual(r.isError, true);      // nowhere.invalid does not resolve
+            assert.doesNotMatch(text(r), /Invalid identifier/, tool + ' ' + JSON.stringify(args));
+        };
+        try {
+            await refused('browse_rows', { table: '(select 1) t', order_by: 'id' });
+            await refused('browse_rows', { table: 'x; select 1', order_by: 'id' });
+            await refused('browse_rows', { table: T, order_by: 'id desc, (select 1)' });
+            await refused('browse_rows', { table: T, order_by: 'id', where: { 'a) or (1=1': 'x' } });
+            await refused('describe_table', { table: "t'::regclass; --" });
+            await refused('count_rows', { table: "t'::regclass; --" });
+            await refused('column_values', { table: T, column: '1) from (select 1) x --' });
+            await refused('column_values', { table: '(select 1) t', column: 'name' });
+
+            await accepted('count_rows', { table: T });
+            await accepted('count_rows', { table: 'public.' + T });
+            await accepted('describe_table', { table: T });
+            await accepted('column_values', { table: T, column: 'name' });
+            await accepted('browse_rows', { table: 'public.' + T, order_by: 'id', where: { name: 'a' } });
+        } finally {
+            await c.close();
+            pgapp.close();
+        }
+    });
+
     await ok('query tool is absent when allow_clear_sql is off', async () => {
         const off = await startApp(Object.assign({}, sqliteConfig, { allow_clear_sql: false }));
         const c = await connect(off.port, 'secret-token');

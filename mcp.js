@@ -81,6 +81,19 @@ function dbEntry(config, id) {
     return config.db[id];
 }
 
+// db_postgres.js does not quote identifiers: the table, column and order_by it is
+// given are concatenated into SQL as they are. For postgres, refuse anything that
+// is not a plain (optionally schema-qualified) name, so the structured tools
+// cannot be used to run arbitrary expressions. sqlite and mysql quote properly.
+var PG_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)?$/;
+
+function checkIdentifiers(config, dbId, names) {
+    if (dbEntry(config, dbId).type !== 'postgres') { return; }
+    names.forEach(function (name) {
+        if (!PG_IDENTIFIER.test(name)) { throw new Error('Invalid identifier: ' + name); }
+    });
+}
+
 // calls fn(dbModule, connection, done) with a read-only connection for config.db[dbId]
 function withDb(config, dbId, fn) {
     var c = dbEntry(config, dbId);
@@ -128,6 +141,7 @@ function buildServer(config) {
         { db: db, table: z.string() },
         function (a) {
             var type = dbEntry(config, a.db).type;
+            checkIdentifiers(config, a.db, [a.table]);
             return withDb(config, a.db, function (mod, conn, done) {
                 mod.getTableDetails(conn, a.table, done);
             }).then(function (parts) {
@@ -141,6 +155,7 @@ function buildServer(config) {
         'Count the rows in a table.',
         { db: db, table: z.string() },
         function (a) {
+            checkIdentifiers(config, a.db, [a.table]);
             return withDb(config, a.db, function (mod, conn, done) {
                 mod.rowsCounter(conn, a.table, done);
             }).then(function (n) { return { count: Number(n) }; });
@@ -151,6 +166,7 @@ function buildServer(config) {
         { db: db, table: z.string(), column: z.string(),
           limit: z.number().int().min(1).max(maxRows).default(Math.min(50, maxRows)) },
         function (a) {
+            checkIdentifiers(config, a.db, [a.table, a.column]);
             return withDb(config, a.db, function (mod, conn, done) {
                 mod.showColumnRequest(conn, a.column, a.table, a.limit, done);
             });
@@ -166,6 +182,8 @@ function buildServer(config) {
           where: z.record(z.string(), z.string()).optional()
                   .describe('column -> required value; all must match') },
         function (a) {
+            checkIdentifiers(config, a.db,
+                [a.table, a.order_by].concat(Object.keys(a.where || {})));
             var order = { order_by: a.order_by, direction: a.direction, limit: a.limit };
             return withDb(config, a.db, function (mod, conn, done) {
                 mod.showValueRequest(conn, a.table, a.where || {}, order, done);
