@@ -293,6 +293,13 @@ async function mysqlTests() {
             assert.ok(Date.now() - t0 < 3000, 'took ' + (Date.now() - t0) + 'ms');
         });
 
+        await ok('mysql: the timeout still applies after the caller tries to switch it off', async () => {
+            try { await sql('SET SESSION max_execution_time = 0'); } catch (e) { /* refusing is fine too */ }
+            const t0 = Date.now();
+            try { await sql('SELECT SLEEP(5)'); } catch (e) { /* an error is fine too */ }
+            assert.ok(Date.now() - t0 < 3000, 'took ' + (Date.now() - t0) + 'ms');
+        });
+
         await ok('mysql: the connection is still usable after errors', async () => {
             const rows = await sql('SELECT 1 AS one');
             assert.strictEqual(rows[0].one, 1);

@@ -140,17 +140,28 @@ function pgDriver(cc, timeoutMs, onLost) {
     };
 }
 
-// MySQL: START TRANSACTION READ ONLY / <statement> / ROLLBACK. mysql2 runs one
-// statement per call (multipleStatements is off).
+// MySQL: SET SESSION max_execution_time / START TRANSACTION READ ONLY /
+// <statement> / ROLLBACK. mysql2 runs one statement per call (multipleStatements
+// is off). The timeout is a session variable, which ROLLBACK does not undo and
+// the caller's own SQL can change, so it is set again on every call.
 function mysqlDriver(cc, timeoutMs, onLost) {
     var conn = mysql.createConnection(cc);
+    var warned = false;
     conn.on('error', onLost);
 
     function run(sql, params, cb) {
-        conn.query('START TRANSACTION READ ONLY', function (err) {
-            if (err) { return cb(err); }
-            var args = params ? [sql, params] : [sql];
-            conn.query.apply(conn, args.concat(finish));
+        // MariaDB calls this max_statement_time: there the SET fails, the
+        // statement runs without a timeout, and we say so once
+        conn.query('SET SESSION max_execution_time = ' + Number(timeoutMs), function (err) {
+            if (err && !warned) {
+                warned = true;
+                console.log('MCP: could not apply the statement timeout on a mysql connection: ' + err.message);
+            }
+            conn.query('START TRANSACTION READ ONLY', function (err) {
+                if (err) { return cb(err); }
+                var args = params ? [sql, params] : [sql];
+                conn.query.apply(conn, args.concat(finish));
+            });
         });
 
         function finish(err, rows, fields) {
@@ -159,14 +170,7 @@ function mysqlDriver(cc, timeoutMs, onLost) {
     }
 
     return {
-        open: function (done) {
-            conn.connect(function (err) {
-                if (err) { return done(err); }
-                // best effort: MariaDB calls this max_statement_time
-                conn.query('SET SESSION max_execution_time = ' + Number(timeoutMs),
-                           function () { done(null); });
-            });
-        },
+        open  : function (done) { conn.connect(function (err) { done(err); }); },
         runner: run,
         close : function () { conn.end(function () {}); }
     };
