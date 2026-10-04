@@ -230,6 +230,26 @@ async function postgresTests() {
             assert.strictEqual(rows.length, 2);
         });
 
+        await ok('postgres: tools — describe_table labels, count_rows on a missing table is a tool error', async () => {
+            const app = await startApp(Object.assign({}, config, { mcp: { token: 't', timeout_ms: 500 } }));
+            const client = await connect(app.port, 't');
+            try {
+                const d = data(await call(client, 'describe_table', { db: 'pgtest', table: T }));
+                assert.deepStrictEqual(Object.keys(d),
+                    ['columns', 'indexes', 'status', 'referenced_by', 'triggers', 'foreign_keys']);
+                assert.ok(d.columns.length >= 2);
+                assert.deepStrictEqual(data(await call(client, 'count_rows', { db: 'pgtest', table: T })), { count: 3 });
+                const bad = await call(client, 'count_rows', { db: 'pgtest', table: 'no_such_table_xyz' });
+                assert.strictEqual(bad.isError, true);
+                const q = await call(client, 'browse_rows', { db: 'pgtest', table: T, order_by: 'id', limit: 2 });
+                assert.strictEqual(data(q).rows.length, 2);
+                assert.ok(data(await call(client, 'list_tables', { db: 'pgtest' })).includes(T));
+            } finally {
+                await client.close();
+                app.close();
+            }
+        });
+
         await ok('postgres: the statement timeout cancels a long query', async () => {
             const t0 = Date.now();
             await assert.rejects(sql('SELECT pg_sleep(5)'));
@@ -403,6 +423,103 @@ async function endpointTests() {
     });
 }
 
+async function toolTests() {
+    console.log('\n-- mcp: tools (sqlite) --');
+    const app = await startApp(sqliteConfig);
+    const client = await connect(app.port, 'secret-token');
+
+    try {
+        await ok('tools/list has all seven tools', async () => {
+            const names = (await client.listTools()).tools.map((t) => t.name).sort();
+            assert.deepStrictEqual(names, ['browse_rows', 'column_values', 'count_rows',
+                'describe_table', 'list_databases', 'list_tables', 'query']);
+        });
+
+        await ok('list_tables', async () => {
+            assert.ok(data(await call(client, 'list_tables', { db: 'lite' })).includes(T));
+        });
+
+        await ok('describe_table: labelled parts with the columns', async () => {
+            const d = data(await call(client, 'describe_table', { db: 'lite', table: T }));
+            assert.deepStrictEqual(d.columns.map((c) => c.column_name), ['id', 'name']);
+            assert.ok(d.create_sql);
+        });
+
+        await ok('count_rows', async () => {
+            assert.deepStrictEqual(data(await call(client, 'count_rows', { db: 'lite', table: T })), { count: 12 });
+        });
+
+        await ok('column_values: grouped counts', async () => {
+            const rows = data(await call(client, 'column_values', { db: 'lite', table: T, column: 'name' }));
+            assert.deepStrictEqual(rows.map((r) => [r.name, r.count]).sort(), [['a', 6], ['b', 6]]);
+        });
+
+        await ok('browse_rows: order, direction, limit', async () => {
+            const r = data(await call(client, 'browse_rows',
+                { db: 'lite', table: T, order_by: 'id', direction: 'DESC', limit: 3 }));
+            assert.deepStrictEqual(r.rows.map((x) => x.id), [12, 11, 10]);
+            assert.strictEqual(r.truncated, false);
+        });
+
+        await ok('browse_rows: where filter and NOTNULL', async () => {
+            const a = data(await call(client, 'browse_rows',
+                { db: 'lite', table: T, order_by: 'id', where: { name: 'a' }, limit: 5 }));
+            assert.deepStrictEqual(a.rows.map((x) => x.id), [1, 3, 5, 7, 9]);
+            const nn = data(await call(client, 'browse_rows',
+                { db: 'lite', table: T, order_by: 'id', where: { name: 'NOTNULL' }, limit: 2 }));
+            assert.strictEqual(nn.rows.length, 2);
+        });
+
+        await ok('query: SELECT works; rows are capped with truncated: true', async () => {
+            const r = data(await call(client, 'query', { db: 'lite', sql: 'SELECT * FROM ' + T + ' ORDER BY id' }));
+            assert.strictEqual(r.rows.length, 5);     // sqliteConfig.mcp.max_rows
+            assert.strictEqual(r.row_count, 12);
+            assert.strictEqual(r.truncated, true);
+        });
+
+        await ok('query: a write is a tool error and changes nothing', async () => {
+            const r = await call(client, 'query', { db: 'lite', sql: 'DELETE FROM ' + T });
+            assert.strictEqual(r.isError, true);
+            assert.strictEqual(countSqlite(), 12);
+        });
+
+        await ok('errors are tool errors and the server keeps serving', async () => {
+            const bad = await call(client, 'count_rows', { db: 'lite', table: 'no_such_table' });
+            assert.strictEqual(bad.isError, true);
+            const unknown = await call(client, 'list_tables', { db: 'nope' });
+            assert.strictEqual(unknown.isError, true);
+            assert.match(unknown.content[0].text, /No such database/);
+            assert.ok(data(await call(client, 'list_tables', { db: 'lite' })).includes(T));
+        });
+
+        for (const id of ['constructor', '__proto__']) {
+            for (const tool of ['list_tables', 'describe_table']) {
+                await ok(tool + ': inherited property name "' + id + '" is "No such database"', async () => {
+                    const r = await call(client, tool, { db: id, table: T });
+                    assert.strictEqual(r.isError, true);
+                    assert.match(r.content[0].text, /No such database/);
+                });
+            }
+        }
+    } finally {
+        await client.close();
+        app.close();
+    }
+
+    await ok('query tool is absent when allow_clear_sql is off', async () => {
+        const off = await startApp(Object.assign({}, sqliteConfig, { allow_clear_sql: false }));
+        const c = await connect(off.port, 'secret-token');
+        try {
+            const names = (await c.listTools()).tools.map((t) => t.name);
+            assert.ok(!names.includes('query'));
+            assert.ok(names.includes('browse_rows'));
+        } finally {
+            await c.close();
+            off.close();
+        }
+    });
+}
+
 // ---- main ------------------------------------------------------------------
 
 (async () => {
@@ -411,6 +528,7 @@ async function endpointTests() {
         await postgresTests();
         await mysqlTests();
         await endpointTests();
+        await toolTests();
     } finally {
         for (const f of [tmpFile, attachFile]) { try { fs.unlinkSync(f); } catch (_) {} }
     }
