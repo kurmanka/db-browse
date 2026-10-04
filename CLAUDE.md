@@ -63,6 +63,10 @@ handler.cache_ttl      = 600;                            // optional, seconds
 
 Cache backend is Memcached (disabled by default via `config.cache = false`). When disabled, `cache_wrapper` calls the handler directly with no overhead.
 
+### MCP interface
+
+`mcp.js` mounts `POST /mcp` (streamable HTTP, stateless) when `config.mcp.token` is set; `start.js` calls `mcp.mount(app, config)` before the session middleware. Tools call the same `db_*.js` functions as the web UI, but on **separate read-only connections** from `mcp_db.js` (not the `database` cache in `start.js`): SQLite opened read-only, Postgres/MySQL via a per-call read-only transaction, calls serialized per connection. `callDb(config, dbId, fn)` also converts exceptions thrown inside `db_*.js` callbacks into rejections. `dbId` is untrusted agent input: `dbEntry(config, id)` in `mcp.js` and an own-property check in `mcp_db.getConnection` make names like `constructor` / `__proto__` "No such database". For Postgres, `checkIdentifiers` in `mcp.js` rejects table/column/order_by/where names that are not plain identifiers, because `db_postgres.js` does not quote them. Tests: `node test/mcp.js`; Postgres/MySQL sections need `DBB_TEST_PG_URL` / `DBB_TEST_MYSQL_URL` (MySQL has never been run against a real server). Design: `docs/superpowers/specs/2026-10-04-mcp-interface-design.md`.
+
 ### SQL history
 
 `sqliteDB.js` manages a local `usersRequests.sqlite` file. The `sql` table stores executed queries with metadata (name, comment, dbid, user, timestamps, use count). Connection is lazy — opened on first use.

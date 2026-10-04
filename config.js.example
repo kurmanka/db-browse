@@ -88,5 +88,19 @@ exports.addons = {
 };
 */
 
+// MCP interface for agents: read-only database access at POST /mcp.
+// Off unless a token is set. Agents authenticate with "Authorization: Bearer <token>".
+// Use a long random string, and TLS (a reverse proxy) if agents are not on localhost.
+/*
+exports.mcp = {
+    token: 'a long random string',
+    // optional: rows returned per call (default 1000)
+    //max_rows: 1000,
+    // optional: statement timeout, milliseconds (default 30000)
+    //timeout_ms: 30000,
+};
+*/
 
-
+// For MCP, a database entry above can also carry credentials of a role that has
+// only SELECT grants (and is not a superuser / has no FILE privilege):
+//   readonly_user: 'dbb_ro', readonly_password: '...',

@@ -660,9 +660,11 @@ Add these two functions after `sqliteDriver`:
 
 ```js
 // Postgres: BEGIN READ ONLY / SET LOCAL statement_timeout / <statement> / ROLLBACK.
-// The caller's statement is sent with the `rows` option, which makes pg use the
-// extended protocol even when there are no parameters; that protocol refuses
+// The caller's statement is sent with queryMode 'extended', which makes pg use
+// the extended protocol even when there are no parameters; that protocol refuses
 // several commands in one string, so nobody can smuggle in "COMMIT; ...".
+// (Not the `rows` option: with it pg 8.20 sends no Sync after an error, and the
+// connection hangs on the next statement.)
 function pgDriver(cc, timeoutMs, onLost) {
     var client = new pg.Client(cc);
     client.on('error', onLost);
@@ -672,7 +674,7 @@ function pgDriver(cc, timeoutMs, onLost) {
             if (err) { return cb(err); }
             client.query('SET LOCAL statement_timeout = ' + Number(timeoutMs), function (err) {
                 if (err) { return finish(err); }
-                client.query({ text: sql, values: params || [], rows: 100000 }, finish);
+                client.query({ text: sql, values: params || [], queryMode: 'extended' }, finish);
             });
         });
 
@@ -688,17 +690,28 @@ function pgDriver(cc, timeoutMs, onLost) {
     };
 }
 
-// MySQL: START TRANSACTION READ ONLY / <statement> / ROLLBACK. mysql2 runs one
-// statement per call (multipleStatements is off).
+// MySQL: SET SESSION max_execution_time / START TRANSACTION READ ONLY /
+// <statement> / ROLLBACK. mysql2 runs one statement per call (multipleStatements
+// is off). The timeout is a session variable, which ROLLBACK does not undo and
+// the caller's own SQL can change, so it is set again on every call.
 function mysqlDriver(cc, timeoutMs, onLost) {
     var conn = mysql.createConnection(cc);
+    var warned = false;
     conn.on('error', onLost);
 
     function run(sql, params, cb) {
-        conn.query('START TRANSACTION READ ONLY', function (err) {
-            if (err) { return cb(err); }
-            var args = params ? [sql, params] : [sql];
-            conn.query.apply(conn, args.concat(finish));
+        // MariaDB calls this max_statement_time: there the SET fails, the
+        // statement runs without a timeout, and we say so once
+        conn.query('SET SESSION max_execution_time = ' + Number(timeoutMs), function (err) {
+            if (err && !warned) {
+                warned = true;
+                console.log('MCP: could not apply the statement timeout on a mysql connection: ' + err.message);
+            }
+            conn.query('START TRANSACTION READ ONLY', function (err) {
+                if (err) { return cb(err); }
+                var args = params ? [sql, params] : [sql];
+                conn.query.apply(conn, args.concat(finish));
+            });
         });
 
         function finish(err, rows, fields) {
@@ -707,14 +720,7 @@ function mysqlDriver(cc, timeoutMs, onLost) {
     }
 
     return {
-        open: function (done) {
-            conn.connect(function (err) {
-                if (err) { return done(err); }
-                // best effort: MariaDB calls this max_statement_time
-                conn.query('SET SESSION max_execution_time = ' + Number(timeoutMs),
-                           function () { done(null); });
-            });
-        },
+        open  : function (done) { conn.connect(function (err) { done(err); }); },
         runner: run,
         close : function () { conn.end(function () {}); }
     };
@@ -744,7 +750,7 @@ with
 Run: `DBB_TEST_PG_URL=postgres://dbb@localhost:54329/mcptest node test/mcp.js`
 Expected: all PASS, including `postgres: several commands in one string are refused`, `postgres: switching the session to read-write does not help`, and `postgres: table is unchanged afterwards`.
 
-If any fails, **stop and diagnose** (`superpowers:systematic-debugging`) rather than weakening the test. In particular: if the `rows` option does not force the extended protocol, the "several commands" test fails — then switch to a unique `name` per statement plus `DEALLOCATE`, and say so. These tests are the verification the spec asks for ("Postgres rejects `SET TRANSACTION READ WRITE`…").
+If any fails, **stop and diagnose** (`superpowers:systematic-debugging`) rather than weakening the test. In particular: if `queryMode: 'extended'` does not force the extended protocol, the "several commands" test fails — then switch to a unique `name` per statement plus `DEALLOCATE`, and say so. (Do not use the `rows` option for this: pg 8.20 sends no Sync after a failed statement when `rows` is set, so the connection hangs after the first error. The first version of this plan used it; it was replaced.) These tests are the verification the spec asks for ("Postgres rejects `SET TRANSACTION READ WRITE`…").
 
 - [ ] **Step 5: Run MySQL tests if a server is available**
 

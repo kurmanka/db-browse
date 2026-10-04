@@ -1,7 +1,7 @@
 # MCP interface for db-browse — design
 
 Date: 2026-10-04
-Status: draft, awaiting review
+Status: implemented; amended to match the build
 
 ## Goal
 
@@ -37,12 +37,16 @@ structured or raw, is covered:
 | Driver | Enforcement |
 |---|---|
 | SQLite | Open with `readonly: true` (OS-level flag; SQL cannot undo it). |
-| Postgres | Each call: `BEGIN READ ONLY` → `SET LOCAL statement_timeout` → query → `ROLLBACK`. The caller's statement is sent via the extended protocol, which rejects multi-command strings (closes `COMMIT; BEGIN READ WRITE; ...`). |
-| MySQL | Each call: `START TRANSACTION READ ONLY` → query → `ROLLBACK`. `max_execution_time` set per session. mysql2 runs a single statement per call (`multipleStatements` off). |
+| Postgres | Each call: `BEGIN READ ONLY` → `SET LOCAL statement_timeout` → query → `ROLLBACK`. The caller's statement is sent via the extended protocol (`queryMode: 'extended'`), which rejects multi-command strings (closes `COMMIT; BEGIN READ WRITE; ...`). The `rows` query option must not be used for this: pg 8.20 sends no Sync after a failed statement when it is set, and the connection hangs. |
+| MySQL | Each call: `SET SESSION max_execution_time` → `START TRANSACTION READ ONLY` → query → `ROLLBACK`. The timeout is a session variable that survives `ROLLBACK` and that the agent's own SQL could switch off, so it is applied on every call; a failure to set it logs a warning once per connection (MariaDB calls the variable `max_statement_time`, so there the timeout is not applied). mysql2 runs a single statement per call (`multipleStatements` off). |
 
 Session-level settings alone (`default_transaction_read_only`,
 `SET SESSION TRANSACTION READ ONLY`) are **not** relied on: the agent's own SQL
 can switch them off.
+
+`callDb` hands each tool call a *view* of the connection; an exception thrown inside a `db_*.js` callback (e.g. `rowsCounter` on a missing table in the Postgres/MySQL modules) rejects the call instead of escaping into the driver and crashing the process.
+
+The database id is untrusted agent input, so `getConnection` only resolves ids that `config.db` defines itself (inherited names such as `constructor` or `__proto__` are "No such database").
 
 The wrapper serializes calls through a per-connection queue, so the multi-step
 sequences above cannot interleave (e.g. `getTableDetails` issues several
@@ -56,6 +60,10 @@ session-level protection. Off by default; recommended in the README.
 **To verify, not assume:** that Postgres rejects `SET TRANSACTION READ WRITE`
 inside an already read-only transaction. Covered by a test (below) that must
 pass against a real Postgres before the Postgres path is considered done.
+Verified: the Postgres tests in `test/mcp.js` (see the plan) passed against a
+real PostgreSQL 14 server, including the bypass attempts. The MySQL tests did
+**not** run: no MySQL server was available, so the MySQL driver is implemented
+but untested against a real server.
 
 ### `mcp.js` — tools, auth, mounting
 
@@ -79,11 +87,13 @@ listen address, otherwise put it behind a TLS proxy (README note).
 |---|---|---|
 | `list_databases` | — | `config.db`: id, type, comment. Never credentials. |
 | `list_tables` | `db` | `showAllTable` |
-| `describe_table` | `db, table` | `getTableDetails` (passed through as each driver returns it) |
+| `describe_table` | `db, table` | `getTableDetails`, returned as labelled parts per driver: postgres `columns, indexes, status, referenced_by, triggers, foreign_keys`; mysql `columns, create_table, details`; sqlite `columns, create_sql` |
 | `count_rows` | `db, table` | `rowsCounter` |
 | `column_values` | `db, table, column, limit?` | `showColumnRequest` |
-| `browse_rows` | `db, table, where?, order_by?, direction?, limit?` | `showValueRequest` |
+| `browse_rows` | `db, table, order_by, where?, direction?, limit?` | `showValueRequest` |
 | `query` | `db, sql` | `getSQL` |
+
+`order_by` is required: `showValueRequest` fails without it and returns the whole table without a `LIMIT` if no ordering is passed.
 
 - `query` is registered only if `config.allow_clear_sql` is truthy, so MCP does
   not bypass the operator's switch for raw SQL in the web UI.
@@ -94,13 +104,27 @@ listen address, otherwise put it behind a TLS proxy (README note).
   agent's context window; it does **not** bound server memory (see below).
 - Every call is logged with `console.log`: tool, db, and SQL truncated to ~200
   chars.
-- The weak Postgres `escape()` in the structured functions adds no exposure,
-  since `query` already allows arbitrary reads.
+- The weak Postgres `escape()` in the structured functions adds no exposure
+  *only when `query` is available*; see "Identifier handling" below.
+
+**Identifier handling.** `db_postgres.js` never quotes identifiers, so a table,
+column or `order_by` given to a structured tool would be spliced into SQL as it
+is, letting an agent run arbitrary read expressions even with `allow_clear_sql`
+off. `checkIdentifiers` in `mcp.js` therefore rejects, for Postgres, any
+`table`, `column`, `order_by` or `where` key that is not a simple identifier,
+optionally schema-qualified (`/^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)?$/`).
+Quoted or mixed-case Postgres names are not reachable through the structured
+tools (nor through the web UI's `db_postgres.js`); `list_tables` shows only the
+`public` schema, as the existing module does. SQLite and MySQL quote properly.
+The database id is validated the same way as in `mcp_db.js`: `dbEntry(config, id)`
+accepts only ids `config.db` defines itself.
 
 ### Config additions
 
 ```js
 exports.mcp = { token: 'long random string' };   // enables /mcp
+
+// optional: mcp.max_rows (default 1000), mcp.timeout_ms (default 30000)
 
 // per database, optional:
 //   readonly_user: '...', readonly_password: '...'
@@ -150,6 +174,18 @@ notice otherwise):
   (`iterate()` for SQLite, mysql2 stream, `pg-cursor` for Postgres).
 - **Static shared token**, no per-agent identity or revocation beyond changing
   the config and restarting.
+- **The statement timeout is best effort.** Postgres applies it with
+  `SET LOCAL` per call and MySQL re-applies it per call, so an agent cannot
+  disable it for later calls, but its own statement can change the setting for
+  itself. It does not apply to SQLite, and MariaDB is not supported for it.
+  Superusers / FILE-privilege accounts can still write files through
+  `COPY ... TO PROGRAM` / `INTO OUTFILE` (README tells operators to use a plain
+  role).
+- **MySQL is untested against a real server.** Run `DBB_TEST_MYSQL_URL=mysql://user:pass@host:port/scratchdb node test/mcp.js`
+  against a scratch database before relying on it.
+- **Postgres names are restricted** to plain, optionally schema-qualified
+  identifiers in the structured tools (see "Identifier handling"), and
+  `list_tables` shows only `public`.
 
 ## Out of scope
 
