@@ -23,6 +23,11 @@ function createConnection(cc) {
                 params = [];
             }
 
+            if (cc.readonly) {
+                var out = readOnlyQuery(db, sql, params);
+                return callback(out.err, out.rows);
+            }
+
             try {
                 var stmt = db.prepare(sql);
                 var rows;
@@ -38,6 +43,47 @@ function createConnection(cc) {
             }
         }
     };
+}
+
+// A connection opened with cc.readonly (the MCP interface; the web UI never sets
+// it). Opening the file read-only is not enough on its own: SQLite still lets
+// such a handle write VACUUM INTO files and temp tables, and ATTACH any file.
+//  - a statement runs only if SQLite itself says it is read-only
+//    (sqlite3_stmt_readonly, via stmt.readonly): VACUUM INTO, CREATE TEMP ...,
+//    PRAGMA journal_mode=... are refused
+//  - after every statement, even a failed one, every schema other than main and
+//    temp is detached, so an ATTACH is never there for a later call. (Each call
+//    is one statement: prepare() refuses a string with several.) If that fails,
+//    the handle is closed, and later calls fail until it is reopened.
+// Returns { err, rows }; the caller calls back once, outside any try.
+function readOnlyQuery(db, sql, params) {
+    var err = null, rows;
+    try {
+        var stmt = db.prepare(sql);
+        if (!stmt.readonly) {
+            throw new Error('Not a read-only statement; this connection is read-only');
+        }
+        if (stmt.reader) {
+            rows = stmt.all(params);
+        } else {
+            stmt.run(params);
+            rows = [];
+        }
+    } catch (e) {
+        err = e;
+    }
+
+    try {
+        db.prepare('PRAGMA database_list').all().forEach(function (d) {
+            if (d.name !== 'main' && d.name !== 'temp') {
+                db.prepare('DETACH DATABASE ' + escapeId(d.name)).run();
+            }
+        });
+    } catch (e) {
+        try { db.close(); } catch (e2) {}
+        if (!err) { err = e; rows = undefined; }
+    }
+    return { err: err, rows: rows };
 }
 
 function escapeId(id) {

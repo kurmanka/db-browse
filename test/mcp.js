@@ -39,6 +39,8 @@ async function ok(label, fn) {
 
 const tmpFile = path.join(os.tmpdir(), 'db-browse-mcp-test-' + Date.now() + '.sqlite');
 const attachFile = tmpFile + '.attached';
+const vacuumFile = tmpFile + '.vacuum';
+const otherFile  = tmpFile + '.other';
 
 function makeFixture() {
     const db = new Database(tmpFile);
@@ -172,6 +174,37 @@ async function connectionLayerTests() {
 
     await ok('sqlite: ATTACH cannot be used to create files', () => {
         assert.ok(!fs.existsSync(attachFile));
+    });
+
+    const lite = (s) => mcp_db.callDb(sqliteConfig, 'lite', (c, done) => db_sqlite.getSQL(c, s, done));
+
+    await ok('sqlite: VACUUM INTO is refused and creates no file', async () => {
+        await assert.rejects(lite("VACUUM INTO '" + vacuumFile + "'"));
+        assert.ok(!fs.existsSync(vacuumFile), 'VACUUM INTO wrote ' + vacuumFile);
+    });
+
+    await ok('sqlite: an ATTACHed database is detached before the next call', async () => {
+        const o = new Database(otherFile);
+        o.exec('CREATE TABLE other_secret (v TEXT)');
+        o.close();
+        try { await lite("ATTACH DATABASE '" + otherFile + "' AS x"); } catch (e) { /* refusing is fine too */ }
+        await assert.rejects(lite('SELECT * FROM x.other_secret'), /no such table/);
+    });
+
+    for (const s of ['CREATE TEMP TABLE t (x)', 'CREATE TEMP VIEW v AS SELECT 1', 'PRAGMA journal_mode = WAL']) {
+        await ok('sqlite: rejects  ' + s, async () => { await assert.rejects(lite(s)); });
+    }
+
+    await ok('sqlite: a plain SELECT still works afterwards', async () => {
+        const rows = await lite('SELECT count(*) AS n FROM ' + T);
+        assert.strictEqual(rows[0].n, 12);
+    });
+
+    await ok('sqlite: a connection without readonly (the web UI) is not restricted', async () => {
+        const conn = db_sqlite.createConnection({ database: otherFile });
+        await new Promise((res, rej) => conn.connect((e) => e ? rej(e) : res()));
+        await new Promise((res, rej) => conn.query('CREATE TEMP TABLE t (x)', (e) => e ? rej(e) : res()));
+        await new Promise((res, rej) => conn.query('INSERT INTO other_secret VALUES (?)', ['w'], (e) => e ? rej(e) : res()));
     });
 }
 
@@ -567,7 +600,7 @@ async function toolTests() {
         await endpointTests();
         await toolTests();
     } finally {
-        for (const f of [tmpFile, attachFile]) { try { fs.unlinkSync(f); } catch (_) {} }
+        for (const f of [tmpFile, attachFile, vacuumFile, otherFile]) { try { fs.unlinkSync(f); } catch (_) {} }
     }
     console.log('\n' + passed + ' passed, ' + failed + ' failed\n');
     process.exit(failed ? 1 : 0);
