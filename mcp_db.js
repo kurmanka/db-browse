@@ -109,6 +109,70 @@ function sqliteDriver(cc) {
 }
 
 
+// Postgres: BEGIN READ ONLY / SET LOCAL statement_timeout / <statement> / ROLLBACK.
+// The caller's statement is sent with queryMode 'extended', which makes pg use
+// the extended protocol even when there are no parameters; that protocol refuses
+// several commands in one string, so nobody can smuggle in "COMMIT; ...".
+// (Not the `rows` option: with it pg sends no Sync after an error, and the
+// connection hangs.)
+function pgDriver(cc, timeoutMs, onLost) {
+    var client = new pg.Client(cc);
+    client.on('error', onLost);
+
+    function run(sql, params, cb) {
+        client.query('BEGIN READ ONLY', function (err) {
+            if (err) { return cb(err); }
+            client.query('SET LOCAL statement_timeout = ' + Number(timeoutMs), function (err) {
+                if (err) { return finish(err); }
+                client.query({ text: sql, values: params || [], queryMode: 'extended' }, finish);
+            });
+        });
+
+        function finish(err, result) {
+            client.query('ROLLBACK', function () { cb(err, result); });
+        }
+    }
+
+    return {
+        open  : function (done) { client.connect(done); },
+        runner: run,
+        close : function () { client.end(function () {}); }
+    };
+}
+
+// MySQL: START TRANSACTION READ ONLY / <statement> / ROLLBACK. mysql2 runs one
+// statement per call (multipleStatements is off).
+function mysqlDriver(cc, timeoutMs, onLost) {
+    var conn = mysql.createConnection(cc);
+    conn.on('error', onLost);
+
+    function run(sql, params, cb) {
+        conn.query('START TRANSACTION READ ONLY', function (err) {
+            if (err) { return cb(err); }
+            var args = params ? [sql, params] : [sql];
+            conn.query.apply(conn, args.concat(finish));
+        });
+
+        function finish(err, rows, fields) {
+            conn.query('ROLLBACK', function () { cb(err, rows, fields); });
+        }
+    }
+
+    return {
+        open: function (done) {
+            conn.connect(function (err) {
+                if (err) { return done(err); }
+                // best effort: MariaDB calls this max_statement_time
+                conn.query('SET SESSION max_execution_time = ' + Number(timeoutMs),
+                           function () { done(null); });
+            });
+        },
+        runner: run,
+        close : function () { conn.end(function () {}); }
+    };
+}
+
+
 function pingSql(type) {
     return (type == 'sqlite') ? 'SELECT 1' : 'SELECT NOW()';
 }
@@ -129,7 +193,11 @@ function open(config, dbId, onLost) {
     var timeoutMs = (config.mcp && config.mcp.timeout_ms) || DEFAULT_TIMEOUT_MS;
     var driver;
 
-    if (c.type == 'sqlite') {
+    if (c.type == 'postgres') {
+        driver = pgDriver(cc, timeoutMs, onLost);
+    } else if (c.type == 'mysql') {
+        driver = mysqlDriver(cc, timeoutMs, onLost);
+    } else if (c.type == 'sqlite') {
         driver = sqliteDriver(cc);
     } else {
         return Promise.reject(new Error("Unsupported database type '" + c.type + "'"));

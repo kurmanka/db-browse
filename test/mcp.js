@@ -171,11 +171,145 @@ async function connectionLayerTests() {
     });
 }
 
+// ---- Task 2: postgres / mysql (opt-in) -------------------------------------
+
+async function postgresTests() {
+    console.log('\n-- postgres --');
+    const url = process.env.DBB_TEST_PG_URL;
+    if (!url) { console.log('  SKIP  set DBB_TEST_PG_URL to run these'); return; }
+
+    const pg = require('pg');
+    const db_postgres = require('../db_postgres.js');
+    const u = new URL(url);
+    const admin = new pg.Client(url);
+    await admin.connect();
+    await admin.query('DROP TABLE IF EXISTS ' + T);
+    await admin.query('CREATE TABLE ' + T + ' (id integer PRIMARY KEY, name text)');
+    await admin.query('INSERT INTO ' + T + " VALUES (1,'a'),(2,'b'),(3,'a')");
+    const count = async () => Number((await admin.query('SELECT count(*) AS n FROM ' + T)).rows[0].n);
+
+    const config = {
+        db: { pgtest: { type: 'postgres', host: u.hostname, port: Number(u.port) || 5432,
+                        user: decodeURIComponent(u.username),
+                        password: decodeURIComponent(u.password) || undefined,
+                        database: u.pathname.slice(1) } },
+        mcp: { timeout_ms: 500 },
+    };
+    const sql = (s) => mcp_db.callDb(config, 'pgtest', (c, done) => db_postgres.getSQL(c, s, done));
+    const ins = (id) => 'INSERT INTO ' + T + " VALUES (" + id + ", 'y')";
+
+    try {
+        await readOnlyContract('postgres', db_postgres, config, 'pgtest', count, [
+            'SET default_transaction_read_only = off',
+            'SET TRANSACTION READ WRITE',
+            'COMMIT',
+            'SELECT 1; ' + ins(98),
+            'COMMIT; ' + ins(97),
+            'COMMIT; SET default_transaction_read_only = off; ' + ins(96),
+            'WITH w AS (' + ins(95) + ' RETURNING 1) SELECT * FROM w',
+            "DO $$ BEGIN EXECUTE 'SET TRANSACTION READ WRITE'; " + ins(94) + "; END $$",
+        ]);
+
+        await ok('postgres: several commands in one string are refused', async () => {
+            await assert.rejects(sql('SELECT 1; SELECT 2'), /multiple commands/);
+        });
+
+        await ok('postgres: structured db functions work on the read-only connection', async () => {
+            const tables = await mcp_db.callDb(config, 'pgtest', (c, d) => db_postgres.showAllTable(c, d));
+            assert.ok(tables.includes(T));
+            const details = await mcp_db.callDb(config, 'pgtest', (c, d) => db_postgres.getTableDetails(c, T, d));
+            assert.strictEqual(details.length, 6);
+            const n = await mcp_db.callDb(config, 'pgtest', (c, d) => db_postgres.rowsCounter(c, T, d));
+            assert.strictEqual(Number(n), 3);
+            const rows = await mcp_db.callDb(config, 'pgtest', (c, d) =>
+                db_postgres.showValueRequest(c, T, { name: 'a' }, { order_by: 'id', direction: 'ASC', limit: 10 }, d));
+            assert.strictEqual(rows.length, 2);
+        });
+
+        await ok('postgres: the statement timeout cancels a long query', async () => {
+            const t0 = Date.now();
+            await assert.rejects(sql('SELECT pg_sleep(5)'));
+            assert.ok(Date.now() - t0 < 3000, 'took ' + (Date.now() - t0) + 'ms');
+        });
+
+        await ok('postgres: the connection is still usable after errors', async () => {
+            const rows = await sql('SELECT 1 AS one');
+            assert.strictEqual(rows[0].one, 1);
+        });
+    } finally {
+        await admin.query('DROP TABLE IF EXISTS ' + T);
+        await admin.end();
+    }
+}
+
+async function mysqlTests() {
+    console.log('\n-- mysql --');
+    const url = process.env.DBB_TEST_MYSQL_URL;
+    if (!url) { console.log('  SKIP  set DBB_TEST_MYSQL_URL to run these'); return; }
+
+    const mysqlp = require('mysql2/promise');
+    const db_mysql = require('../db_mysql.js');
+    const u = new URL(url);
+    const admin = await mysqlp.createConnection(url);
+    await admin.query('DROP TABLE IF EXISTS ' + T);
+    await admin.query('CREATE TABLE ' + T + ' (id INT PRIMARY KEY, name VARCHAR(20))');
+    await admin.query('INSERT INTO ' + T + " VALUES (1,'a'),(2,'b'),(3,'a')");
+    const count = async () => Number((await admin.query('SELECT count(*) AS n FROM ' + T))[0][0].n);
+
+    const config = {
+        db: { mytest: { type: 'mysql', host: u.hostname, port: Number(u.port) || 3306,
+                        user: decodeURIComponent(u.username),
+                        password: decodeURIComponent(u.password) || undefined,
+                        database: u.pathname.slice(1) } },
+        mcp: { timeout_ms: 500 },
+    };
+    const sql = (s) => mcp_db.callDb(config, 'mytest', (c, done) => db_mysql.getSQL(c, s, done));
+    const ins = (id) => 'INSERT INTO ' + T + " VALUES (" + id + ", 'y')";
+
+    try {
+        await readOnlyContract('mysql', db_mysql, config, 'mytest', count, [
+            'SET SESSION TRANSACTION READ WRITE',
+            'START TRANSACTION READ WRITE',
+            'COMMIT',
+            'SET autocommit = 1',
+            'SELECT 1; ' + ins(98),
+        ]);
+
+        await ok('mysql: structured db functions work on the read-only connection', async () => {
+            const tables = await mcp_db.callDb(config, 'mytest', (c, d) => db_mysql.showAllTable(c, d));
+            assert.ok(tables.includes(T));
+            const details = await mcp_db.callDb(config, 'mytest', (c, d) => db_mysql.getTableDetails(c, T, d));
+            assert.strictEqual(details.length, 3);
+            const n = await mcp_db.callDb(config, 'mytest', (c, d) => db_mysql.rowsCounter(c, T, d));
+            assert.strictEqual(Number(n), 3);
+            const rows = await mcp_db.callDb(config, 'mytest', (c, d) =>
+                db_mysql.showValueRequest(c, T, { name: 'a' }, { order_by: 'id', direction: 'ASC', limit: 10 }, d));
+            assert.strictEqual(rows.length, 2);
+        });
+
+        await ok('mysql: a long query does not run past the timeout', async () => {
+            const t0 = Date.now();
+            try { await sql('SELECT SLEEP(5)'); } catch (e) { /* an error is fine too */ }
+            assert.ok(Date.now() - t0 < 3000, 'took ' + (Date.now() - t0) + 'ms');
+        });
+
+        await ok('mysql: the connection is still usable after errors', async () => {
+            const rows = await sql('SELECT 1 AS one');
+            assert.strictEqual(rows[0].one, 1);
+        });
+    } finally {
+        await admin.query('DROP TABLE IF EXISTS ' + T);
+        await admin.end();
+    }
+}
+
 // ---- main ------------------------------------------------------------------
 
 (async () => {
     try {
         await connectionLayerTests();
+        await postgresTests();
+        await mysqlTests();
     } finally {
         for (const f of [tmpFile, attachFile]) { try { fs.unlinkSync(f); } catch (_) {} }
     }
