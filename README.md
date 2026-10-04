@@ -73,7 +73,8 @@ Notes:
 - Postgres: table, column and ordering names given to the structured tools must
   be plain identifiers, optionally schema-qualified (`orders`, `sales.orders`),
   because db_postgres.js does not quote them; quoted or mixed-case names are
-  rejected (the `query` tool, when enabled, can still use them). `list_tables` shows only the
+  rejected here, although the web UI accepts them (the `query` tool, when
+  `allow_clear_sql` is on, can still use them). `list_tables` shows only the
   `public` schema.
 - One shared static token: no per-agent identity.
 

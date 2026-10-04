@@ -113,9 +113,10 @@ is, letting an agent run arbitrary read expressions even with `allow_clear_sql`
 off. `checkIdentifiers` in `mcp.js` therefore rejects, for Postgres, any
 `table`, `column`, `order_by` or `where` key that is not a simple identifier,
 optionally schema-qualified (`/^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)?$/`).
-Quoted or mixed-case Postgres names are not reachable through the structured
-tools (nor through the web UI's `db_postgres.js`); `list_tables` shows only the
-`public` schema, as the existing module does. SQLite and MySQL quote properly.
+Quoted or mixed-case Postgres names are rejected by the structured tools, even
+though the web UI accepts them (its `escape()` leaves `"` alone); with
+`allow_clear_sql` on, `query` can still be used for such tables. `list_tables`
+shows only the `public` schema, as the existing module does. SQLite and MySQL quote properly.
 The database id is validated the same way as in `mcp_db.js`: `dbEntry(config, id)`
 accepts only ids `config.db` defines itself.
 
@@ -185,7 +186,11 @@ notice otherwise):
   against a scratch database before relying on it.
 - **Postgres names are restricted** to plain, optionally schema-qualified
   identifiers in the structured tools (see "Identifier handling"), and
-  `list_tables` shows only `public`.
+  `list_tables` shows only `public`. MCP is stricter than the web UI here: quoted
+  or mixed-case names work in the web UI but are rejected by the MCP structured
+  tools (`query` can still reach them when `allow_clear_sql` is on). A possible
+  follow-up: accept double-quoted identifiers that contain none of `'`, `;`,
+  `,`, `%`.
 
 ## Out of scope
 
