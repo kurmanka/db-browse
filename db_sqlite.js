@@ -10,7 +10,7 @@ function createConnection(cc) {
     return {
         connect: function (done) {
             try {
-                db = new Database(cc.database);
+                db = new Database(cc.database, { readonly: !!cc.readonly });
                 done(null);
             } catch (err) {
                 done(err);

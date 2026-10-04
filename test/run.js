@@ -3,7 +3,7 @@
 const { execFileSync } = require('child_process');
 const path = require('path');
 
-const scripts = ['sqlite.js', 'routes.js'];
+const scripts = ['sqlite.js', 'routes.js', 'mcp.js'];
 let anyFailed = false;
 
 for (const script of scripts) {
