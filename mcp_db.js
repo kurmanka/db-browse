@@ -5,10 +5,14 @@
 // would let a read-only transaction interleave with a web query.
 //
 // Read-only is enforced by the database, never by looking at the SQL text:
-//   sqlite   - the file is opened read-only
+//   sqlite   - the file is opened read-only, a statement runs only if SQLite
+//              says it is read-only, and ATTACHed files are detached after
+//              every call (see db_sqlite.js)
 //   postgres - every call runs inside BEGIN READ ONLY ... ROLLBACK
-//   mysql    - every call runs inside START TRANSACTION READ ONLY ... ROLLBACK
-// (session-wide settings would not do: the caller's own SQL can switch them off)
+//   mysql    - every call runs inside START TRANSACTION READ ONLY ... ROLLBACK,
+//              after SET SESSION TRANSACTION READ ONLY (for DDL; unverified)
+// (session-wide settings alone would not do: the caller's own SQL can switch
+// them off)
 
 'use strict';
 var pg        = require('pg');
@@ -140,10 +144,15 @@ function pgDriver(cc, timeoutMs, onLost) {
     };
 }
 
-// MySQL: SET SESSION max_execution_time / START TRANSACTION READ ONLY /
-// <statement> / ROLLBACK. mysql2 runs one statement per call (multipleStatements
-// is off). The timeout is a session variable, which ROLLBACK does not undo and
-// the caller's own SQL can change, so it is set again on every call.
+// MySQL: SET SESSION max_execution_time / SET SESSION TRANSACTION READ ONLY /
+// START TRANSACTION READ ONLY / <statement> / ROLLBACK. mysql2 runs one
+// statement per call (multipleStatements is off). Session variables are not
+// undone by ROLLBACK and the caller's own SQL can change them, so they are set
+// again on every call.
+// The session-level READ ONLY is there for DDL (DROP, TRUNCATE, CREATE, ALTER,
+// RENAME, GRANT...): MySQL commits the open transaction before such a statement,
+// so the READ ONLY transaction no longer covers it; the session default should.
+// NOT YET VERIFIED against a real MySQL server.
 function mysqlDriver(cc, timeoutMs, onLost) {
     var conn = mysql.createConnection(cc);
     var warned = false;
@@ -157,10 +166,14 @@ function mysqlDriver(cc, timeoutMs, onLost) {
                 warned = true;
                 console.log('MCP: could not apply the statement timeout on a mysql connection: ' + err.message);
             }
-            conn.query('START TRANSACTION READ ONLY', function (err) {
+            // unlike the timeout, this one must work
+            conn.query('SET SESSION TRANSACTION READ ONLY', function (err) {
                 if (err) { return cb(err); }
-                var args = params ? [sql, params] : [sql];
-                conn.query.apply(conn, args.concat(finish));
+                conn.query('START TRANSACTION READ ONLY', function (err) {
+                    if (err) { return cb(err); }
+                    var args = params ? [sql, params] : [sql];
+                    conn.query.apply(conn, args.concat(finish));
+                });
             });
         });
 

@@ -208,6 +208,103 @@ async function connectionLayerTests() {
     });
 }
 
+// ---- mysql driver, with a stand-in for mysql2 (no server) -----------------
+
+// A fake mysql2 connection: records every statement sent; reply(sql) decides the
+// answer (undefined: success, an Error: failure, 'hang': never answers).
+// Installed by swapping mysql2.createConnection while fn runs.
+async function withFakeMysql(reply, fn) {
+    const mysql2 = require('mysql2');
+    const sent = [];
+    const conn = {
+        destroyed: 0,
+        on() {},
+        connect(cb) { cb(null); },
+        end(cb) { if (cb) cb(); },
+        destroy() { conn.destroyed++; },
+        query(sql, ...rest) {
+            const cb = rest.pop();
+            sent.push(sql);
+            const r = reply(sql);
+            if (r === 'hang') return;
+            setImmediate(() => (r instanceof Error) ? cb(r) : cb(null, [{ sql }], []));
+        },
+    };
+    const orig = mysql2.createConnection;
+    mysql2.createConnection = () => conn;
+    try { return await fn(conn, sent); } finally { mysql2.createConnection = orig; }
+}
+
+let fakeIds = 0;
+const fakeMysqlConfig = () => {
+    const id = 'fakemysql' + (++fakeIds);
+    return { id, config: { db: { [id]: { type: 'mysql', host: 'fake' } }, mcp: { timeout_ms: 500 } } };
+};
+
+// runs one statement on a fresh connection; resolves with every callback call
+// made within 30ms (so a second call would show up)
+async function oneCall(f, sql) {
+    const conn = await mcp_db.getConnection(f.config, f.id);
+    const calls = [];
+    conn.view(() => {}).query(sql, function () { calls.push(Array.from(arguments)); });
+    await new Promise((res) => setTimeout(res, 30));
+    return calls;
+}
+
+async function mysqlDriverTests() {
+    console.log('\n-- mcp_db: mysql driver (fake mysql2, no server) --');
+    const SET_RO = 'SET SESSION TRANSACTION READ ONLY';
+    const START  = 'START TRANSACTION READ ONLY';
+
+    await ok('mysql driver: every call sets the session read-only, then runs in a read-only transaction', async () => {
+        await withFakeMysql(() => undefined, async (conn, sent) => {
+            const f = fakeMysqlConfig();
+            const calls = await oneCall(f, 'SELECT 1');
+            assert.strictEqual(calls.length, 1);
+            assert.strictEqual(calls[0][0], null);
+            assert.deepStrictEqual(sent, ['SET SESSION max_execution_time = 500', SET_RO, START, 'SELECT 1', 'ROLLBACK']);
+            // and again on reuse (the ping is a call too)
+            sent.length = 0;
+            await mcp_db.callDb(f.config, f.id, (c, done) => c.query('SELECT 2', done));
+            assert.deepStrictEqual(sent.filter((s) => s === SET_RO).length, 2);
+            sent.forEach((s, i) => { if (s === START) assert.strictEqual(sent[i - 1], SET_RO); });
+        });
+    });
+
+    for (const failing of [SET_RO, START, 'SELECT 1']) {
+        await ok('mysql driver: if "' + failing + '" fails, the call fails once and nothing runs after it but ROLLBACK', async () => {
+            await withFakeMysql((s) => s === failing ? new Error('refused: ' + s) : undefined, async (conn, sent) => {
+                const calls = await oneCall(fakeMysqlConfig(), 'SELECT 1');
+                assert.strictEqual(calls.length, 1);
+                assert.strictEqual(calls[0][0].message, 'refused: ' + failing);
+                const rest = sent.slice(sent.indexOf(failing) + 1);
+                assert.ok(rest.every((s) => s === 'ROLLBACK'), 'sent after the failure: ' + rest.join(' | '));
+                if (failing !== 'SELECT 1') assert.ok(!sent.includes('SELECT 1'));
+            });
+        });
+    }
+
+    await ok('mysql driver: a failing timeout SET is not fatal (MariaDB)', async () => {
+        await withFakeMysql((s) => /max_execution_time/.test(s) ? new Error('unknown variable') : undefined,
+            async (conn, sent) => {
+                const calls = await oneCall(fakeMysqlConfig(), 'SELECT 1');
+                assert.strictEqual(calls.length, 1);
+                assert.strictEqual(calls[0][0], null);
+                assert.ok(sent.includes('SELECT 1'));
+            });
+    });
+
+    await ok('db_mysql: NOTNULL where-keys are quoted with escapeId', async () => {
+        const db_mysql = require('../db_mysql.js');
+        let seen = null;
+        const fake = { query(sql, values, cb) { seen = sql; cb(null, []); } };
+        await new Promise((res) => db_mysql.showValueRequest(fake, 't', { 'a@@b': 'NOTNULL', 'c`d': 'NOTNULL' },
+            { order_by: 'id', direction: 'ASC', limit: 1 }, res));
+        assert.ok(seen.includes('`a@@b` IS NOT NULL'), seen);
+        assert.ok(seen.includes('`c``d` IS NOT NULL'), seen);
+    });
+}
+
 // ---- Task 2: postgres / mysql (opt-in) -------------------------------------
 
 async function postgresTests() {
@@ -595,6 +692,7 @@ async function toolTests() {
 (async () => {
     try {
         await connectionLayerTests();
+        await mysqlDriverTests();
         await postgresTests();
         await mysqlTests();
         await endpointTests();

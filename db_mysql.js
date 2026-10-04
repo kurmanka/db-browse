@@ -92,7 +92,7 @@ function showValueRequest(connection, table, where, order_limit_offset, doneRetu
     for( var col in where ) {
         var val = where[col];
         if (val === 'NOTNULL')
-            conditions.push(escape(col) + " IS NOT NULL");
+            conditions.push(mysql.escapeId(col) + " IS NOT NULL");
         else {
         // mysql-specific escape and the placeholder
             conditions.push(mysql.escapeId(col) + "=?");
