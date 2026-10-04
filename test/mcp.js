@@ -121,6 +121,15 @@ async function connectionLayerTests() {
         await assert.rejects(mcp_db.getConnection(sqliteConfig, 'nope'), /No such database: nope/);
     });
 
+    for (const id of ['constructor', 'toString', '__proto__']) {
+        await ok('getConnection: inherited property name "' + id + '" rejects (does not throw)', async () => {
+            await assert.rejects(mcp_db.getConnection(sqliteConfig, id), /No such database/);
+        });
+        await ok('callDb: inherited property name "' + id + '" rejects (does not throw)', async () => {
+            await assert.rejects(mcp_db.callDb(sqliteConfig, id, (c, done) => done(null, [])), /No such database/);
+        });
+    }
+
     await ok('queries on one connection never overlap, and run in order', async () => {
         let active = 0, maxActive = 0;
         const runner = (sql, params, cb) => {

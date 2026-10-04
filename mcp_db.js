@@ -17,7 +17,7 @@ var db_sqlite = require('./db_sqlite.js');
 
 var DEFAULT_TIMEOUT_MS = 30000;
 
-var connections = {};   // dbId -> Promise of a connected connection
+var connections = Object.create(null);   // dbId -> Promise of a connected connection
 
 
 // Credentials for the MCP connection. If readonly_user is set, use it: a DB
@@ -151,7 +151,8 @@ function forget(dbId, promise) {
 // A connected, read-only connection for config.db[dbId]; opened lazily, pinged
 // on reuse, reopened if the ping fails.
 function getConnection(config, dbId) {
-    var c = config.db[dbId];
+    // dbId may be client input: only own keys count ('constructor' etc. do not)
+    var c = Object.prototype.hasOwnProperty.call(config.db, dbId) && config.db[dbId];
     if (!c) {
         return Promise.reject(new Error('No such database: ' + dbId));
     }
