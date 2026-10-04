@@ -10,9 +10,13 @@ const fs     = require('fs');
 const os     = require('os');
 const path   = require('path');
 const Database = require('better-sqlite3');
+const express = require('express');
+const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
+const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/client/streamableHttp.js');
 
 const mcp_db    = require('../mcp_db.js');
 const db_sqlite = require('../db_sqlite.js');
+const mcp       = require('../mcp.js');
 
 const T = 'mcp_test_items';
 
@@ -310,6 +314,95 @@ async function mysqlTests() {
     }
 }
 
+// ---- Task 3/4: the HTTP endpoint -------------------------------------------
+
+function startApp(config) {
+    const app = express();
+    const mounted = mcp.mount(app, config);
+    return new Promise((resolve) => {
+        const server = app.listen(0, '127.0.0.1', () =>
+            resolve({ mounted, port: server.address().port, close: () => server.close() }));
+    });
+}
+
+async function connect(port, token) {
+    const client = new Client({ name: 'test', version: '0' });
+    await client.connect(new StreamableHTTPClientTransport(
+        new URL('http://127.0.0.1:' + port + '/mcp'),
+        { requestInit: { headers: { Authorization: 'Bearer ' + token } } }));
+    return client;
+}
+
+const call = (client, name, args) => client.callTool({ name, arguments: args || {} });
+const data = (result) => JSON.parse(result.content[0].text);
+
+async function rawPost(port, headers) {
+    return fetch('http://127.0.0.1:' + port + '/mcp', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json',
+                                 Accept: 'application/json, text/event-stream' }, headers),
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+    });
+}
+
+async function endpointTests() {
+    console.log('\n-- mcp: endpoint, auth, list_databases --');
+
+    const config = Object.assign({}, sqliteConfig, {
+        db: Object.assign({}, sqliteConfig.db, {
+            secretdb: { type: 'postgres', host: 'nowhere.invalid', user: 'u', password: 'hunter2', database: 'd' },
+        }),
+    });
+    const app = await startApp(config);
+
+    try {
+        await ok('mount() reports it mounted', () => assert.strictEqual(app.mounted, true));
+
+        await ok('no token → 401', async () => {
+            const r = await rawPost(app.port, {});
+            assert.strictEqual(r.status, 401);
+        });
+
+        await ok('wrong token → 401', async () => {
+            const r = await rawPost(app.port, { Authorization: 'Bearer nope' });
+            assert.strictEqual(r.status, 401);
+        });
+
+        await ok('GET with a valid token → 405 (stateless: no SSE stream)', async () => {
+            const r = await fetch('http://127.0.0.1:' + app.port + '/mcp',
+                { headers: { Authorization: 'Bearer secret-token' } });
+            assert.strictEqual(r.status, 405);
+        });
+
+        await ok('list_databases: ids, types, comments; never credentials', async () => {
+            const client = await connect(app.port, 'secret-token');
+            const r = await call(client, 'list_databases');
+            const text = r.content[0].text;
+            assert.ok(!text.includes('hunter2'));
+            assert.ok(!text.includes('nowhere.invalid'));
+            const list = data(r);
+            assert.deepStrictEqual(list.find((d) => d.id === 'lite'),
+                { id: 'lite', type: 'sqlite', comment: 'fixture' });
+            assert.deepStrictEqual(list.find((d) => d.id === 'secretdb'),
+                { id: 'secretdb', type: 'postgres', comment: null });
+            await client.close();
+        });
+    } finally {
+        app.close();
+    }
+
+    await ok('no token configured → nothing mounted, /mcp is a 404', async () => {
+        const bare = await startApp({ db: {}, mcp: {} });
+        try {
+            assert.strictEqual(bare.mounted, false);
+            const r = await rawPost(bare.port, { Authorization: 'Bearer anything' });
+            assert.strictEqual(r.status, 404);
+        } finally {
+            bare.close();
+        }
+    });
+}
+
 // ---- main ------------------------------------------------------------------
 
 (async () => {
@@ -317,6 +410,7 @@ async function mysqlTests() {
         await connectionLayerTests();
         await postgresTests();
         await mysqlTests();
+        await endpointTests();
     } finally {
         for (const f of [tmpFile, attachFile]) { try { fs.unlinkSync(f); } catch (_) {} }
     }

@@ -21,6 +21,7 @@ const decoder = new StringDecoder('utf8');
 var requestHandlers = require('./requestHandlers.js');
 var sqlt = require('./sqlt.js');
 var util = require('./util.js');
+var mcp = require('./mcp.js');
 
 // configuration
 var config = require('./config.js');
@@ -57,6 +58,11 @@ app.use(function(req, res, next){
 
 // logging with response time
 app.use(morgan('tiny'));
+
+// MCP interface (a no-op unless config.mcp.token is set). It has to come before
+// the session middleware, or every agent request would create a session file.
+mcp.mount(app, config);
+
 // sessions
 app.use(express_session(config.session_config));
 
