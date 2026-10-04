@@ -21,6 +21,11 @@ var db_sqlite = require('./db_sqlite.js');
 
 var DEFAULT_TIMEOUT_MS = 30000;
 
+// how long past its timeout a statement may go unanswered before the watchdog
+// in wrap() drops the connection (the database's own timeout should come first)
+var STUCK_GRACE_MS = 5000;
+var stuckGraceMs = STUCK_GRACE_MS;
+
 var connections = Object.create(null);   // dbId -> Promise of a connected connection
 
 
@@ -74,8 +79,19 @@ function makeQueue() {
 // view(onError) gives one tool call its own handle on the connection. If a
 // db_*.js callback throws (rowsCounter() does on a missing table), onError gets
 // the exception, instead of it escaping into the driver and killing the process.
-function wrap(runner, close) {
+//
+// Watchdog: with timeoutMs, a statement that has not answered within timeoutMs
+// plus a grace period (the database's own timeout should have fired by then)
+// fails with an error, close() is called (once per connection), and the queue
+// moves on; if the runner answers later after all, that answer is ignored.
+// close() must drop the connection hard and forget it, so the next
+// getConnection() opens a new one (open() passes such a close).
+// Without the watchdog one stuck statement would stall every later call.
+function wrap(runner, close, timeoutMs) {
     var enqueue = makeQueue();
+    var closed = false;
+    var limit = Number(timeoutMs);
+    var watch = isFinite(limit) && limit > 0;
 
     return {
         view: function (onError) {
@@ -86,14 +102,36 @@ function wrap(runner, close) {
                         params = undefined;
                     }
                     enqueue(function (release) {
-                        runner(sql, params, function () {
+                        var settled = false;
+                        var timer = null;
+
+                        function deliver(args) {
                             try {
-                                cb.apply(null, arguments);
+                                cb.apply(null, args);
                             } catch (e) {
                                 onError(e);
                             } finally {
                                 release();
                             }
+                        }
+
+                        if (watch) {
+                            // setTimeout treats more than 2^31-1 ms as 1 ms
+                            timer = setTimeout(function () {
+                                settled = true;
+                                if (!closed) {
+                                    closed = true;
+                                    try { close(); } catch (e) {}
+                                }
+                                deliver([new Error('Statement did not return in time; connection dropped')]);
+                            }, Math.min(limit + stuckGraceMs, 2147483647));
+                        }
+
+                        runner(sql, params, function () {
+                            if (settled) { return; }   // too late: the job has failed already
+                            settled = true;
+                            clearTimeout(timer);
+                            deliver(arguments);
                         });
                     });
                 }
@@ -140,7 +178,11 @@ function pgDriver(cc, timeoutMs, onLost) {
     return {
         open  : function (done) { client.connect(done); },
         runner: run,
-        close : function () { client.end(function () {}); }
+        // a hard close: on a dead socket end() alone may never finish
+        close : function () {
+            client.end(function () {});
+            if (client.connection && client.connection.stream) { client.connection.stream.destroy(); }
+        }
     };
 }
 
@@ -185,7 +227,12 @@ function mysqlDriver(cc, timeoutMs, onLost) {
     return {
         open  : function (done) { conn.connect(function (err) { done(err); }); },
         runner: run,
-        close : function () { conn.end(function () {}); }
+        // a hard close: end() would queue a QUIT behind a stuck statement, and
+        // mysql2's destroy() only half-closes the socket
+        close : function () {
+            conn.destroy();
+            if (conn.stream) { conn.stream.destroy(); }
+        }
     };
 }
 
@@ -220,7 +267,12 @@ function open(config, dbId, onLost) {
         return Promise.reject(new Error("Unsupported database type '" + c.type + "'"));
     }
 
-    var conn = wrap(driver.runner, driver.close);
+    // close() forgets the connection as well, for the watchdog in wrap();
+    // sqlite has no close (and, being synchronous, cannot get stuck)
+    var conn = wrap(driver.runner, function () {
+        onLost();
+        if (driver.close) { driver.close(); }
+    }, timeoutMs);
     return new Promise(function (resolve, reject) {
         driver.open(function (err) {
             if (err) { reject(err); } else { resolve(conn); }
@@ -278,7 +330,13 @@ function callDb(config, dbId, fn) {
 }
 
 
+// tests only: a shorter grace; no argument restores the default
+function setStuckGraceMs(ms) {
+    stuckGraceMs = (ms === undefined) ? STUCK_GRACE_MS : ms;
+}
+
 exports.connectionConfig = connectionConfig;
 exports.wrap             = wrap;       // exported for tests
+exports.setStuckGraceMs  = setStuckGraceMs;
 exports.getConnection    = getConnection;
 exports.callDb           = callDb;

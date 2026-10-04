@@ -159,6 +159,73 @@ async function connectionLayerTests() {
         assert.deepStrictEqual(rows, ['next']);
     });
 
+    await ok('watchdog: a stuck statement fails, the connection is closed once, the queue moves on', async () => {
+        mcp_db.setStuckGraceMs(10);
+        try {
+            let late = null, closed = 0;
+            const runner = (sql, params, cb) => {
+                if (sql === 'stuck') { late = () => cb(null, ['late']); return; }
+                setTimeout(() => cb(null, [sql]), 5);
+            };
+            const view = mcp_db.wrap(runner, () => { closed++; }, 20).view(() => {});
+            const stuckCalls = [];
+            const t0 = Date.now();
+            const failed = new Promise((res) => view.query('stuck', function () {
+                stuckCalls.push(Array.from(arguments)); res();
+            }));
+            const next = new Promise((res) => view.query('next', (err, rows) => res(rows)));
+            await failed;
+            assert.ok(Date.now() - t0 < 1000, 'took ' + (Date.now() - t0) + 'ms');
+            assert.match(stuckCalls[0][0].message, /did not return in time; connection dropped/);
+            assert.deepStrictEqual(await next, ['next']);
+            assert.strictEqual(closed, 1);
+
+            late();                      // the dead runner answers after all
+            const after = await new Promise((res) => view.query('after', (err, rows) => res(rows)));
+            assert.deepStrictEqual(after, ['after']);
+            assert.strictEqual(stuckCalls.length, 1);
+            assert.strictEqual(closed, 1);
+        } finally {
+            mcp_db.setStuckGraceMs();
+        }
+    });
+
+    await ok('watchdog: a late answer does not release the queue a second time', async () => {
+        mcp_db.setStuckGraceMs(10);
+        try {
+            let late = null, active = 0, maxActive = 0;
+            const runner = (sql, params, cb) => {
+                if (sql === 'stuck') { late = () => cb(null, []); return; }
+                active++; maxActive = Math.max(maxActive, active);
+                setTimeout(() => { active--; cb(null, [sql]); }, 20);
+            };
+            const view = mcp_db.wrap(runner, () => {}, 20).view(() => {});
+            await new Promise((res) => view.query('stuck', res));
+            const a = new Promise((res) => view.query('a', (e, r) => res(r)));
+            const b = new Promise((res) => view.query('b', (e, r) => res(r)));
+            late();                      // while 'a' runs: must not start 'b' early
+            assert.deepStrictEqual([await a, await b], [['a'], ['b']]);
+            assert.strictEqual(maxActive, 1);
+        } finally {
+            mcp_db.setStuckGraceMs();
+        }
+    });
+
+    await ok('watchdog: off without a timeout; a statement that answers in time is not affected', async () => {
+        mcp_db.setStuckGraceMs(10);
+        try {
+            let closed = 0;
+            const runner = (sql, params, cb) => setTimeout(() => cb(null, [sql]), 60);
+            const noTimeout = mcp_db.wrap(runner, () => { closed++; }).view(() => {});
+            assert.deepStrictEqual(await new Promise((res) => noTimeout.query('slow', (e, r) => res(r))), ['slow']);
+            const inTime = mcp_db.wrap(runner, () => { closed++; }, 200).view(() => {});
+            assert.deepStrictEqual(await new Promise((res) => inTime.query('ok', (e, r) => res(r))), ['ok']);
+            assert.strictEqual(closed, 0);
+        } finally {
+            mcp_db.setStuckGraceMs();
+        }
+    });
+
     await ok('callDb: rejects (instead of crashing) when the db function callback throws', async () => {
         await assert.rejects(
             mcp_db.callDb(sqliteConfig, 'lite', (c, done) =>
@@ -217,6 +284,7 @@ async function withFakeMysql(reply, fn) {
     const mysql2 = require('mysql2');
     const sent = [];
     const conn = {
+        created: 0,
         destroyed: 0,
         on() {},
         connect(cb) { cb(null); },
@@ -231,7 +299,7 @@ async function withFakeMysql(reply, fn) {
         },
     };
     const orig = mysql2.createConnection;
-    mysql2.createConnection = () => conn;
+    mysql2.createConnection = () => { conn.created++; return conn; };
     try { return await fn(conn, sent); } finally { mysql2.createConnection = orig; }
 }
 
@@ -292,6 +360,25 @@ async function mysqlDriverTests() {
                 assert.strictEqual(calls[0][0], null);
                 assert.ok(sent.includes('SELECT 1'));
             });
+    });
+
+    await ok('watchdog: a stuck mysql statement drops the connection; the next call opens a new one', async () => {
+        mcp_db.setStuckGraceMs(10);
+        try {
+            await withFakeMysql((s) => s === 'SELECT forever' ? 'hang' : undefined, async (conn, sent) => {
+                const f = fakeMysqlConfig();
+                f.config.mcp.timeout_ms = 20;
+                await assert.rejects(mcp_db.callDb(f.config, f.id, (c, done) => c.query('SELECT forever', done)),
+                    /did not return in time; connection dropped/);
+                assert.strictEqual(conn.destroyed, 1);
+                sent.length = 0;
+                await mcp_db.callDb(f.config, f.id, (c, done) => c.query('SELECT 1', done));
+                assert.strictEqual(conn.created, 2, 'a new connection was opened');
+                assert.ok(!sent.includes('SELECT NOW()'), 'the dropped connection was not reused');
+            });
+        } finally {
+            mcp_db.setStuckGraceMs();
+        }
     });
 
     await ok('db_mysql: NOTNULL where-keys are quoted with escapeId', async () => {
@@ -389,6 +476,21 @@ async function postgresTests() {
         await ok('postgres: the connection is still usable after errors', async () => {
             const rows = await sql('SELECT 1 AS one');
             assert.strictEqual(rows[0].one, 1);
+        });
+
+        await ok('postgres: watchdog drops a stuck connection; the next call gets a new one', async () => {
+            // a negative grace makes the watchdog fire (at 100ms) before statement_timeout (500ms)
+            const pid = (await sql('SELECT pg_backend_pid() AS pid'))[0].pid;
+            mcp_db.setStuckGraceMs(-400);
+            try {
+                const t0 = Date.now();
+                await assert.rejects(sql('SELECT pg_sleep(3)'), /did not return in time; connection dropped/);
+                assert.ok(Date.now() - t0 < 1000, 'took ' + (Date.now() - t0) + 'ms');
+            } finally {
+                mcp_db.setStuckGraceMs();
+            }
+            const rows = await sql('SELECT pg_backend_pid() AS pid');
+            assert.notStrictEqual(rows[0].pid, pid, 'still the old backend');
         });
     } finally {
         await admin.query('DROP TABLE IF EXISTS ' + T);
@@ -689,6 +791,15 @@ async function toolTests() {
 
 // ---- main ------------------------------------------------------------------
 
+// if a callback never comes, node exits (with 0) once nothing is left to do
+let finished = false;
+process.on('exit', () => {
+    if (!finished) {
+        console.log('\nTests did not finish: something never called back');
+        process.exitCode = 1;
+    }
+});
+
 (async () => {
     try {
         await connectionLayerTests();
@@ -700,6 +811,7 @@ async function toolTests() {
     } finally {
         for (const f of [tmpFile, attachFile, vacuumFile, otherFile]) { try { fs.unlinkSync(f); } catch (_) {} }
     }
+    finished = true;
     console.log('\n' + passed + ' passed, ' + failed + ' failed\n');
     process.exit(failed ? 1 : 0);
 })();
