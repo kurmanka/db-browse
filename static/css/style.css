@@ -1,19 +1,24 @@
-/* The page is a fixed-height column: the header and footer stay put and only
-   the content between them scrolls. */
-html {
-    height: 100%;
-}
-
+/* The document itself scrolls, so the scrollbars are the window's, at the edge
+   of the viewport, instead of belonging to an inset box in the middle of the
+   page. The header and the footer are pinned to the viewport, and the inline
+   script at the end of views/page.pug reserves their height on the body; the
+   padding below is the fallback for when that script does not run. */
 body {
     margin: 0;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    padding-top: 4.2em;      /* fallback: header height */
+    padding-bottom: 3.4em;   /* fallback: footer height */
+}
+
+#header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    background: #fff;
 }
 
 #topnav {
-    flex: 0 0 auto;
     background: #eee;
     padding: 1ex;
     text-align: right;
@@ -25,17 +30,16 @@ body {
     text-decoration: none;
 }
 
-/* the only part of the page that scrolls; min-height lets it shrink so the
-   flex column itself never overflows */
 #content {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: auto;
     margin: 2em;
 }
 
 #footer {
-    flex: 0 0 auto;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
     background: #eee;
     padding: 2ex;
     text-align: center;
@@ -192,14 +196,13 @@ TABLE#statusT {
 
 /* the breadcrumbs belong to the fixed header, not to the scrolling content */
 .breadcrumbs {
-    flex: 0 0 auto;
     margin: 0;
     padding: 1ex 2em;
 }
 
-/* the view switcher on row-detail pages: a flex item, so text-align, not float */
+/* the view switcher on row-detail pages; float does not apply inside the
+   header's block flow, so it is right-aligned with text-align */
 .nav2 {
-    flex: 0 0 auto;
     margin: 0;
     padding: 0 2em;
     text-align: right;

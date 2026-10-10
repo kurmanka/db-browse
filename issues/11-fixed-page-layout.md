@@ -29,6 +29,50 @@ scroll away on long pages — row listings and table details are long. The legac
 - With a long table, the header and footer stay visible while the content
   scrolls; no content is hidden behind the fixed bars.
 
+## Corrigendum: the first attempt put the scrollbars inside the page
+
+The flex-column version above made `#content` the scroll container, inset by its
+`margin: 2em`. That means the scrollbars belonged to an inner box floating 32px
+inside the window instead of to the window, and on a wide listing — a table with
+both many rows and many columns — the page showed **two scrollbars side by side
+in the middle of the view**. Measured on
+`submittal1/package/package_id/_DESC`:
+
+    html/body   scrollHeight == clientHeight  (757 == 757)   document does NOT scroll
+    #content    scrollWidth 292,004 vs clientWidth  1,321    horizontal scrollbar
+                scrollHeight 10,140 vs clientHeight   550    vertical scrollbar
+                margin 32px
+
+The doctype was suspected, but it makes no difference here — measuring the same
+page with and without it gives identical results (`BackCompat` and `CSS1Compat`
+both scroll on `#content` only).
+
+The layout now lets the **document** scroll, so both scrollbars are the window's,
+at the edge of the viewport:
+
+- `body` no longer clips or flexes; `#header` (a new wrapper around the topnav,
+  the row-view nav line and the breadcrumbs) and `#footer` are `position: fixed`,
+  full width, so they stay pinned and stay viewport-width even when a wide table
+  scrolls the document sideways.
+- A few lines at the end of `views/page.pug` set the body's top/bottom padding
+  from `offsetHeight`, because the header height varies by page (63px, or 81px
+  when the row view adds its nav line) and the breadcrumbs can wrap. `style.css`
+  carries a fallback padding for when the script does not run. This is the one
+  place where a script now participates in layout; the alternative — a hardcoded
+  padding per page shape — would have been wrong on every page that does not
+  match the assumption.
+
+Measured after the change, on the same page:
+
+    document scrolls: vertical = true, horizontal = true
+    #content overflow: visible (it is not a scroll container any more)
+    header position: fixed, height 81px, body padding-top 81px
+    scrolled to (900, 1500): header top 0, footer bottom 742 = viewport 757 - scrollbar
+
+and across page types (login / table list / table details / row view / error):
+`contentTop` 95 or 113 against a header of 63 or 81 — nothing hidden under it in
+any case.
+
 ## Status
 
 - [x] fixed

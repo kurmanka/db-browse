@@ -13,22 +13,26 @@ html
     link(rel="stylesheet", href="/_/css/style.css")
     script(src="//ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js")
   body
-    #topnav
-      block topnav
-      if authenticate
-        a(href="/logout") Logout <<<
-      else
-        | &nbsp;
 
-    block topnav2
+    //- pinned to the viewport so it stays put while the document scrolls; the
+    //- script at the end of the body reserves its height
+    #header
+      #topnav
+        block topnav
+        if authenticate
+          a(href="/logout") Logout <<<
+        else
+          | &nbsp;
 
-    p.breadcrumbs
-      if breadcrumbs
-        each crumb,i in breadcrumbs
-          if i > 0
-            |  / 
-          a(href="/" + crumb.u)= crumb.t
-        |  / 
+      block topnav2
+
+      p.breadcrumbs
+        if breadcrumbs
+          each crumb,i in breadcrumbs
+            if i > 0
+              |  / 
+            a(href="/" + crumb.u)= crumb.t
+          |  / 
 
     #content
       h1 
@@ -42,3 +46,20 @@ html
       a(href='/_reset') reset
       |  · 
       a(href='/_exit') restart
+
+    script.
+      // The header and footer are fixed, so the body has to leave room for
+      // them. Measuring here keeps the content clear of them on every page,
+      // whatever the header happens to hold (the row view adds a nav line and
+      // the breadcrumbs can wrap). The body padding in style.css is the
+      // fallback for when this does not run.
+      (function () {
+        function fit() {
+          var h = document.getElementById('header');
+          var f = document.getElementById('footer');
+          if (h) { document.body.style.paddingTop = h.offsetHeight + 'px'; }
+          if (f) { document.body.style.paddingBottom = f.offsetHeight + 'px'; }
+        }
+        fit();
+        window.addEventListener('resize', fit);
+      })();
