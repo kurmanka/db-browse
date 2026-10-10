@@ -333,8 +333,9 @@ function prepare_dbconnection( req, res, next ) {
     req.dbconfig = config.db[dbId];
 
     if (!req.dbconfig) {
+        // unknown id: not found, not a server error
         return requestHandlers.showError(req, res,
-                                         "No such database: " + dbId + ".");
+                                         "No such database: " + dbId + ".", null, 404);
     }
 
     // for compatibility
@@ -346,9 +347,10 @@ function prepare_dbconnection( req, res, next ) {
 
     var done = function (err) {
         if (err) {
-            // handle the error
+            // The database is configured but unreachable: that is a server-side
+            // fault, distinct from an unknown id (404, above).
             requestHandlers.showError(req, res,
-                "Error connecting to the database '" + dbId + "'. " + err);
+                "Error connecting to the database '" + dbId + "'. " + err, null, 502);
             delete database[dbId];
 
         } else {

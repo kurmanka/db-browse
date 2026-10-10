@@ -127,22 +127,43 @@ function showPage (res, error, content) {
     res.send(content);
 }
 
-function showError (req, res, msg, title) {
+// Driver errors that mean "that thing is not there". They reach us as plain
+// strings (db_postgres.js and db_mysql.js stringify their errors), so they are
+// recognised by shape; this lets a bad URL segment answer 404, not 500.
+var NOT_FOUND_DRIVER_ERROR =
+    /does not exist|doesn't exist|no such (column|table)|unknown (column|table)/i;
+
+function errorStatus (msg) {
+    if (msg && msg.status) { return msg.status; }
+    var text = (msg && msg.message) ? msg.message : msg;
+    if (text && NOT_FOUND_DRIVER_ERROR.test(String(text))) { return 404; }
+    return 500;
+}
+
+// showError(req, res, msg[, title[, status]]). The status defaults to 500, or
+// to 404 when the message reads like a missing table/column/database; an
+// explicit status (or msg.status) always wins.
+function showError (req, res, msg, title, status) {
     breadcrumbs( req, res );
+
+    if (status === undefined) { status = errorStatus(msg); }
+
+    // an Error object would render as "Error: message"; show just the message
+    var text = (msg && msg.message) ? msg.message : msg;
 
     just.render('msg', {
             breadcrumbs: res.locals.breadcrumbs,
             title: title || "Error",
             authenticate: authenticate,
-            msg: msg },
+            msg: text },
 
         function(error, html) {
             if (error) {
                 console.log(error);
             }
 
-            console.log(msg);
-            res.send(500, html);
+            console.log(text);
+            res.status(status).send(html);
         }
     );
 }
@@ -492,7 +513,7 @@ function searchObject(string, obType) {
 }
 
 function noSuchTable (req, res, next) {
-    res.send('No such table: ' + req.params.table);
+    res.status(404).send('No such table: ' + req.params.table);
 }
 
 // 
@@ -634,13 +655,14 @@ function show_rows(req, res) {
 
         function (results, done) {
             if (results == 0) {
-                // error
-                if (Object.keys(req.query).length == 1) {
-                    done( "The value '" + l.value + "' is not present in column '" +
-                      l.column + "'" );
-                } else {
-                    done( "No records found to match your filters." );
-                }
+                // not an error on our side: the filters simply matched nothing
+                var notFound = new Error(
+                    (Object.keys(req.query).length == 1)
+                      ? "The value '" + l.value + "' is not present in column '" +
+                        l.column + "'"
+                      : "No records found to match your filters." );
+                notFound.status = 404;
+                done(notFound);
             } else {
                 l.values = results;
                 l.links  = row_detail_make_links( req, res, results );

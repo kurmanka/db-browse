@@ -40,4 +40,35 @@ that matched nothing.
 
 ## Status
 
-- [ ] fixed
+- [x] fixed
+
+## What changed
+
+- `showError(req, res, msg[, title[, status]])` takes a status. When none is
+  given it infers one: an explicit `msg.status` wins, a message that reads like a
+  missing relation/column (Postgres `does not exist`, MySQL `Unknown column`,
+  SQLite `no such column`) becomes 404, everything else stays 500. Error objects
+  are displayed by message, so a page no longer says "Error: No records found…".
+- `start.js`: unknown `db_id` → 404; a configured database that fails to connect
+  → 502 (the app is a gateway to the database, and that failure is distinct from
+  user input that matched nothing).
+- `noSuchTable` → 404.
+- `show_rows`: an empty result set is a 404 (`err.status = 404`), not a 500.
+
+`test/routes.js` now asserts the 404s. It discovers a browsable SQLite database
+from `config.js` at run time and skips those cases when there is none, the same
+way the Postgres/MySQL MCP tests skip without their URLs.
+
+## Verification
+
+| Request | Before | After |
+|---|---|---|
+| `GET /nope` | 500 | **404** |
+| `GET /base` (configured, unreachable) | 500 | **502** |
+| `GET /notes2/does_not_exist` | 200 | **404** |
+| `GET /notes2/notes/no_such_column` | 500 | **404** |
+| `GET /notes2/meta/key/<no match>` | 500 | **404** |
+| `GET /notes2`, `GET /notes2/meta`, row views | 200 | 200 |
+
+    $ node test/routes.js
+    13 passed, 0 failed

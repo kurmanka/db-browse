@@ -13,11 +13,11 @@ planned fix, and a status checkbox. Fixes are committed one per issue.
 | [01](01-routes-test-stale-server.md) | `test/routes.js` can pass against a stale server | high (test integrity) | fixed |
 | [02](02-db-schema-pg-dump-command.md) | `/:db/.schema` builds a broken `pg_dump` command | medium | fixed |
 | [03](03-sqlite-missing-table.md) | A missing SQLite table renders an empty page with HTTP 200 | medium | fixed |
-| [04](04-http-status-codes.md) | "Not found" answers with HTTP 500 | medium | open |
+| [04](04-http-status-codes.md) | "Not found" answers with HTTP 500 | medium | fixed |
 | [05](05-postgres-identifier-escaping.md) | Postgres identifiers are not escaped (web UI injection) | high (security) | open |
 | [06](06-raw-sql-guard.md) | The raw-SQL DDL guard is a bypassable regex | medium | open |
 | [07](07-addon-loading.md) | Addon loading is broken for the bundled `fun` addon | low | open |
-| [08](08-misconfigured-database.md) | A misconfigured database shows up healthy, then 500s | low (config) | open |
+| [08](08-misconfigured-database.md) | A misconfigured database shows up healthy, then 500s | low (config) | recorded |
 
 ## From the README "To do" / planned improvements
 

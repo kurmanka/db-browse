@@ -38,4 +38,13 @@ be removed/commented out).
 
 ## Status
 
-- [ ] recorded (code part lands with issue 04)
+- [x] recorded — code part landed with issue 04
+
+## What changed (issue 04)
+
+- unknown database id → 404 `No such database: <id>.`
+- configured but unreachable database → 502 `Error connecting to the database
+  '<id>'. <driver error>` — verified live for `base`.
+
+`config.js` itself was left alone. The remaining action is the user's: point
+`base` at an existing database, or remove/comment the entry.

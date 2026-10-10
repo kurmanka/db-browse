@@ -74,6 +74,45 @@ async function login(user, pass) {
     return raw.split(';')[0];
 }
 
+// ---- discovering a browsable database to test against ----------------------
+
+function escapeRe(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Every sqlite database in config.js whose file exists, for database-backed
+// assertions; empty when there is none and those tests are skipped.
+function findSqliteDbs() {
+    const ids = [];
+    try {
+        const cfg = require(path.join(ROOT, 'config.js'));
+        for (const [id, c] of Object.entries(cfg.db || {})) {
+            if (c.type === 'sqlite' && c.database && fs.existsSync(c.database)) { ids.push(id); }
+        }
+    } catch (_) {}
+    return ids;
+}
+
+// The first table linked from the table list page.
+async function firstTable(db, cookie) {
+    try {
+        const r = await get('/' + db, { headers: { Cookie: cookie } });
+        const m = r.text.match(new RegExp('href="/' + escapeRe(db) + '/([^"/?]+)"'));
+        return m ? decodeURIComponent(m[1]) : null;
+    } catch (_) { return null; }
+}
+
+// The first column linked from the table details page. That page still uses the
+// legacy JUST engine, whose attributes are unquoted, so the quote is optional.
+async function firstColumn(db, table, cookie) {
+    try {
+        const r = await get('/' + db + '/' + table, { headers: { Cookie: cookie } });
+        const m = r.text.match(new RegExp(
+            'href\\s*=\\s*"?/?' + escapeRe(db) + '/' + escapeRe(table) + '/([^"/\\s>?]+)'));
+        return m ? decodeURIComponent(m[1]) : null;
+    } catch (_) { return null; }
+}
+
 // ---- server lifecycle ------------------------------------------------------
 
 // Resolves true if something is already listening on the port.
@@ -194,6 +233,48 @@ async function runTests() {
             assert.strictEqual(r.status, 200);
         });
 
+        // --- status semantics: absent things are 404, not 500 ---
+        // (before the logout test below: that one kills the session)
+
+        await ok('GET /unknown-db → 404', async () => {
+            const r = await get('/no_such_database_xyz', { headers: { Cookie: cookie } });
+            assert.strictEqual(r.status, 404);
+        });
+
+        // pick a sqlite database we can actually browse: config may list some
+        // whose file is missing or unreadable
+        let target = null;
+        for (const id of findSqliteDbs()) {
+            const t = await firstTable(id, cookie);
+            if (!t) { continue; }
+            const c = await firstColumn(id, t, cookie);
+            if (c) { target = { id, table: t, column: c }; break; }
+        }
+
+        if (!target) {
+            console.log('  SKIP  (no browsable sqlite database in config.js — skipping table/row 404 tests)');
+        } else {
+            await ok('GET /:db/<missing table> → 404', async () => {
+                const r = await get('/' + target.id + '/no_such_table_xyz',
+                                    { headers: { Cookie: cookie } });
+                assert.strictEqual(r.status, 404);
+            });
+
+            await ok('GET /:db/:table/<missing column> → 404', async () => {
+                const r = await get('/' + target.id + '/' + target.table + '/no_such_column_xyz',
+                                    { headers: { Cookie: cookie } });
+                assert.strictEqual(r.status, 404);
+            });
+
+            await ok('GET /:db/:table/:column/<unmatched value> → 404', async () => {
+                const r = await get('/' + target.id + '/' + target.table + '/' + target.column
+                                  + '/no_such_value_xyz',
+                                    { headers: { Cookie: cookie } });
+                assert.strictEqual(r.status, 404);
+            });
+        }
+
+        // keep last: it destroys the session the tests above share
         await ok('GET /logout → redirects to /', async () => {
             const r = await get('/logout', { headers: { Cookie: cookie } });
             assert.ok([200, 302].includes(r.status));
