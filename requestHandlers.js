@@ -163,6 +163,21 @@ function crumbPath(parts) {
     }).join('/');
 }
 
+// Query keys that control the row view instead of filtering it. Everything else
+// in the query string is treated as "column = value" by show_rows.
+var RESERVED_QUERY = { cols: 1 };
+
+// ?cols=a,b or ?cols=a&cols=b  ->  ['a', 'b']; null when absent or empty
+function parseCols(value) {
+    if (value === undefined || value === null) { return null; }
+    var list = (Array.isArray(value) ? value : [value])
+        .join(',')
+        .split(',')
+        .map(function (s) { return s.trim(); })
+        .filter(function (s) { return s.length > 0; });
+    return list.length ? list : null;
+}
+
 function breadcrumbs(req, res, next) {
     var l = res.locals;
     var bc = [];
@@ -618,6 +633,9 @@ function show_rows(req, res) {
     }
     l.view = view;
 
+    // ?cols=a&cols=b (or ?cols=a,b): the columns to show in the row view
+    var wanted = parseCols(req.query.cols);
+
     var fin = finish_pug( req, res, template );
 
     var order_limit_offset;
@@ -634,16 +652,41 @@ function show_rows(req, res) {
     // get the data
     async.waterfall([
         function (done){
+            // the picker needs the full list, and ?cols= must be checked
+            // against it rather than trusted
+            getDbType(l.dbType).getTableColumns(l.connection, l.table, done);
+        },
+
+        function (allColumns, done){
             var db = getDbType(l.dbType);
+            allColumns = allColumns || [];
+            l.allColumns = allColumns;
+
+            if (wanted) {
+                var unknown = wanted.filter(function (c) {
+                    return allColumns.indexOf(c) === -1;
+                });
+                if (unknown.length) {
+                    var bad = new Error('Unknown column(s): ' + unknown.join(', '));
+                    bad.status = 404;
+                    return done(bad);
+                }
+            }
+            l.selectedColumns = wanted || allColumns;
+
             var where = {};
-            // copy req.query content into where
-            for( var k in req.query ) { where[k] = req.query[k]; }
+            // copy req.query content into where, minus the view controls
+            for( var k in req.query ) {
+                if (RESERVED_QUERY[k]) { continue; }
+                where[k] = req.query[k];
+            }
             if (l.value) { where[l.column] = l.value; }
             // if order_limit_offset.order_by, require that col to have a value
             if (order_limit_offset && order_limit_offset.order_by) {
                 where[order_limit_offset.order_by] = 'NOTNULL';
             }
-            db.showValueRequest(l.connection, l.table, where, order_limit_offset, done);
+            db.showValueRequest(l.connection, l.table, where, order_limit_offset,
+                                wanted || null, done);
         },
 
         function (results, done) {
@@ -1056,3 +1099,4 @@ exports.show_db_schema    = show_db_schema;
 exports.errorStatus       = errorStatus;   // exported for tests
 exports.sqlRefusal        = sqlRefusal;    // exported for tests
 exports.buildUrl          = buildUrl;      // exported for tests
+exports.parseCols         = parseCols;     // exported for tests

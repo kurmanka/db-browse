@@ -26,6 +26,23 @@ block content
   - var rows_total = values.length
   - var rows_show  = Math.min(rows_total, limit)
 
+  //- which columns to show (issue 13); submits the current filters and the
+  //- same path, with the selection as repeated ?cols= parameters
+  if allColumns && allColumns.length > 1
+    details.cols
+      summary Columns: #{selectedColumns.length} of #{allColumns.length}
+      form(method="get", action=req.path)
+        each val, key in req.query
+          if key != 'cols'
+            input(type="hidden", name=key, value=val)
+        each col in allColumns
+          label.col
+            input(type="checkbox", name="cols", value=col,
+                  checked=selectedColumns.indexOf(col) !== -1)
+            = col
+        div
+          button(type="submit") Apply
+
   block data
 
   p Total rows: #{rows_total}, shown above: #{rows_show} 

@@ -167,9 +167,26 @@ function showColumnRequest(connection, column, table, limit, doneReturn) {
                     });
 }
 
-function showValueRequest(connection, table, where, order_limit_offset, doneReturn) {
+// The table's column names, in order. SELECT * ... LIMIT 0 gives no metadata
+// through better-sqlite3's all(), so this uses the pragma.
+function getTableColumns(connection, table, doneReturn) {
+    connection.query('PRAGMA table_info(' + escapeId(table) + ')',
+                    function (err, rows) {
+                        doneReturn(err, rows ? rows.map(function (r) { return r.name; }) : null);
+                    });
+}
+
+function showValueRequest(connection, table, where, order_limit_offset, columns, doneReturn) {
+    // columns is optional: callers that omit it pass the callback in its place
+    if (typeof columns === 'function') { doneReturn = columns; columns = null; }
+
     var conditions = [];
     var values = [];
+    var order_by = '', limit = '';
+    var select = (columns && columns.length)
+               ? columns.map(escapeId).join(', ')
+               : '*';
+
     for (var col in where) {
         var val = where[col];
         if (val === 'NOTNULL')
@@ -183,10 +200,7 @@ function showValueRequest(connection, table, where, order_limit_offset, doneRetu
     const condition = conditions.join(" AND ");
     if (condition) console.log( "BUILD CONDITION:", condition );
 
-    var where = '', order_by = '', limit = '';
-    if( condition ) {
-        where = " where " + condition;
-    }
+    var whereClause = condition ? " where " + condition : '';
 
     if (order_limit_offset) {
         order_by = " order by " + escapeId(order_limit_offset.order_by) + " "
@@ -194,9 +208,9 @@ function showValueRequest(connection, table, where, order_limit_offset, doneRetu
         limit = limitClause(order_limit_offset.limit);
     }
 
-    console.log( "SQL:", "select * from " + escapeId(table) + where + order_by + limit)
+    console.log( "SQL:", "select " + select + " from " + escapeId(table) + whereClause + order_by + limit)
 
-    connection.query("select * from " + escapeId(table) + where + order_by + limit, values,
+    connection.query("select " + select + " from " + escapeId(table) + whereClause + order_by + limit, values,
                     function (err, rows) {
                         doneReturn(err, rows);
                     });
@@ -215,5 +229,6 @@ exports.createConnection   = createConnection;
 exports.showAllTable       = showAllTable;
 exports.showColumnRequest  = showColumnRequest;
 exports.showValueRequest   = showValueRequest;
+exports.getTableColumns    = getTableColumns;
 exports.rowsCounter        = rowsCounter;
 exports.getSQL             = getSQL;

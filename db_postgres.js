@@ -141,15 +141,39 @@ function resultReturn(err, result, done, doneReturn) {
     }
 }
 
-function showValueRequest(connection, table, where, order_limit_offset, doneReturn) {
+// The table's column names, in order, from a zero-row select's result metadata.
+function getTableColumns(connection, table, doneReturn) {
+    try {
+        table = ident(table);
+    } catch (e) {
+        return doneReturn(e);
+    }
+    connection.query("SELECT * FROM " + table + " LIMIT 0",
+                    function (err, result) {
+                        doneReturn(err, (result && result.fields)
+                            ? result.fields.map(function (f) { return f.name; }) : null);
+                    });
+}
+
+function showValueRequest(connection, table, where, order_limit_offset, columns, doneReturn) {
+    // columns is optional: callers that omit it pass the callback in its place
+    if (typeof columns === 'function') { doneReturn = columns; columns = null; }
+
     var conditions = [];
     var values = [];
     var num = 1;
     var order_by = '';
     var limit = '';
+    var select = '*';
 
     try {
         table = ident(table);
+
+        if (columns && columns.length) {
+            // these came from the database (issue 13's column picker), so they
+            // are always quoted: `Name` must not be folded to `name`
+            select = columns.map(quoteIdent).join(', ');
+        }
 
         for( var col in where ) {
             var safeCol = ident(col);
@@ -177,9 +201,9 @@ function showValueRequest(connection, table, where, order_limit_offset, doneRetu
 
     var whereClause = condition ? " where " + condition : '';
 
-    console.log( "SQL:", "select * from " + table + whereClause + order_by + limit)
+    console.log( "SQL:", "select " + select + " from " + table + whereClause + order_by + limit)
 
-    connection.query("select * from " + table + whereClause + order_by + limit, values,
+    connection.query("select " + select + " from " + table + whereClause + order_by + limit, values,
                     function (err, result) {
                         doneReturn(err, result ? result.rows : null);
                     });
@@ -220,6 +244,12 @@ function ident (name) {
     throw new Error("Invalid identifier: " + name);
 }
 
+// Always-quoted identifier, for names this driver got from the database rather
+// than from a URL (the column picker sends exact column names).
+function quoteIdent (name) {
+    return '"' + String(name).replace(/"/g, '""') + '"';
+}
+
 // a row limit, safe to concatenate: LIMIT takes a constant, not a placeholder
 function limitClause (limit) {
     // Number(), not parseInt(): '1; DROP TABLE t' must not become 1
@@ -235,6 +265,7 @@ function directionWord (direction) {
 exports.showAllTable = showAllTable;
 exports.showColumnRequest = showColumnRequest;
 exports.showValueRequest = showValueRequest;
+exports.getTableColumns = getTableColumns;
 exports.rowsCounter = rowsCounter;
 exports.getSQL = getSQL;
 exports.ident = ident;      // exported for tests

@@ -292,6 +292,26 @@ async function runTests() {
                 assert.ok(r.text.indexOf('/count/') === -1,
                           'no link should be built from the count(*) column');
             });
+
+            await ok('?cols= narrows the row view to the chosen columns', async () => {
+                const r = await get('/' + target.id + '/' + target.table + '/' + target.column
+                                  + '/_ASC?cols=' + encodeURIComponent(target.column),
+                                    { headers: { Cookie: cookie } });
+                if (r.status !== 200) { return; }   // nothing non-null to show
+                assert.ok(r.text.indexOf('<th>' + target.column + '</th>') !== -1,
+                          'the chosen column is headed');
+                assert.strictEqual((r.text.match(/<th>/g) || []).length, 1,
+                                   'only the chosen column is shown');
+                assert.ok(r.text.indexOf('<details') !== -1, 'the picker is rendered');
+            });
+
+            await ok('?cols= with an unknown column → 404 with a clear message', async () => {
+                const r = await get('/' + target.id + '/' + target.table + '/' + target.column
+                                  + '/_ASC?cols=no_such_column_xyz',
+                                    { headers: { Cookie: cookie } });
+                assert.strictEqual(r.status, 404);
+                assert.ok(/Unknown column/.test(r.text), 'says which column is unknown');
+            });
         }
 
         // --- addon config endpoint ---

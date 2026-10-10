@@ -42,6 +42,8 @@ const p = {
         db_sqlite.showValueRequest(c, t, where, olo, (err, r) => err ? reject(err) : resolve(r))),
     showColumnRequest: (c, col, t, limit) => new Promise((resolve, reject) =>
         db_sqlite.showColumnRequest(c, col, t, limit, (err, r) => err ? reject(err) : resolve(r))),
+    getTableColumns: (c, t) => new Promise((resolve, reject) =>
+        db_sqlite.getTableColumns(c, t, (err, r) => err ? reject(err) : resolve(r))),
 };
 
 const tmpDb = path.join(os.tmpdir(), 'db-browse-drivers-' + Date.now() + '.sqlite');
@@ -90,6 +92,22 @@ async function run() {
         const rows = await p.showColumnRequest(conn, 'name', 'items', 10);
         assert.strictEqual(rows.length, 2);
         assert.strictEqual(Number(rows[0].count), 1);
+    });
+
+    // ---- column selection (issue 13) ----
+
+    await ok('getTableColumns lists the columns in order', async () => {
+        assert.deepStrictEqual(await p.getTableColumns(conn, 'items'),
+                               ['id', 'name', 'payload']);
+    });
+
+    await ok('showValueRequest can select a subset of columns', async () => {
+        const rows = await new Promise((resolve, reject) =>
+            db_sqlite.showValueRequest(conn, 'items', { name: 'a' },
+                                       { order_by: 'id', direction: 'ASC', limit: 10 },
+                                       ['name'], (e, r) => e ? reject(e) : resolve(r)));
+        assert.strictEqual(rows.length, 1);
+        assert.deepStrictEqual(Object.keys(rows[0]), ['name']);
     });
 
     // ---- postgres identifier validation (no server needed) ----
@@ -154,6 +172,17 @@ async function run() {
             conn, 'items', {}, { order_by: 'id', direction: 'ASC', limit: '1; DROP TABLE t' },
             (e, r) => e ? reject(e) : resolve(r)));
         assert.ok(/LIMIT 100\s*$/.test(sql), sql);
+    });
+
+    await ok('postgres quotes selected columns instead of folding them', async () => {
+        let sql;
+        const conn = { query: (s, prm, cb) => { sql = s; cb(null, { rows: [] }); } };
+        await new Promise((resolve, reject) => db_postgres.showValueRequest(
+            conn, 'items', {}, null, ['MyCol', 'other'],
+            (e, r) => e ? reject(e) : resolve(r)));
+        // a picker value is an exact name from the database: `MyCol` must not
+        // be folded to `mycol`, so the list is always quoted
+        assert.ok(/^select "MyCol", "other" from items/.test(sql), sql);
     });
 
     // ---- HTTP status classification ----
@@ -247,6 +276,17 @@ async function run() {
                            '/db/t/c/a%2Fb%3Fc%23d');
         assert.strictEqual(rh.buildUrl(req({}, { a: '1' }), ['x', 'y'], { b: '2' }),
                            '/x/y?a=1&b=2');
+    });
+
+    await ok('parseCols handles both query forms', async () => {
+        assert.strictEqual(rh.parseCols(undefined), null);
+        assert.strictEqual(rh.parseCols(null), null);
+        assert.strictEqual(rh.parseCols(''), null);
+        assert.strictEqual(rh.parseCols('  '), null);
+        assert.deepStrictEqual(rh.parseCols('a'), ['a']);
+        assert.deepStrictEqual(rh.parseCols('a,b'), ['a', 'b']);
+        assert.deepStrictEqual(rh.parseCols('a, b ,'), ['a', 'b']);
+        assert.deepStrictEqual(rh.parseCols(['a', 'b']), ['a', 'b']);
     });
 
     // ---- JSON tree building (issue 12) ----

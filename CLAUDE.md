@@ -37,8 +37,9 @@ prepare_req_params → loadUser → prepare_dbconnection → prepare_locals → 
 
 - `showAllTable(connection, done)`
 - `getTableDetails(connection, table, done)`
+- `getTableColumns(connection, table, done)` — the table's column names, in order
 - `showColumnRequest(connection, column, table, limit, done)`
-- `showValueRequest(connection, table, where, order_limit_offset, done)`
+- `showValueRequest(connection, table, where, order_limit_offset, columns, done)` — `columns` is an optional array of exact column names (`null`/omitted means `*`); a caller that omits it may pass the callback in its place
 - `rowsCounter(connection, table, done)`
 - `getSQL(connection, sql, done)`
 

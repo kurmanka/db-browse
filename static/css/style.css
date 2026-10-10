@@ -316,3 +316,19 @@ a:hover.subtle {
     text-decoration: underline;
     color: #5555dd;
 }
+
+/* the row-view column picker (views/row_detail_wrapper.pug) */
+details.cols {
+    margin: 0 0 1em 0;
+    font-size: 90%;
+}
+
+details.cols summary {
+    cursor: pointer;
+}
+
+details.cols label.col {
+    display: inline-block;
+    margin: 0 1em 0.3em 0;
+    white-space: nowrap;
+}
