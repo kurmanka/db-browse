@@ -227,6 +227,28 @@ async function run() {
         }
     });
 
+    // ---- URL building (issue 10) ----
+
+    console.log('\n  url building');
+
+    await ok('buildUrl encodes segments and carries the query string', async () => {
+        const req = (params, query) => ({ params: params || {}, query: query || {} });
+
+        assert.strictEqual(rh.buildUrl(req({}, {}), ['db', 't', 'c', 'v']),
+                           '/db/t/c/v');
+        assert.strictEqual(rh.buildUrl(req({}, { name: 'a b' }), ['db', 't', 'c', 'v']),
+                           '/db/t/c/v?name=a%20b');
+        // extra keys merge with, and override, the request's own
+        assert.strictEqual(rh.buildUrl(req({}, { name: 'a' }), ['db', 't'],
+                                      { name: 'b', page: '2' }),
+                           '/db/t?name=b&page=2');
+        // reserved characters in a path segment
+        assert.strictEqual(rh.buildUrl(req({}, {}), ['db', 't', 'c', 'a/b?c#d']),
+                           '/db/t/c/a%2Fb%3Fc%23d');
+        assert.strictEqual(rh.buildUrl(req({}, { a: '1' }), ['x', 'y'], { b: '2' }),
+                           '/x/y?a=1&b=2');
+    });
+
     // ---- addon loading (issue 07) ----
 
     console.log('\n  addon loading');

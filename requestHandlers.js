@@ -1,6 +1,7 @@
 var config = require("./config");
 
 const fs      = require('fs');
+const querystring = require('querystring');
 
 // https://nodejs.org/docs/latest-v8.x/api/string_decoder.html
 const { StringDecoder } = require('string_decoder');
@@ -137,6 +138,31 @@ function showError (req, res, msg, title, status) {
     );
 }
 
+// A URL from path segments plus the request's query string, so that switching
+// view, paging or drilling down does not silently drop filters. Each segment is
+// percent-encoded (values may contain '/', '?', '#', spaces), and `extra` can
+// override or add query keys.
+function buildUrl(req, segments, extra) {
+    var path = segments.map(function (s) {
+        return encodeURIComponent(s === undefined || s === null ? '' : String(s));
+    }).join('/');
+
+    var params = {};
+    var k;
+    for (k in req.query) { params[k] = req.query[k]; }
+    for (k in (extra || {})) { params[k] = extra[k]; }
+
+    var qs = querystring.stringify(params);
+    return '/' + path + (qs ? '?' + qs : '');
+}
+
+// percent-encode the path segments that make up a breadcrumb link
+function crumbPath(parts) {
+    return parts.map(function (s) {
+        return encodeURIComponent(s === undefined || s === null ? '' : String(s));
+    }).join('/');
+}
+
 function breadcrumbs(req, res, next) {
     var l = res.locals;
     var bc = [];
@@ -147,14 +173,17 @@ function breadcrumbs(req, res, next) {
     if (db_id || req.params.path != '') {
         bc.push({u: '', t:'Home'});
     }
+    // No query string here on purpose: the ancestor pages (db, table, column
+    // listing) do not understand the row filters, so carrying them would only
+    // produce noise. The segments are encoded, which they were not before.
     if (table) {
-        bc.push({u: db_id, t: db_id });
+        bc.push({u: crumbPath([db_id]), t: db_id });
     }
     if (column) {
-        bc.push({u: db_id + '/' + table, t: table });
+        bc.push({u: crumbPath([db_id, table]), t: table });
     }
     if (value) {
-        bc.push({u: db_id + '/' + table + '/' + column, t: column });
+        bc.push({u: crumbPath([db_id, table, column]), t: column });
     }
     if (req.params.sql_id) {
         bc.push({u: ':sql', t: 'SQL' });        
@@ -649,26 +678,23 @@ function row_detail_make_links( req, res, data ) {
         value_or_direction = "_" + req.params.direction;
     }
 
-    var base_link = "/" + req.params.db_id 
-                  + "/" + req.params.table
-                  + "/" + req.params.column
-                  + "/" + value_or_direction;
+    var base_segments = [ req.params.db_id, req.params.table, req.params.column,
+                          value_or_direction ];
 
     if (data.length > limit) {
         if (data.length > limit * 2 ) { 
-            links.more = base_link + "/" + view + "/" + limit * 2;
+            links.more = buildUrl(req, base_segments.concat([view, limit * 2]));
         }
-        links.all = base_link + "/" + view + "/" + data.length; 
+        links.all = buildUrl(req, base_segments.concat([view, data.length])); 
     }
 
     l.table_views = { 'ver': 'vertical', 
                       'hor': 'horizontal', 
                       'one': 'one by one' };
-    for ( v in l.table_views ) {
+    for ( var v in l.table_views ) {
         if (view == v) {}
         else {
-            links[v] = base_link + "/" + v + "/" + limit;
-            
+            links[v] = buildUrl(req, base_segments.concat([v, limit]));
         }
     }
     
@@ -1029,3 +1055,4 @@ exports.sqlRemove         = sqlRemove;
 exports.show_db_schema    = show_db_schema;
 exports.errorStatus       = errorStatus;   // exported for tests
 exports.sqlRefusal        = sqlRefusal;    // exported for tests
+exports.buildUrl          = buildUrl;      // exported for tests

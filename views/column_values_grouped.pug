@@ -8,19 +8,28 @@ block content
 
   if values && values[0]
 
+    - var groupKeys = Object.keys(values[0])
+
     table.light
       tr
-        each data,key in values[0]
+        each key in groupKeys
           th= key
           
       - var i = 0
       
       while i < values.length
+        - var row = values[i]
         tr 
-          each data,key in values[i]
-            - var url = encodeURIComponent(key) + '/' + encodeURIComponent(data)
-            td.data 
-              a(href=url class="subtle")= data
+          each key, idx in groupKeys
+            - var cell = row[key]
+            if idx == groupKeys.length - 1
+              //- the trailing count(*) is a number, not a value to drill into:
+              //- linking it produced bogus URLs such as /db/table/count/1
+              td.data= cell
+            else
+              //- an absolute, encoded link to the rows holding this value
+              td.data 
+                a(href='/' + encodeURIComponent(dbId) + '/' + encodeURIComponent(table) + '/' + encodeURIComponent(key) + '/' + encodeURIComponent(cell) class="subtle")= cell
 
         - i++
         

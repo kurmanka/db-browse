@@ -272,6 +272,26 @@ async function runTests() {
                                     { headers: { Cookie: cookie } });
                 assert.strictEqual(r.status, 404);
             });
+
+            await ok('row-view links keep the query string', async () => {
+                // the column itself as a NOTNULL filter: every row matches, so
+                // the page renders and its generated links are observable
+                const filter = target.column + '=NOTNULL';
+                const r = await get('/' + target.id + '/' + target.table + '/' + target.column
+                                  + '/_ASC?' + filter,
+                                    { headers: { Cookie: cookie } });
+                if (r.status !== 200) { return; }   // nothing non-null to show
+                assert.ok(r.text.indexOf('?' + filter) !== -1,
+                          'a view-switch link should carry ' + filter);
+            });
+
+            await ok('grouped column page links values, not counts', async () => {
+                const r = await get('/' + target.id + '/' + target.table + '/' + target.column,
+                                    { headers: { Cookie: cookie } });
+                assert.strictEqual(r.status, 200);
+                assert.ok(r.text.indexOf('/count/') === -1,
+                          'no link should be built from the count(*) column');
+            });
         }
 
         // --- addon config endpoint ---

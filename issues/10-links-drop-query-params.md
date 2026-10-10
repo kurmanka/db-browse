@@ -42,4 +42,44 @@ string concatenation without `encodeURIComponent`, so values containing `/`, `?`
 
 ## Status
 
-- [ ] fixed
+- [x] fixed
+
+## What changed
+
+- New `buildUrl(req, segments, extra)` in `requestHandlers.js`:
+  `encodeURIComponent`s every path segment, merges the request's query string
+  with optional extra keys, and serializes it once
+  (`querystring.stringify`). Exported for tests.
+- `row_detail_make_links()` uses it, so the vertical/horizontal/one-by-one
+  switcher and "see more"/"see all" keep the filters, and values with `/`, `?`,
+  `#` or spaces produce valid URLs instead of broken ones.
+- `breadcrumbs()` percent-encodes its segments (it previously concatenated raw
+  values). It deliberately does **not** carry the query string: the ancestor
+  pages (database, table, column grouping) do not understand the row filters, so
+  copying them up would only be noise. The issue's suggestion to carry them
+  there was wrong; the row-detail links are where it matters.
+- `views/column_values_grouped.pug` built a link from *every* cell, including
+  the trailing `count(*)`, producing bogus targets like `/db/table/count/1`. The
+  count is now plain text and the value link is absolute and encoded.
+- The drill-down link intentionally does not carry `?limit=…`: that page takes
+  its limit as a path segment, and a `limit` query key would be treated as a
+  column filter by the row route.
+
+## Verification
+
+Live, on `notes2`:
+
+    GET /notes2/notes/domain/_ASC?domain=NOTNULL
+      href="/notes2/notes/domain/_ASC/hor/30?domain=NOTNULL"
+      href="/notes2/notes/domain/_ASC/one/30?domain=NOTNULL"
+
+    GET /notes2/meta/key
+      href="/notes2/meta/key/dim"      (value links, absolute + encoded)
+      href="/notes2/meta/key/model"
+      (no /count/ links)
+
+`test/drivers.js` covers `buildUrl`; `test/routes.js` asserts that a row view's
+links keep the query string and that the grouped page emits no `count` links.
+
+    $ node test/run.js
+    7 / 21 / 18 / 62 passed, 0 failed
