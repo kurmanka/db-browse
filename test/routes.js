@@ -6,8 +6,10 @@ const { spawn }  = require('child_process');
 const path       = require('path');
 const assert     = require('assert');
 const fs         = require('fs');
+const net        = require('net');
 
-const BASE = 'http://localhost:1888';
+const PORT = 1888;
+const BASE = 'http://localhost:' + PORT;
 const ROOT = path.join(__dirname, '..');
 
 let passed = 0;
@@ -74,34 +76,62 @@ async function login(user, pass) {
 
 // ---- server lifecycle ------------------------------------------------------
 
-function startServer() {
-    return new Promise((resolve, reject) => {
-        server = spawn('node', ['start.js'], {
-            cwd:   ROOT,
-            stdio: ['ignore', 'pipe', 'pipe'],
-        });
-
-        server.stdout.on('data', (chunk) => {
-            if (chunk.toString().includes('Server has started')) {
-                resolve();
-            }
-        });
-
-        server.stderr.on('data', (chunk) => {
-            const msg = chunk.toString();
-            if (msg.includes('EADDRINUSE')) {
-                reject(new Error('Port 1888 already in use — stop the running server first'));
-            }
-        });
-
-        server.on('exit', (code) => {
-            if (code !== null && code !== 0) {
-                reject(new Error('Server exited with code ' + code));
-            }
-        });
-
-        setTimeout(() => reject(new Error('Server start timed out')), 8000);
+// Resolves true if something is already listening on the port.
+function portIsOpen() {
+    return new Promise((resolve) => {
+        const socket = net.connect({ port: PORT, host: 'localhost' });
+        const done = (open) => { socket.destroy(); resolve(open); };
+        socket.setTimeout(500);
+        socket.once('connect', () => done(true));
+        socket.once('timeout', () => done(false));
+        socket.once('error',   () => done(false));
     });
+}
+
+// Waits for the child server to actually accept connections. "Server has
+// started" on stdout is NOT a readiness signal: start.js prints it before the
+// socket is bound, so a bind failure (EADDRINUSE) arrives afterwards.
+function startServer() {
+    return (async () => {
+        if (await portIsOpen()) {
+            throw new Error('Port ' + PORT + ' is already in use; refusing to test '
+                          + 'a foreign process. Stop the running server first.');
+        }
+
+        await new Promise((resolve, reject) => {
+            let settled = false;
+            let output  = '';
+            const fail = (err) => { if (!settled) { settled = true; reject(err); } };
+            const pass = () => { if (!settled) { settled = true; resolve(); } };
+            const tail = () => output.trim() ? '\n--- server output ---\n' + output.trim() : '';
+
+            server = spawn('node', ['start.js'], {
+                cwd:   ROOT,
+                // keep the test hermetic: do not touch the session store the
+                // user's config.js points at
+                env:   { ...process.env, DBB_SESSION_MEMORY: '1' },
+                stdio: ['ignore', 'pipe', 'pipe'],
+            });
+            server.stdout.on('data', (chunk) => { output += chunk; });
+            server.stderr.on('data', (chunk) => { output += chunk; });
+
+            server.on('exit', (code, signal) => {
+                fail(new Error('Server exited before it was ready (code ' + code
+                             + ', signal ' + signal + ').' + tail()));
+            });
+
+            const deadline = Date.now() + 8000;
+            (function poll() {
+                portIsOpen().then((open) => {
+                    if (open) { return pass(); }
+                    if (Date.now() > deadline) {
+                        return fail(new Error('Server start timed out.' + tail()));
+                    }
+                    setTimeout(poll, 100);
+                });
+            })();
+        });
+    })();
 }
 
 function stopServer() {

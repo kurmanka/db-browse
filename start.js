@@ -26,6 +26,14 @@ var mcp = require('./mcp.js');
 // configuration
 var config = require('./config.js');
 
+// Tests (and confined environments) may not be able to write to the session
+// store directory named in config.js. DBB_SESSION_MEMORY=1 falls back to
+// express-session's in-memory store: correct for a short-lived test process,
+// never for a real deployment (sessions are lost on restart and leak memory).
+if (process.env.DBB_SESSION_MEMORY) {
+    delete config.session_config.store;
+}
+
 // create the express app
 var app = express();
 var server; // .listen() returns that
@@ -289,7 +297,21 @@ app.get('/:db_id/:table/:column/:value/:view?/:limit?', middleware, requestHandl
 
 
 server = app.listen(config.listen.port, config.listen.host);
-console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
+
+// Without a handler, a listen error (EADDRINUSE above all) is an unhandled
+// 'error' event: the process dies with a stack trace. Say what happened
+// instead, and exit non-zero.
+server.on('error', function (err) {
+    console.error("Cannot listen on http://" + config.listen.host + ":" + config.listen.port + ": " + err.message);
+    process.exit(1);
+});
+
+// Announce readiness only once the socket is really bound: printing this next
+// to app.listen() above was a lie (the bind happens later), and scripts that
+// waited for this line would go on to talk to somebody else's server.
+server.on('listening', function () {
+    console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
+});
 
 
 // make req.params.path

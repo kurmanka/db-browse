@@ -56,4 +56,31 @@ child.
 
 ## Status
 
-- [ ] fixed
+- [x] fixed
+
+## What changed
+
+- `start.js`: `server.on('error')` handles listen failures (one clear line, exit
+  non-zero — no stack trace), and "Server has started" moved into
+  `server.on('listening')`, so the readiness line is now true.
+- `test/routes.js`: refuses to run when the port already answers, resolves only
+  once the child is actually accepting connections, and fails if the child exits
+  first (with its output attached).
+- `test/routes.js`: spawns the server with `DBB_SESSION_MEMORY=1`, and `start.js`
+  honours it by dropping the configured session store, so the test no longer
+  writes into the user's session directory (which a sandbox may forbid, and which
+  a test should not touch anyway).
+
+## Verification
+
+    $ node start.js            # with a server already running
+    Cannot listen on http://localhost:1888: listen EADDRINUSE: address already in use ::1:1888
+    exit: 1
+
+    $ node test/routes.js      # with a server already running
+    Could not start server: Port 1888 is already in use; refusing to test a foreign process. Stop the running server first.
+    exit: 1
+
+    $ node test/run.js         # clean
+    7 passed, 0 failed / 9 passed, 0 failed / 62 passed, 0 failed
+    exit: 0
