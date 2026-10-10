@@ -58,14 +58,16 @@ mis-composited in this headless setup (blank, or offset by the scroll amount),
 so the evidence above is geometry read back with `--dump-dom`
 (`getBoundingClientRect()` at several scroll offsets), not a picture.
 
-## Not done
+## Scope
 
-The line still scrolls *vertically* with the table — it is visible when you are
-at the end of the listing, which is where it has always been. If it should stay
-on screen while scrolling through the rows as well, the change is to pin it as a
-status bar above the footer (`position: fixed`, `bottom: <footer height>`)
-rather than stick it to the left; that is a different design decision and was
-not asked for.
+Confirmed with the reporter: the pinning is wanted for the **horizontal** scroll
+only. Scrolling down through the rows still carries the line with the table, as
+it always has — it belongs to the end of the listing, not to the viewport.
+
+Pinning it as a status bar above the footer (`position: fixed`,
+`bottom: <footer height>`, with a background and its own z-index) would keep it
+visible while scrolling through the rows as well. That is deliberately not done:
+it was considered and ruled out.
 
 ## Status
 
