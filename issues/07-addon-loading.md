@@ -43,4 +43,35 @@
 
 ## Status
 
-- [ ] fixed
+- [x] fixed
+
+## What changed
+
+- `addons/fun/index.js`: `ect` is required inside `init()`, not at module load.
+  A missing engine is logged once and leaves `ect` null; `render()` then answers
+  500 with a clear "run npm install ect" message instead of throwing. The
+  add-on's SQL-template features work either way.
+- `start.js` `init_addons`: `a.init(app, config.addons[i], path)` — the literal
+  `config.addons.i` is gone.
+- `start.js`: the static auth guard is built by `addon_static_guard(prefix)`, so
+  each add-on captures its own prefix instead of whatever the shared loop
+  variable held last.
+- `start.js` `/ao/config`: uses `req.query.ao` (not the deprecated
+  `req.param()`), answers **404** for a missing/unknown add-on, answers JSON, and
+  checks `hasOwnProperty` so `?ao=constructor` cannot resolve to `Object`.
+- `README.md` documents `ect` as an optional add-on requirement.
+
+## Verification
+
+- `test/drivers.js` requires `addons/fun/index.js` without `ect` installed and
+  asserts it loads and that `render()` answers 500 with a helpful message rather
+  than throwing.
+- `test/routes.js` asserts `/ao/config` → 404 for no `ao`, an unknown add-on and
+  `ao=constructor`.
+
+The `config.addons[i]` and closure fixes were confirmed by inspection only: the
+user's `config.js` has no add-ons enabled, and enabling one to test would mean
+editing a file the project keeps out of the repository.
+
+    $ node test/run.js
+    7 / 20 / 16 / 62 passed, 0 failed

@@ -274,6 +274,23 @@ async function runTests() {
             });
         }
 
+        // --- addon config endpoint ---
+
+        await ok('GET /ao/config with an unknown addon → 404', async () => {
+            const r = await get('/ao/config?ao=no_such_addon', { headers: { Cookie: cookie } });
+            assert.strictEqual(r.status, 404);
+        });
+
+        await ok('GET /ao/config without ao → 404', async () => {
+            const r = await get('/ao/config', { headers: { Cookie: cookie } });
+            assert.strictEqual(r.status, 404);
+        });
+
+        await ok('GET /ao/config?ao=constructor → 404 (prototype keys do not resolve)', async () => {
+            const r = await get('/ao/config?ao=constructor', { headers: { Cookie: cookie } });
+            assert.strictEqual(r.status, 404);
+        });
+
         // keep last: it destroys the session the tests above share
         await ok('GET /logout → redirects to /', async () => {
             const r = await get('/logout', { headers: { Cookie: cookie } });

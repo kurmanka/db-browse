@@ -227,6 +227,35 @@ async function run() {
         }
     });
 
+    // ---- addon loading (issue 07) ----
+
+    console.log('\n  addon loading');
+
+    let ectInstalled = true;
+    try { require.resolve('ect'); } catch (_) { ectInstalled = false; }
+
+    await ok('the "fun" addon loads without its optional template engine', async () => {
+        assert.doesNotThrow(() => require('../addons/fun/index.js'));
+    });
+
+    if (ectInstalled) {
+        console.log('  SKIP  (ect is installed — the missing-engine path does not apply)');
+    } else {
+        await ok('the "fun" addon reports a missing engine instead of throwing', async () => {
+            const fun = require('../addons/fun/index.js');
+            assert.doesNotThrow(() => fun.init({}, {}, path.join(__dirname, '..')));
+
+            const res = {
+                statusCode: 200,
+                status(c) { this.statusCode = c; return this; },
+                send(b)   { this.body = b; return this; },
+            };
+            assert.doesNotThrow(() => fun.render({}, res, 'show', { hello: 'dolly' }));
+            assert.strictEqual(res.statusCode, 500);
+            assert.ok(/ect/.test(String(res.body)), String(res.body));
+        });
+    }
+
     try { fs.unlinkSync(tmpDb); } catch (_) {}
 
     console.log('\n' + passed + ' passed, ' + failed + ' failed\n');

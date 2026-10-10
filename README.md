@@ -30,6 +30,11 @@ Add-ons
 
 Add-ons allow adding features, without rewriting the core app. It is an experiment.
 
+A bundled example lives in `addons/fun/`. Its `show` feature needs the optional
+`ect` template engine (`npm install ect`); without it the add-on still loads and
+its SQL-template features keep working. `ect` is deliberately not a dependency of
+db-browse, since nothing outside this example uses it.
+
 
 MCP interface (for agents)
 --------------------------

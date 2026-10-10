@@ -438,7 +438,7 @@ function init_addons (app, config) {
 
         if (a) {
             console.log( 'init addon ' + i );
-            a.init( app, config.addons.i, path );
+            a.init( app, config.addons[i], path );
             app.addons[i] = a;
         }
 
@@ -448,11 +448,10 @@ function init_addons (app, config) {
                 if (s.isDirectory()) {
                     // make the directory available, but only to signed-in users
                     var prefix = '/ao/' + i + '/';
-                    // request authentication on the addon homepage
-                    app.use( function (req, res, next) {
-                        if (req.url == prefix) { loadUser(req,res,next); } 
-                        else next(); 
-                    } );
+                    // request authentication on the addon homepage.
+                    // The guard is built per addon: a closure made in the loop
+                    // would see the last addon's prefix for every addon.
+                    app.use( addon_static_guard(prefix) );
                     app.use( prefix, express.static(path+'/static'));
                     console.log( prefix + i );
                     console.log( ' -> ' + path + '/static' );
@@ -482,14 +481,24 @@ function init_addons (app, config) {
 
     }
 
-    app.get('/ao/config', loadUser, function(req,res) {
-        var ao = req.param('ao')
-        if ( ao && config.addons[ao] ) {
-            res.send( config.addons[ao] );
+    app.get('/ao/config', loadUser, function (req, res) {
+        var ao = req.query.ao;
+        // hasOwnProperty: 'constructor' and friends must not resolve
+        if (ao && Object.prototype.hasOwnProperty.call(config.addons, ao)) {
+            res.json( config.addons[ao] );
         } else {
-            res.send( 500, 'ao param is empty or no such addon' );
+            res.status(404).send('ao param is empty or no such addon');
         }
     });
+}
+
+// The auth guard for one addon's static root. A factory, so each addon gets its
+// own prefix even though the loop that installs these shares a scope.
+function addon_static_guard (prefix) {
+    return function (req, res, next) {
+        if (req.url == prefix) { loadUser(req, res, next); }
+        else { next(); }
+    };
 }
 
 function create_sqlt_feature( def ) {

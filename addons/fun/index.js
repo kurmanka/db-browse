@@ -1,16 +1,27 @@
-var ECT = require('ect');
-var ect;
+// 'ect' is optional: it is this addon's template engine and nothing else in
+// db-browse uses it. Require it in init(), not at module load, so the addon
+// still loads (and its SQL-template features still work) without it.
+var ect = null;
 
 exports.init = function(a,c,home) {
-	ect = ECT({ root: home + '/views', watch: true });
+	try {
+		ect = require('ect')({ root: home + '/views', watch: true });
+	} catch (e) {
+		ect = null;
+		console.log('addon fun: the template engine "ect" is not installed, so the ' +
+		            '"show" feature is unavailable (' + e.message + ')');
+	}
 	// ...
 	return true;
 };
 
 var render = 
 exports.render = function(req, res, template, data) {
+	if (!ect) {
+		return res.status(500).send('The addon "fun" needs the template engine "ect", ' +
+		                            'which is not installed. Run "npm install ect" to use it.');
+	}
 	console.log( 'render()', template, data );
-	if (!ect) console.log( 'no ect' );
 	var html = ect.render(template, data);
 	console.log( 'generated: ' + html );
 	res.send( html );
