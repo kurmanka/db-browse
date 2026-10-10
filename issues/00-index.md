@@ -35,3 +35,4 @@ planned fix, and a status checkbox. Fixes are committed one per issue.
 | # | Title | Severity | Status |
 |---|---|---|---|
 | [15](15-utf8-charset.md) | Non-ASCII characters mangled on the table-details page | medium | fixed |
+| [16](16-sticky-record-summary.md) | Record-summary line scrolls out of view sideways | low | fixed |

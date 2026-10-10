@@ -328,10 +328,28 @@ a:hover.subtle {
     color: #5555dd;
 }
 
-/* the row-view column picker (views/row_detail_wrapper.pug) */
+/* the row view's column picker (views/row_detail_wrapper.pug) */
 details.cols {
     margin: 0 0 1em 0;
     font-size: 90%;
+}
+
+/* The record summary under a wide table. The page scrolls sideways to reach
+   further columns, which would carry this line off to the left; sticking it to
+   the content's left edge keeps it readable.
+   Two things are load-bearing: the wrapper is as wide as the table, and the
+   paragraph is only as wide as its text. A sticky box can move only within its
+   containing block, so either a viewport-wide wrapper or a full-width
+   paragraph leaves it no room and it does not stick at all. */
+.records {
+    width: min-content;     /* the table's own width, so it lays out as before */
+    min-width: 100%;        /* but never narrower than the page */
+}
+
+p.total-rows {
+    position: sticky;
+    left: 2em;              /* lines up with #content's margin */
+    width: max-content;
 }
 
 details.cols summary {
