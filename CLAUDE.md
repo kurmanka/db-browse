@@ -25,27 +25,6 @@ Two environment overrides are useful with the tests and for side-by-side runs:
   express-session's in-memory one, so a test run does not write into the user's
   session directory. Test-only; never for a real deployment.
 
-### Visual checks (headless Chrome)
-
-Chrome is installed at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
-and is fine to use for screenshot checks. Always run it like this:
-
-```bash
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --headless=new --disable-gpu --no-sandbox \
-  --user-data-dir=/tmp/chrome-profile \
-  --use-mock-keychain --password-store=basic \
-  --disable-crash-reporter --crash-dumps-dir=/tmp/chrome-crash \
-  --window-size=1400,900 --screenshot=/tmp/out.png file:///path/to/page.html
-```
-
-`--user-data-dir` under `/tmp` and `--use-mock-keychain` are required.
-**Never** point `HOME` at a temp directory to get around sandbox restrictions on
-`~/Library`: Chrome then looks for `$HOME/Library/Keychains/login.keychain-db`,
-finds nothing, and macOS pops a *"Keychain Not Found — A keychain cannot be found
-to store "Chrome.""* dialog on every launch. That dialog's "Reset To Defaults"
-button resets the user's keychain search list, so it must not be left on screen.
-
 ## Architecture
 
 Single-process Express 4 app. All routes defined in `start.js`, all handlers in `requestHandlers.js`.
