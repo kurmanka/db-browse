@@ -54,4 +54,42 @@ boundary. The fix removes the false positives and closes the trivial misses.
 
 ## Status
 
-- [ ] fixed
+- [x] fixed
+
+## What changed
+
+`requestHandlers.js`:
+
+- `sqlRefusal(sql)` replaces the substring scan: it splits off the first
+  statement at the first *top-level* `;` (respecting `'…'`, `"…"`, `--` and
+  `/* */`), skips leading whitespace and comments, and looks at the first
+  keyword.
+- A keyword in `BLOCKED_KEYWORDS` (`CREATE ALTER DROP TRUNCATE GRANT REVOKE
+  COMMENT RENAME REINDEX CLUSTER REFRESH`) is refused, as is anything after the
+  first statement, and an empty request.
+- `SELECT`/`INSERT`/`UPDATE`/`DELETE` are still allowed: the box is deliberately
+  not read-only, and `allow_clear_sql` remains the real switch. `DO`, `COPY` and
+  `CALL` are deliberately *not* blocked — this is a typo guard, not a security
+  boundary — and that is now said in the code.
+- The refusal is **400**, not 500.
+- `prepare_locals` no longer strips the first `;` from the SQL
+  (`req.body.sql.replace(/;/, '')`). That hack mangled the statement shown and
+  executed, and left `SELECT 1;; DROP …` a two-statement string after only the
+  first `;` was removed.
+- `sqlRefusal` is exported and covered by `test/drivers.js`.
+
+## Verification
+
+| Request | Result |
+|---|---|
+| `SELECT * FROM meta` | 200, rows returned |
+| `SELECT * FROM meta WHERE key = 'drop'` | 200 (no false positive) |
+| `DROP TABLE meta` | 400 refused |
+| `TRUNCATE TABLE meta` | 400 refused |
+| `SELECT 1; DROP TABLE meta` | 400 "Only one statement…" |
+| `/* c */ DROP TABLE meta` | 400 refused |
+
+`meta` still holds its two rows afterwards.
+
+    $ node test/drivers.js
+    18 passed, 0 failed

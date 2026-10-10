@@ -56,7 +56,7 @@ function prepare_locals (req, res, next) {
         column:        req.params.column,
         value:         req.params.value,
         dbId:          req.params.db_id,
-        sql:           (req.body.sql) ? req.body.sql.replace(/;/, ''): '',
+        sql:           req.body.sql || '',
         reqName:       req.body.name,
         user:          (req.session) ? req.session.user : null,
         comment:       req.body.comment || '',
@@ -736,20 +736,101 @@ function getDbType (dbType) {
 //  DIRECT SQL FEATURE
 // 
 
+// Statement-leading keywords that change the schema. The SQL box is not
+// read-only (allow_clear_sql is the real switch), but it has always refused
+// schema changes. Do not read this as a security boundary: it is a typo guard.
+// DO, COPY and CALL are deliberately not listed.
+var BLOCKED_KEYWORDS = ['CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'GRANT', 'REVOKE',
+                        'COMMENT', 'RENAME', 'REINDEX', 'CLUSTER', 'REFRESH'];
+
+// Splits off the first statement at the first top-level ';' (one that is not
+// inside a string, a quoted identifier or a comment). Returns the two halves.
+function splitStatements(sql) {
+    var inSingle = false, inDouble = false, inLine = false, inBlock = false;
+
+    for (var i = 0; i < sql.length; i++) {
+        var c = sql[i], next = sql[i + 1];
+
+        if (inLine)  { if (c === '\n') { inLine = false; } continue; }
+        if (inBlock) { if (c === '*' && next === '/') { inBlock = false; i++; } continue; }
+
+        if (inSingle) {
+            if (c === "'" && next === "'") { i++; }        // '' is an escaped quote
+            else if (c === "'") { inSingle = false; }
+            continue;
+        }
+        if (inDouble) {
+            if (c === '"' && next === '"') { i++; }
+            else if (c === '"') { inDouble = false; }
+            continue;
+        }
+
+        if (c === '-' && next === '-') { inLine = true;  i++; continue; }
+        if (c === '/' && next === '*') { inBlock = true; i++; continue; }
+        if (c === "'") { inSingle = true; continue; }
+        if (c === '"') { inDouble = true; continue; }
+        if (c === ';') { return { first: sql.slice(0, i), rest: sql.slice(i + 1) }; }
+    }
+
+    return { first: sql, rest: '' };
+}
+
+// Everything after leading whitespace and comments.
+function stripLeadingNoise(sql) {
+    var s = sql;
+    for (;;) {
+        var t = s.replace(/^\s+/, '');
+        if (t.slice(0, 2) === '--') {
+            var nl = t.indexOf('\n');
+            s = (nl === -1) ? '' : t.slice(nl + 1);
+            continue;
+        }
+        if (t.slice(0, 2) === '/*') {
+            var end = t.indexOf('*/', 2);
+            s = (end === -1) ? '' : t.slice(end + 2);
+            continue;
+        }
+        return t;
+    }
+}
+
+// null when the statement may run, otherwise the reason to refuse it.
+function sqlRefusal(sql) {
+    sql = String(sql);
+
+    var parts = splitStatements(sql);
+    var first = stripLeadingNoise(parts.first);
+    var rest  = stripLeadingNoise(parts.rest);
+
+    if (!first && !rest) {
+        return "The request is empty.";
+    }
+
+    var keyword = /^([A-Za-z]+)/.exec(first);
+    if (keyword && BLOCKED_KEYWORDS.indexOf(keyword[1].toUpperCase()) !== -1) {
+        return "Request '" + sql + "' can not be executed";
+    }
+
+    // Postgres runs a multi-statement string as one query in the simple
+    // protocol, so "SELECT 1; DROP ..." would slip past a keyword check.
+    if (rest) {
+        return "Only one statement can be executed at a time.";
+    }
+
+    return null;
+}
+
 function sqlRequest(req, res) {
     var l = res.locals;
 
     console.log( 'sql:', l.sql );
 
-    async.waterfall([
+    var refusal = sqlRefusal(l.sql);
+    if (refusal) {
+        return showError(req, res, refusal, null, 400);
+    }
 
-        function (done){
-            if ( /ALTER|create|drop/i.exec(l.sql) ) {
-                showError(req, res, "Request '" + l.sql + "' can not be executed");
-            } else {
-                done(null);
-            }
-        },
+    async.waterfall([
 
         function (done){
             var db = getDbType(l.dbType);
@@ -988,3 +1069,4 @@ exports.sqlSave           = sqlSave;
 exports.sqlRemove         = sqlRemove;
 exports.show_db_schema    = show_db_schema;
 exports.errorStatus       = errorStatus;   // exported for tests
+exports.sqlRefusal        = sqlRefusal;    // exported for tests

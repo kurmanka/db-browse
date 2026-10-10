@@ -175,6 +175,58 @@ async function run() {
         assert.strictEqual(rh.errorStatus(notFound), 404);
     });
 
+    // ---- the raw-SQL guard (issue 06) ----
+
+    console.log('\n  raw SQL guard');
+
+    const rh = require('../requestHandlers.js');
+
+    await ok('sqlRefusal allows ordinary queries', async () => {
+        for (const s of ['SELECT 1',
+                         '  select * from t where a = 1',
+                         "SELECT * FROM t WHERE note = 'drop'",
+                         "SELECT ';' AS semi",                    // ';' inside a string
+                         '-- a comment\nSELECT 1',
+                         '/* c */ SELECT 1',
+                         'SELECT 1;',                             // trailing semicolon
+                         'SELECT 1; -- trailing comment',
+                         'SELECT 1; /* trailing */',
+                         'INSERT INTO t VALUES (1)',
+                         'UPDATE t SET a = 1',
+                         'DELETE FROM t']) {
+            assert.strictEqual(rh.sqlRefusal(s), null, JSON.stringify(s));
+        }
+    });
+
+    await ok('sqlRefusal refuses schema changes however they are written', async () => {
+        for (const s of ['DROP TABLE t',
+                         'drop table t',
+                         '  DROP TABLE t',
+                         '-- comment\nDROP TABLE t',
+                         '/* comment */ DROP TABLE t',
+                         'TRUNCATE TABLE t',
+                         'GRANT ALL ON t TO x',
+                         'ALTER TABLE t ADD COLUMN c int',
+                         'CREATE TABLE t (a int)']) {
+            assert.ok(rh.sqlRefusal(s), JSON.stringify(s));
+        }
+    });
+
+    await ok('sqlRefusal refuses more than one statement', async () => {
+        for (const s of ['SELECT 1; DROP TABLE t',
+                         'SELECT 1; SELECT 2',
+                         'SELECT 1;;',
+                         '; SELECT 1']) {
+            assert.ok(rh.sqlRefusal(s), JSON.stringify(s));
+        }
+    });
+
+    await ok('sqlRefusal refuses an empty request', async () => {
+        for (const s of ['', '   ', '-- nothing\n', '/* nothing */']) {
+            assert.ok(rh.sqlRefusal(s), JSON.stringify(s));
+        }
+    });
+
     try { fs.unlinkSync(tmpDb); } catch (_) {}
 
     console.log('\n' + passed + ' passed, ' + failed + ' failed\n');
