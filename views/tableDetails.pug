@@ -1,0 +1,113 @@
+//- Ported from view/tableDetails.html (legacy JUST template).
+//- The record count used to be appended from view/totalRecords.html; that is
+//- now totalRecords.pug and is still written after this page.
+
+extends page
+
+block title
+  | Table #{table}
+
+block content
+
+  - var skip = { parse: 1, _typeCast: 1, is_nullable: 1, column_default: 1, mlength: 1 }
+  - var attrList = attrList || []
+  - var keys = attrList[0] ? Object.keys(attrList[0]) : []
+  - var firstKey = keys.length ? keys[0] : ''
+
+  table.light
+    tr
+      each key in keys
+        if !skip[key]
+          th= key
+        if key == 'column_default'
+          th modifiers
+      th sorted listing
+
+    - var i = 0
+    while i < attrList.length
+      - var attr = attrList[i]
+      - var column = attr[firstKey]
+      tr
+        each key in keys
+          - var val = attr[key]
+          if !skip[key]
+            if firstKey == key
+              td.data
+                a(href= path + '/' + val)= val
+            else
+              td.data
+                | #{val}
+                if attr.mlength
+                  | (#{attr.mlength})
+          if key == 'column_default' && attr.is_nullable == 'NO'
+            if val
+              td.data not null default #{val}
+            else
+              td.data not null
+          if key == 'column_default' && attr.is_nullable != 'NO'
+            td.data
+        td.data
+          a.arrow(href= path + '/' + column + '/_ASC') ⤴
+          |  ·
+          a.arrow(href= path + '/' + column + '/_DESC') ⤵
+      - i++
+
+  if lastStringReq
+    p= lastStringReq
+
+  if indexesArr && indexesArr.length > 0
+    #index
+      b Indexes:
+
+  if dbType == 'postgres'
+    table#indexes
+      each idx in indexesArr
+        if idx.indexdef != ''
+          tr
+            td= idx.indexdef
+
+    if foreignKey.length > 0
+      #fkey
+        b Foreign-key constraints:
+
+    table#fkeytable
+      each fk in foreignKey
+        tr
+          td "#{fk.conname}" #{fk.condef}
+
+    if referenced.length > 0
+      #ref
+        b Referenced by:
+
+    table#referenced
+      each r in referenced
+        tr
+          td
+            | TABLE "#{r.conrelid}" CONSTRAINT "#{r.conname}" #{r.condef}
+
+    if triggers.length > 0
+      #triggers
+        b Triggers:
+
+    table#triggerstable
+      each t in triggers
+        tr
+          td= t.creating.replace(/CREATE TRIGGER/g, '')
+
+  if dbType == 'mysql'
+    table#indexes
+      each idx in indexesArr
+        tr
+          td= idx
+
+  #status
+    b Status:
+
+  table#statusT
+    if statusArr && statusArr[0]
+      each key in Object.keys(statusArr[0])
+        if key != 'parse' && key != '_typeCast' && statusArr[0][key] != '' && key != 'TABLE_NAME'
+          tr
+            td #{key}: 
+            each row in statusArr
+              td.paddingText= row[key]

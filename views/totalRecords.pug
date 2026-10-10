@@ -1,0 +1,9 @@
+//- Ported from view/totalRecords.html (legacy JUST template).
+//- A fragment: showPageTotalRecords() writes it after tableDetails.pug, so it
+//- must not extend page.pug.
+
+script.
+  $(document).ready(function() {
+      var title = $('h1').html();
+      $('h1').html( title + ' — #{rowsCounter} records' );
+  })

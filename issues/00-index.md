@@ -23,7 +23,7 @@ planned fix, and a status checkbox. Fixes are committed one per issue.
 
 | # | Title | Severity | Status |
 |---|---|---|---|
-| [09](09-finish-pug-transition.md) | Finish the Pug transition; delete the legacy `view/` | medium | open |
+| [09](09-finish-pug-transition.md) | Finish the Pug transition; delete the legacy `view/` | medium | fixed |
 | [10](10-links-drop-query-params.md) | Generated links drop query parameters | medium | open |
 | [11](11-fixed-page-layout.md) | Top and bottom of the page should be fixed | low | open |
 | [12](12-json-support.md) | JSON folding / syntax highlighting | low | open |

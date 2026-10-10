@@ -10,11 +10,6 @@ var Memcached = require('memcached');
 var memcached = ( config.cache ) ? new Memcached(config.cache_memcached)
                                  : null;
 
-// Just templating engine, https://github.com/baryshev/just
-var JUST      = require('just');
-var just_usecache = false; // or true
-var just      = new JUST({ root: './view', useCache: just_usecache, ext: '.html' });
-
 var mysql    = require('./db_mysql.js');
 var postgres = require('./db_postgres.js');
 var db_sqlite = require('./db_sqlite.js');
@@ -69,38 +64,8 @@ function prepare_locals (req, res, next) {
     next();
 }
 
-// produce a response with a JUST template,
-// from the ./view/ directory,
-// but use res.locals to store the template data
-function respond(res, template, data, callback) {
-    // integrate data into res.locals
-    for (var p in data) { res.locals[p] = data[p]; }
-    // a trick to make locals available to
-    // the template
-    var locals = {};
-    for (var p in res.locals) { locals[p] = res.locals[p]; }
-    // the default callback
-    callback = (callback) ? callback
-                          : function(error, html) { showPage(res, error, html); };
-    // execute the template
-    just.render( template,
-                 locals,
-                 callback );
-}
-
-// produce error response if there is error,
-// or produce page response otherwise
-function finish( req, res, template, data, cb) {
-    // return a function
-    return function (err, result) {
-        if (err) {
-            showError(req, res, err);
-        } else {
-            respond( res, template, data, cb );
-        }
-    };
-}
-
+// produce a response with a Pug template from the ./views/ directory,
+// using res.locals plus the given data.
 function finish_pug( req, res, template, data, cb) {
     if (!template.match(/\.pug$/)) {
         template = template + '.pug';
@@ -155,19 +120,19 @@ function showError (req, res, msg, title, status) {
     // an Error object would render as "Error: message"; show just the message
     var text = (msg && msg.message) ? msg.message : msg;
 
-    just.render('msg', {
-            breadcrumbs: res.locals.breadcrumbs,
-            title: title || "Error",
+    res.status(status).render('msg.pug', {
+            breadcrumbs:  res.locals.breadcrumbs,
+            title:        title || "Error",
             authenticate: authenticate,
-            msg: text },
-
-        function(error, html) {
+            msg:          text
+        },
+        function (error, html) {
             if (error) {
                 console.log(error);
+                return res.send(html || '');
             }
-
             console.log(text);
-            res.status(status).send(html);
+            res.send(html);
         }
     );
 }
@@ -303,7 +268,6 @@ function _list_tables(req, res, next) {
 
 _list_tables.cache_key = function(r) {return r.url;}
 _list_tables.template = 'tableList';
-_list_tables.pug = true;
                            // in the order of appearance:
 _list_tables.produce_locals = [ 'path_sql', 'tableGr', 'tablesList', 'tables', 'groups', 'the_rest', ];
 
@@ -396,7 +360,7 @@ function table_details(req, res, next) {
                 //res.send( "OK" );
 
                 // provide a custom callback for the template
-                var handler = finish(req, res, 'tableDetails', {},
+                var handler = finish_pug(req, res, 'tableDetails', {},
                     // this function actually outputs the tableDetails page
                     // and then it adds some more javascript
                     function(error, html) {
@@ -546,7 +510,7 @@ function showPageTotalRecords (req, res, error, html) {
             done(null);
         }
     ],
-    finish(req, res, 'totalRecords', {},
+    finish_pug(req, res, 'totalRecords', {},
         function(err, html) {
                 if (err) {
                     console.log(err);
@@ -584,7 +548,6 @@ function _showColumn(req, res, next) {
 _showColumn.cache_key      = function(req) { return req.url; }
 _showColumn.produce_locals = ['values','nextlimit'];
 _showColumn.template       = 'column_values_grouped';
-_showColumn.pug = true;
 
 function showColumn(req, res) {
     cache_wrapper(req, res, _showColumn);
@@ -626,10 +589,7 @@ function show_rows(req, res) {
     }
     l.view = view;
 
-    var fin = finish( req, res, template );
-    if ( /\.pug$/.test(template) ) {
-        fin = finish_pug( req, res, template );
-    }
+    var fin = finish_pug( req, res, template );
 
     var order_limit_offset;
     if ( req.params.direction ) {
@@ -848,7 +808,7 @@ function sqlRequest(req, res) {
         }, 
     ], 
 
-        finish( req, res, 'showSqlRequest' ) 
+        finish_pug( req, res, 'showSqlRequest' ) 
     );
 }
 
@@ -880,7 +840,7 @@ function sqlDetails (req, res) {
             done(null);
         },
     ],
-    finish( req, res, 'sqlDetails' )
+    finish_pug( req, res, 'sqlDetails' )
     );
 }
 
@@ -894,7 +854,7 @@ function sqlSave (req, res) {
         }
 
     ],
-    finish ( req, res, 'msg', { 
+    finish_pug ( req, res, 'msg', { 
                                 title: 'Saving status',
                                 msg: 'Saving was successful!' }
            )
@@ -910,7 +870,7 @@ function sqlRemove (req, res) {
         }
 
     ],
-    finish ( req, res, 'msg', { 
+    finish_pug ( req, res, 'msg', { 
                                  title: 'Removing status',
                                 msg: 'Removing was successful!' }
             )
@@ -990,8 +950,7 @@ function cache_wrapper (req, res, handler) {
     var template = handler.template;
     if (typeof template == 'function') { template = template(req) }
 
-    var render = (handler.pug) ? finish_pug( req, res, template )
-                                : finish( req, res, template );
+    var render = finish_pug( req, res, template );
 
     var the_locals = handler.produce_locals;
     if (typeof the_locals == 'function') { the_locals = the_locals(req) }

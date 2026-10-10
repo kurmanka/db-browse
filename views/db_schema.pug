@@ -1,0 +1,12 @@
+//- Ported from view/db_schema.html (legacy JUST template).
+
+extends page
+
+block title
+  | #{dbId} schema
+
+block content
+  link(rel="stylesheet", type="text/css", href="/_/css/prism.css")
+  pre
+    code.language-sql= schema
+  script(src="/_/js/prism.js")

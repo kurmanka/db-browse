@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node test/run.js",
     "test:sqlite": "node test/sqlite.js",
+    "test:drivers": "node test/drivers.js",
     "test:routes": "node test/routes.js",
     "test:mcp": "node test/mcp.js",
     "start": "node start.js"
@@ -29,7 +30,6 @@
     "express": "^4.22.1",
     "express-session": "^1.19.0",
     "js-yaml": "^4.1.1",
-    "just": "~0.1.8",
     "memcached": "*",
     "morgan": "^1.10.1",
     "mysql2": "^3.22.3",

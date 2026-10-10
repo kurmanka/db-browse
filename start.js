@@ -76,9 +76,8 @@ app.use(express_session(config.session_config));
 
 app.use( '/_/', serve_static('./static') );
 
-// this is for Jade templates, they are in the views/ directory.
-// while the view/ directory holds Just templates (see 
-// requestHandlers.js for details).
+// Pug templates live in the views/ directory; views/page.pug is the shared
+// layout and every other page extends it.
 app.set('views', __dirname + '/views');
 
 app.engine('pug', require('pug').__express)

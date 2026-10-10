@@ -1,0 +1,50 @@
+//- Ported from view/sqlDetails.html (legacy JUST template).
+
+extends page
+
+block title
+  | Sql details page-form
+
+block content
+
+  form(method="post", name="sql_details", action='/' + values.dbid + ':sql/' + sql_id)
+
+    table.details
+      tr
+        td id
+        td= values.id
+      tr
+        td name
+        td
+          input#sqlname(type="text", name="name", value=values.name)
+      tr
+        td database
+        td
+          select(name="db")
+            option(value=values.dbid, selected)= values.dbid
+            each key in Object.keys(databaseList)
+              if key != values.dbid
+                option(value=key)= key
+
+    div
+      textarea(name="sql")= values.sql
+
+    - var comment = values.comment || 'comment...'
+    #comment
+      textarea(name="comment")= comment
+
+    table.details
+      tr
+        td created:
+        td= values.created_at
+      tr
+        td times used:
+        td= values.used_times
+      tr
+        td last used:
+        td= values.last_used
+
+    div.submit
+      input(type="submit", name="run", value="Execute")
+      input#save(type="submit", name="run", value="Save")
+      input#remove(type="submit", name="run", value="Remove")

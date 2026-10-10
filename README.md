@@ -122,7 +122,6 @@ To do
 
 These are some of the things I'd like to do:
 
-* finish the transition to pug templates; delete the legacy view/ folder
 * fix URL building in links properly; e.g. horizontal / vertical links don't take possible query params into account
 * fix page layout — the top and the bottom should be fixed, non-scrollable
 * add JSON support

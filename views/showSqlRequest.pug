@@ -1,0 +1,26 @@
+//- Ported from view/showSqlRequest.html (legacy JUST template).
+
+extends page
+
+block title
+  | SQL
+
+block content
+
+  div.sql
+    a #{sql}
+
+  if results && results.length > 0
+    - var keys = Object.keys(results[0])
+    table.light
+      tr
+        each key in keys
+          if key != 'parse' && key != '_typeCast'
+            th= key
+      each row in results
+        tr
+          each key in keys
+            if key != 'parse' && key != '_typeCast'
+              td.data= row[key]
+  else
+    a 0 rows

@@ -58,4 +58,50 @@ for tooling.
 
 ## Status
 
-- [ ] fixed
+- [x] fixed
+
+## What changed
+
+Six templates were ported to `views/*.pug`, matching what the JUST ones rendered:
+
+| Was | Now |
+|---|---|
+| `view/tableDetails.html` | `views/tableDetails.pug` (extends `page`) |
+| `view/totalRecords.html` | `views/totalRecords.pug` (fragment, still appended) |
+| `view/showSqlRequest.html` | `views/showSqlRequest.pug` |
+| `view/sqlDetails.html` | `views/sqlDetails.pug` |
+| `view/msg.html` | `views/msg.pug` |
+| `view/db_schema.html` | `views/db_schema.pug` |
+
+- `requestHandlers.js`: `respond()` and `finish()` (and the `JUST` require) are
+  gone; the remaining callers use `finish_pug()`. `showError()` renders
+  `msg.pug`. `show_rows` and `cache_wrapper` no longer branch on template
+  extension/`handler.pug` — everything is Pug.
+- The two-part table-details response is preserved: `tableDetails.pug` is
+  written, then `totalRecords.pug` appends the row count via jQuery.
+- The unused `handler.pug` flags and the `just` dependency are removed.
+- `view/` is deleted; `CLAUDE.md` describes one template engine now, and
+  `README.md` drops the finished to-do item.
+
+Dead templates that nothing referenced (`login.html`, `listDatabase.html`,
+`tableList.html`, `columnData.html`, `sqlHistory.html`, `parent.html`) went with
+the directory.
+
+## Verification
+
+Every affected route was checked live after the port:
+
+| Route | Result |
+|---|---|
+| `/:db/:table` | 200; headers, column links, arrows, status/SQL, "— N records" |
+| `/:db:sql` (Execute) | 200; `.sql` block and results table |
+| `/:sql/:id` | 200; form renders |
+| `/:db/.schema` | 200; Prism-highlighted dump |
+| error page | 200/4xx; `#msg` renders |
+| `/:sql/999` (unknown) | 200, as before |
+
+Rendering is now consistent with the other Pug pages (quoted attributes, e.g.
+`<td class="data">` instead of `<td class = 'data'>`).
+
+    $ node test/run.js
+    7 / 20 / 16 / 62 passed, 0 failed
