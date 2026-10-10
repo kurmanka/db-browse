@@ -86,8 +86,21 @@ emit HTML5 void tags — `<meta charset="utf-8">`, not `<meta charset="utf-8"/>`
 
 This was deferred at first because standards mode can move layout, so it needed a
 visual check. Chrome was available after all, and `--headless=new --screenshot`
-(with `HOME` and the profile under `/tmp`, otherwise the sandbox blocks its
-writes to `~/Library`) renders the real pages saved from the server:
+renders the real pages saved from the server.
+
+Two things about running it on this machine, both learned the hard way:
+
+- Point the profile somewhere writable (`--user-data-dir=/tmp/…`) and add
+  `--disable-crash-reporter --crash-dumps-dir=/tmp/…`, or the sandbox turns its
+  writes to `~/Library` into permission errors.
+- Add **`--use-mock-keychain`**. Do *not* "fix" the sandbox by pointing `HOME`
+  at a temp directory: Chrome then looks for
+  `$HOME/Library/Keychains/login.keychain-db`, finds nothing, and macOS pops a
+  *"Keychain Not Found — A keychain cannot be found to store "Chrome.""* dialog
+  on every launch. That dialog's "Reset To Defaults" button resets the keychain
+  search list, so it is not something to leave on screen for a user to click.
+
+With those flags it renders quietly:
 
 | Page | compat mode before | after | pixel diff |
 |---|---|---|---|
