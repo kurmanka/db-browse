@@ -58,7 +58,10 @@ function prepare_locals (req, res, next) {
         comment:       req.body.comment || '',
         sql_id:        req.params.sql_id,
         lastStringReq: '',
-        breadcrumbs:   []
+        breadcrumbs:   [],
+        // compact row view (see compactChars/compactOn above)
+        compact:       compactOn(req, config),
+        compact_chars: compactChars(config)
     };
     // prepare breadcrumbs}}{}
     breadcrumbs(req, res);
@@ -176,6 +179,32 @@ function parseCols(value) {
         .map(function (s) { return s.trim(); })
         .filter(function (s) { return s.length > 0; });
     return list.length ? list : null;
+}
+
+//
+//  COMPACT ROW VIEW
+//
+// The row views render every value in full, so one long text or JSON column
+// makes a page of records scroll forever. In compact mode only the start of
+// such a value is shown and a click expands that one cell in place. The
+// preference lives in a cookie and is read here so the switch in the fixed
+// header and the first paint agree; static/js/row-compact.js applies it in the
+// browser. See issues/17-compact-row-view.md.
+var COMPACT_COOKIE = 'dbb_compact';
+var COMPACT_DEFAULT_CHARS = 80;
+
+// config.compact_chars, defaulted and sanitised: a positive integer, or 0 to
+// switch the feature off entirely.
+function compactChars(config) {
+    var n = parseInt(config.compact_chars, 10);
+    if (isNaN(n)) { n = COMPACT_DEFAULT_CHARS; }
+    return (n > 0) ? n : 0;
+}
+
+// Compact mode is on by default; the cookie only records a deliberate "off".
+function compactOn(req, config) {
+    if (!compactChars(config)) { return false; }
+    return !(req.cookies && req.cookies[COMPACT_COOKIE] === '0');
 }
 
 function breadcrumbs(req, res, next) {
@@ -1132,3 +1161,5 @@ exports.errorStatus       = errorStatus;   // exported for tests
 exports.sqlRefusal        = sqlRefusal;    // exported for tests
 exports.buildUrl          = buildUrl;      // exported for tests
 exports.parseCols         = parseCols;     // exported for tests
+exports.compactChars      = compactChars;  // exported for tests
+exports.compactOn         = compactOn;     // exported for tests

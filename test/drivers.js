@@ -362,6 +362,58 @@ async function run() {
         assert.strictEqual(jf.buildTree({ k: 1 }, 0).collapsed, false);
     });
 
+    // ---- compact row view (issue 17) ----
+
+    console.log('\n  compact row view');
+
+    const rc = require('../static/js/row-compact.js');
+
+    await ok('previewText keeps short values and trims long ones', async () => {
+        assert.strictEqual(rc.previewText('short value', 80), null);
+        assert.strictEqual(rc.previewText('', 80), null);
+        assert.strictEqual(rc.previewText('x'.repeat(100), 10), 'x'.repeat(10) + '\u2026');
+        assert.strictEqual(rc.previewText('one two three', 7), 'one two\u2026');
+    });
+
+    await ok('previewText flattens whitespace into a single line', async () => {
+        assert.strictEqual(rc.previewText('a\n\nb\tc ' + 'd'.repeat(20), 6), 'a b c\u2026');
+        // nothing to trim once the newlines have become spaces
+        assert.strictEqual(rc.previewText('a\n\nb', 80), null);
+    });
+
+    await ok('previewJson shows the compact serialisation, one line', async () => {
+        assert.strictEqual(
+            rc.previewJson('{\n    "b": 2,\n    "a": [1, 2]\n}', 80),
+            '{"b":2,"a":[1,2]}');
+        assert.strictEqual(rc.previewJson('{"b":2,"a":[1,2,3]}', 10), '{"b":2,"a"\u2026');
+        // not JSON: left as text rather than throwing
+        assert.strictEqual(rc.previewJson('plain', 80), 'plain');
+    });
+
+    await ok('compactCookie records the switch, site-wide', async () => {
+        assert.ok(/^dbb_compact=1;path=\/;/.test(rc.compactCookie(true)));
+        assert.ok(/^dbb_compact=0;path=\/;/.test(rc.compactCookie(false)));
+    });
+
+    await ok('compactChars defaults, sanitises and can switch the feature off', async () => {
+        assert.strictEqual(rh.compactChars({}), 80);
+        assert.strictEqual(rh.compactChars({ compact_chars: 40 }), 40);
+        assert.strictEqual(rh.compactChars({ compact_chars: '40' }), 40);
+        assert.strictEqual(rh.compactChars({ compact_chars: 0 }), 0);
+        assert.strictEqual(rh.compactChars({ compact_chars: -1 }), 0);
+        assert.strictEqual(rh.compactChars({ compact_chars: 'nonsense' }), 80);
+    });
+
+    await ok('compactOn is on by default and follows the cookie', async () => {
+        assert.strictEqual(rh.compactOn({}, {}), true);
+        assert.strictEqual(rh.compactOn({ cookies: {} }, {}), true);
+        assert.strictEqual(rh.compactOn({ cookies: { dbb_compact: '1' } }, {}), true);
+        assert.strictEqual(rh.compactOn({ cookies: { dbb_compact: '0' } }, {}), false);
+        // feature switched off in config: never on, whatever the cookie says
+        assert.strictEqual(rh.compactOn({ cookies: { dbb_compact: '1' } },
+                                        { compact_chars: 0 }), false);
+    });
+
     // ---- addon loading (issue 07) ----
 
     console.log('\n  addon loading');

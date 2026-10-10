@@ -10,6 +10,19 @@ block topnav2
   //- a direct child of body is a flex item, where float does not apply: the
   //- right alignment comes from the stylesheet instead
   p.nav2
+
+      //- Compact ("short values") mode, issue 17. It belongs to the fixed header
+      //- so it stays reachable while a page of tall records is scrolled. The
+      //- choice lives in a cookie and static/js/row-compact.js applies it; the
+      //- label is hidden until that script runs, because without it a switch
+      //- would do nothing. Hidden entirely when config.compact_chars is 0.
+      if compact_chars
+        label.compact-toggle(hidden)
+          input#compact(type="checkbox", checked=compact, data-limit=compact_chars,
+                        title="Show only the start of long text and JSON values")
+          |  short values
+        |  · 
+
       - var i = 0
       - var size = Object.keys(table_views).length
       each label,code in table_views
@@ -56,6 +69,9 @@ block content
         |  · 
         a(href= links.all) see all
 
+  //- Compact mode first: it remembers each cell's full text before
+  //- json-format.js turns a JSON cell into a tree (issue 17)
+  script(src="/_/js/row-compact.js")
+
   //- turns each .json cell (views/inc/row_detail_value.pug) into a tree
   script(src="/_/js/json-format.js")
-    

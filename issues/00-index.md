@@ -36,3 +36,4 @@ planned fix, and a status checkbox. Fixes are committed one per issue.
 |---|---|---|---|
 | [15](15-utf8-charset.md) | Non-ASCII characters mangled on the table-details page | medium | fixed |
 | [16](16-sticky-record-summary.md) | Record-summary line scrolls out of view sideways | low | fixed |
+| [17](17-compact-row-view.md) | Compact row view: show only the start of long values | low | fixed |

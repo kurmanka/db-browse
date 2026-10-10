@@ -313,6 +313,35 @@ td.json.json-parsed {
     margin: 0;
 }
 
+/* Compact row view (issue 17): a cell showing only the start of a long text or
+   JSON value. Clicking it expands that one value in place; see
+   static/js/row-compact.js. These rules come after the .json ones on purpose:
+   a short JSON cell keeps the .json class but must not be pre-formatted. */
+label.compact-toggle {
+    margin-right: 0.5em;
+    cursor: pointer;
+}
+
+td.compact-preview {
+    cursor: pointer;
+    white-space: normal;
+}
+
+td.compact-preview:hover {
+    background: #f2f2ff;
+}
+
+/* a plain text cell folds back when clicked again; a JSON cell folds with its
+   own markers and the "short" link, so it keeps the default cursor */
+td.compact-open:not(.json) {
+    cursor: pointer;
+}
+
+.j-short {
+    color: #5555dd;
+    text-decoration: none;
+}
+
 a:link.arrow {
     text-decoration: none;
     font-weight: bold;

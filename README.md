@@ -122,10 +122,27 @@ always was.
 tree-building part is shared with the tests (`test/drivers.js`).
 
 
+Compact row view
+----------------
+
+A row listing with a long text or JSON column makes every record tall, so most
+of the page is scrolling. The `short values` checkbox in the fixed header — on
+by default, remembered in a cookie — shows only the start of such values, and
+clicking a cell expands that one value in place: plain text as it is, a JSON
+value as the collapsible tree above. The short form keeps
+`config.compact_chars` characters (80 by default); set it to 0 to switch the
+feature off and hide the checkbox. See [issue 17](issues/17-compact-row-view.md).
+
+`static/js/row-compact.js` does the work; `static/js/json-format.js` builds a
+tree only for a value that is actually shown in full.
+
+
 To do
 -----
 
 Everything that used to be listed here - the Pug transition (the legacy `view/`
 directory is gone), link building, the fixed page layout, JSON support, column
-selection and links to referring records - is done. See `issues/` for what was
-found along the way, and the Postgres/MySQL caveats in the MCP notes above.
+selection, links to referring records and the compact row view - is done. See
+`issues/` for what was found along the way, and the Postgres/MySQL caveats in
+the MCP notes above.
+

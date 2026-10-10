@@ -138,7 +138,7 @@
         bar.appendChild(toggle);
 
         cell.textContent = '';
-        cell.className += ' json-parsed';
+        cell.classList.add('json-parsed');
         cell.appendChild(bar);
         cell.appendChild(tree);
         cell.appendChild(raw);
@@ -146,10 +146,16 @@
 
     function init() {
         var cells = document.querySelectorAll('td.json');
-        for (var i = 0; i < cells.length; i++) { renderCell(cells[i]); }
+        for (var i = 0; i < cells.length; i++) {
+            // a cell showing the compact short form (static/js/row-compact.js)
+            // is not an expanded value yet: it gets its tree when clicked
+            if (cells[i].classList.contains('compact-preview')) { continue; }
+            renderCell(cells[i]);
+        }
     }
 
-    var api = { buildTree: buildTree, MAX_DEPTH: MAX_DEPTH, MAX_ITEMS: MAX_ITEMS };
+    var api = { buildTree: buildTree, renderCell: renderCell,
+                MAX_DEPTH: MAX_DEPTH, MAX_ITEMS: MAX_ITEMS };
 
     root.jsonFormat = api;
     if (typeof module !== 'undefined' && module.exports) { module.exports = api; }

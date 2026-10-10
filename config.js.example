@@ -78,6 +78,14 @@ exports.authenticate_userfile = 'users.txt';
 exports.cache = false;
 exports.cache_memcached = 'localhost:11211';
 
+// The row views (vertical, horizontal, one by one) can show just the start of
+// long text and JSON values, so a page of records stays scannable; clicking a
+// cell expands that one value. The "short values" switch in the fixed header
+// flips it and the choice is remembered in a cookie. This is how many
+// characters of a value the short form keeps; 0 switches the feature off and
+// hides the switch.
+//exports.compact_chars = 80;
+
 // for postgres schema browsing
 exports.pg_dump_path = 'pg_dump';
 

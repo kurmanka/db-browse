@@ -114,6 +114,28 @@ async function firstColumn(db, table, cookie) {
     } catch (_) { return null; }
 }
 
+// A row-view URL that really renders: the columns linked from the table details
+// page, tried until one has a value to sort by. null when none does.
+async function firstRowUrl(db, table, cookie) {
+    let cols = [];
+    try {
+        const r = await get('/' + db + '/' + table, { headers: { Cookie: cookie } });
+        const re = new RegExp('href\\s*=\\s*"?/?' + escapeRe(db) + '/' + escapeRe(table)
+                            + '/([^"/\\s>?]+)/_ASC', 'g');
+        let m;
+        while ((m = re.exec(r.text)) !== null) { cols.push(decodeURIComponent(m[1])); }
+    } catch (_) { return null; }
+
+    for (const c of cols) {
+        const url = '/' + db + '/' + table + '/' + c + '/_ASC?' + c + '=NOTNULL';
+        try {
+            const r = await get(url, { headers: { Cookie: cookie } });
+            if (r.status === 200) { return url; }
+        } catch (_) { /* try the next column */ }
+    }
+    return null;
+}
+
 // ---- server lifecycle ------------------------------------------------------
 
 // Resolves true if something is already listening on the port.
@@ -346,6 +368,39 @@ async function runTests() {
                 assert.ok(r.text.indexOf('\u2934') !== -1, 'the sort arrow survives');
                 assert.ok(r.text.indexOf('\u2014') !== -1, 'the em dash survives');
             });
+
+            // --- the compact ("short values") switch, issue 17 ---
+
+            const rowUrl = await firstRowUrl(target.id, target.table, cookie);
+
+            if (!rowUrl) {
+                console.log('  SKIP  (no row view with a value to sort by — skipping compact switch tests)');
+            } else {
+                await ok('the row view renders the compact switch, on by default', async () => {
+                    const r = await get(rowUrl, { headers: { Cookie: cookie } });
+                    assert.strictEqual(r.status, 200);
+                    assert.ok(/id="compact"/.test(r.text), 'the switch is rendered');
+                    assert.ok(/data-limit="80"/.test(r.text), 'the limit comes from config');
+                    assert.ok(/id="compact"[^>]*\bchecked\b/.test(r.text),
+                              'on by default');
+                    assert.ok(r.text.indexOf('/_/js/row-compact.js') !== -1,
+                              'its script is included');
+                });
+
+                await ok('dbb_compact=0 turns the compact switch off', async () => {
+                    const r = await get(rowUrl,
+                                        { headers: { Cookie: cookie + '; dbb_compact=0' } });
+                    assert.strictEqual(r.status, 200);
+                    assert.ok(/id="compact"/.test(r.text), 'the switch is still rendered');
+                    assert.ok(!/id="compact"[^>]*\bchecked\b/.test(r.text), 'not checked');
+                });
+
+                await ok('the compact switch script is served', async () => {
+                    const r = await get('/_/js/row-compact.js');
+                    assert.strictEqual(r.status, 200);
+                    assert.ok(/previewText/.test(r.text), 'it is the real script');
+                });
+            }
         }
 
         // --- addon config endpoint ---
