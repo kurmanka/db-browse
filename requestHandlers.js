@@ -136,7 +136,11 @@ var NOT_FOUND_DRIVER_ERROR =
 function errorStatus (msg) {
     if (msg && msg.status) { return msg.status; }
     var text = (msg && msg.message) ? msg.message : msg;
-    if (text && NOT_FOUND_DRIVER_ERROR.test(String(text))) { return 404; }
+    if (!text) { return 500; }
+    text = String(text);
+    // a rejected identifier is the client's mistake, not ours
+    if (/^Invalid identifier/.test(text)) { return 400; }
+    if (NOT_FOUND_DRIVER_ERROR.test(text)) { return 404; }
     return 500;
 }
 
@@ -983,3 +987,4 @@ exports.sqlDetails        = sqlDetails;
 exports.sqlSave           = sqlSave;
 exports.sqlRemove         = sqlRemove;
 exports.show_db_schema    = show_db_schema;
+exports.errorStatus       = errorStatus;   // exported for tests

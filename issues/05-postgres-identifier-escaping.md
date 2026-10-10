@@ -65,4 +65,46 @@ Postgres. Unconditional double-quoting would change which table resolves.
 
 ## Status
 
-- [ ] fixed
+- [x] fixed
+
+## What changed
+
+`db_postgres.js`:
+
+- `escape()` is replaced by `ident(name)`, which accepts a plain optionally
+  schema-qualified name (passed through unquoted, so case folding is unchanged)
+  or a strictly double-quoted optionally qualified name (passed through, so
+  mixed-case keeps working), and refuses everything else with
+  `Invalid identifier: …`.
+- Every identifier position goes through it: table, column, `order_by`, and each
+  `where` key, in `rowsCounter`, `getTableDetails`, `showColumnRequest` and
+  `showValueRequest`. Validation happens before any query; failures are reported
+  through the callback, never thrown.
+- The three `regclass` queries are parameterized (`$1::regclass`) instead of
+  interpolating a single-quoted literal. Using the cast (rather than
+  `to_regclass`) keeps a missing Postgres table an error, so it stays a 404
+  rather than silently rendering an empty page like the old SQLite bug.
+- `LIMIT` is built by `limitClause()` (`Number()`, so `'1; DROP TABLE t'` does
+  not become `1`) and the sort direction by `directionWord()` (only `ASC`/`DESC`
+  are emitted). The same two helpers were added to `db_mysql.js` and
+  `db_sqlite.js`, which had the same raw concatenation.
+- `requestHandlers.errorStatus()` maps `Invalid identifier: …` to **400** — bad
+  input, not a server fault.
+
+`ident` is exported and covered by `test/drivers.js`, together with the "must not
+reach the database" checks and the `errorStatus` mapping.
+
+## Verification
+
+    $ node test/drivers.js
+    14 passed, 0 failed
+
+Live, against `submittal1`:
+
+| Request | Result |
+|---|---|
+| table list, table details | 200 |
+| `/submittal1/db_upgrade_history/a) or (1=1` | 400 `Invalid identifier` |
+| `/submittal1/db_upgrade_history/id desc, (select 1)` | 400 `Invalid identifier` |
+| `/submittal1/x; DROP TABLE t` | 404 (refused before any query) |
+| `/submittal1/does_not_exist` | 404 (as before) |

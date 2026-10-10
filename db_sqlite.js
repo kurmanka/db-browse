@@ -90,6 +90,18 @@ function escapeId(id) {
     return '"' + String(id).replace(/"/g, '""') + '"';
 }
 
+// a row limit, safe to concatenate: LIMIT takes a constant, not a placeholder
+function limitClause (limit) {
+    // Number(), not parseInt(): '1; DROP TABLE t' must not become 1
+    var n = Number(limit);
+    return (Number.isInteger(n) && n > 0) ? " LIMIT " + n : " LIMIT 100 ";
+}
+
+// a sort direction, safe to concatenate: only these two words are emitted
+function directionWord (direction) {
+    return (direction === 'DESC') ? 'DESC' : 'ASC';
+}
+
 function showAllTable(connection, doneReturn) {
     connection.query(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
@@ -177,9 +189,9 @@ function showValueRequest(connection, table, where, order_limit_offset, doneRetu
     }
 
     if (order_limit_offset) {
-        order_by = " order by " + escapeId(order_limit_offset.order_by) + " " + order_limit_offset.direction
-        if (order_limit_offset.limit > 0) { limit = " LIMIT " + order_limit_offset.limit; }
-        else { limit = " LIMIT 100 " }
+        order_by = " order by " + escapeId(order_limit_offset.order_by) + " "
+                 + directionWord(order_limit_offset.direction);
+        limit = limitClause(order_limit_offset.limit);
     }
 
     console.log( "SQL:", "select * from " + escapeId(table) + where + order_by + limit)
