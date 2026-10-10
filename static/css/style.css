@@ -227,6 +227,14 @@ textarea[name='sql'] {
     height: 220px;
 }
 
+/* The SQL form's submit button, with the "History of previous SQL" link right
+   below it. Explicit, so the gap does not depend on the user agent's
+   quirks-mode defaults (it was the one visible difference switching to
+   standards mode made). */
+#sql_request button {
+    margin-bottom: 0.8em;
+}
+
 textarea[name='comment'] {
     width: 540px;
     height: 60px;

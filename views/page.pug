@@ -1,4 +1,7 @@
 //- the shared page layout; every other template extends it
+//- doctype html matters: without it browsers render in quirks mode, and it is
+//- what makes Pug emit HTML5 void tags (<meta charset="utf-8">, not ".../>")
+doctype html
 html
   head
     //- the legacy parent.html declared this; without it a page whose

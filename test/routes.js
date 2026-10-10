@@ -333,10 +333,12 @@ async function runTests() {
 
             // the table-details page sets its own Content-Type; without a
             // charset the browser guesses and the sort arrows turn to mojibake
-            await ok('table details is served as UTF-8', async () => {
+            await ok('table details is served as UTF-8, in standards mode', async () => {
                 const r = await get('/' + target.id + '/' + target.table,
                                     { headers: { Cookie: cookie } });
                 assert.strictEqual(r.status, 200);
+                assert.ok(/^<!DOCTYPE html>/i.test(r.text),
+                          'the doctype is there (without it, quirks mode)');
                 assert.ok(/charset=utf-8/i.test(r.headers.get('content-type') || ''),
                           'Content-Type carries the charset');
                 assert.ok(/<meta charset="utf-8"\s*\/?>/i.test(r.text),

@@ -71,9 +71,13 @@ as an object.
 - `test/drivers.js` covers `buildTree`: nesting, array indices, commas,
   primitive rendering, summaries, and the depth/size collapse thresholds.
 
-Not verified here: the in-browser interactivity (expanding, the raw toggle,
-the colours). The logic is tested and the CSS/JS are served; a click-through in
-a browser is the remaining step.
+Partly resolved: the rendering has since been checked visually with headless
+Chrome, on a real `jsonb` column (`submittal1/user_account/profile`). The tree
+draws with coloured keys and values, container summaries (`{}`), collapsed
+`▸`/`▾` markers and indentation, inside the table cell. What is still not
+exercised is the *interaction* — no click was simulated, so expanding a node and
+the raw/tree toggle are covered by the code and the `buildTree` unit tests, not
+by a click-through. See [issue 15](15-utf8-charset.md) for the setup.
 
     $ node test/run.js
     7 / 24 / 18 / 62 passed, 0 failed

@@ -61,10 +61,11 @@ with `text-align: right`.
 - The served `/_/css/style.css` contains the new rules, and the row-detail page
   renders `<p class="nav2">` with the switcher links.
 
-Caveat: this is a layout change and I verified it structurally (rules served,
-markup compatible, templates render) rather than visually — there is no browser
-available here. Worth a quick look in a real browser, especially a long table
-listing and a row-detail page with the floating SQL form.
+Caveat resolved: originally verified only structurally (rules served, markup
+compatible, templates render). It has since been checked visually with headless
+Chrome — the header (logout), breadcrumbs and footer stay put while the content
+between them scrolls, on both a long table-details page and a row-detail page
+with the floated SQL form. See [issue 15](15-utf8-charset.md) for the setup.
 
     $ node test/run.js
     7 / 21 / 18 / 62 passed, 0 failed

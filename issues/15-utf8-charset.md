@@ -77,14 +77,48 @@ covers the page wherever it ends up.
 `Content-Type` carries the charset, that the page declares it, and that the sort
 arrow (`\u2934`) and the em dash (`\u2014`) survive.
 
-## Not changed: the missing doctype
+## Also fixed: the missing doctype
 
-`views/page.pug` starts with `html`, not `doctype html`, so browsers render the
-app in **quirks mode** (the legacy templates had the same omission, so this is
-not a regression). Adding `doctype html` would switch to standards mode, which
-can move layout — and would also make Pug emit HTML5 void tags
-(`<meta charset="utf-8">` rather than `<meta charset="utf-8"/>`). That is worth
-doing deliberately, with a visual check, rather than as a side effect here.
+`views/page.pug` started with `html`, not `doctype html`, so browsers rendered
+the app in **quirks mode** (the legacy templates had the same omission, so this
+was not a regression). It now starts with `doctype html`, which also makes Pug
+emit HTML5 void tags — `<meta charset="utf-8">`, not `<meta charset="utf-8"/>`.
+
+This was deferred at first because standards mode can move layout, so it needed a
+visual check. Chrome was available after all, and `--headless=new --screenshot`
+(with `HOME` and the profile under `/tmp`, otherwise the sandbox blocks its
+writes to `~/Library`) renders the real pages saved from the server:
+
+| Page | compat mode before | after | pixel diff |
+|---|---|---|---|
+| `/submittal1/user_account` (table details) | `BackCompat` | `CSS1Compat` | 0 of 1,260,000 |
+| `/submittal1/user_account/user_id/_ASC/hor/3` (row view) | `BackCompat` | `CSS1Compat` | 0 of 1,260,000 |
+
+`document.compatMode` was read back from each file with `--dump-dom`, so the mode
+really did change: the identical rendering is a result, not a setup that ignored
+the doctype. The same pages were also rendered with the missing doctype inserted
+back, and stayed identical.
+
+Two notes on the screenshots: they cover the sort arrows and the fixed
+header/footer, which is the visual check [issue 11](11-fixed-page-layout.md) had
+been missing, and the JSON tree, which is the one [issue 12](12-json-support.md)
+had been missing. The record count does not appear in them because a `file://`
+page cannot load the jQuery CDN script; that is an artefact of the harness, not
+of the app.
+
+Five more pages were compared the same way (each page rendered twice, once as
+served and once with the doctype removed, so the doctype was the only variable):
+`/` (database list), `/submittal1` (table list), `/:sql` (SQL history), `/nope`
+(error page) and a vertical row view. Four were pixel-identical; the table list
+differed by 0.71% of its pixels, all in one place: in quirks mode the user
+agent's stylesheet left a gap under the SQL form's "Execute it" button, and in
+standards mode it did not.
+
+That gap is now explicit rather than inherited from a UA quirk:
+
+    #sql_request button { margin-bottom: 0.8em; }
+
+and the re-rendered page looks right.
 
 ## Test-harness side note
 
