@@ -248,8 +248,58 @@ textarea[name='comment'] {
     margin: 0px 0px 20px 0px;
 }
 
+/* JSON cells: see static/js/json-format.js. Without JavaScript they stay the
+   pretty-printed block they have always been; the script turns them into a
+   collapsible tree with a "raw" toggle. */
 .json {
     white-space: pre;
+}
+
+td.json.json-parsed {
+    white-space: normal;
+    font-family: Menlo, Consolas, monospace;
+    font-size: 90%;
+}
+
+.j-bar {
+    text-align: right;
+    font-size: 85%;
+}
+
+.j-rawtoggle {
+    color: #5555dd;
+    text-decoration: none;
+}
+
+.j-head {
+    cursor: pointer;
+}
+
+.j-toggle {
+    display: inline-block;
+    width: 1em;
+    color: #888;
+}
+
+.j-body {
+    margin-left: 0.6em;
+    padding-left: 0.6em;
+    border-left: 1px dotted #ddd;
+}
+
+.j-collapsed > .j-body { display: none; }
+.j-open > .j-head > .j-summary { display: none; }
+
+.j-key     { color: #a11; }
+.j-string  { color: #080; }
+.j-number  { color: #05a; }
+.j-boolean { color: #a50; }
+.j-null    { color: #888; }
+.j-bracket, .j-summary, .j-comma { color: #888; }
+
+.j-raw {
+    white-space: pre-wrap;
+    margin: 0;
 }
 
 a:link.arrow {

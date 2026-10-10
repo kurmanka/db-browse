@@ -112,9 +112,14 @@ Notes:
 JSON support
 ------------
 
-Currently, the JSON values in a database are output in an indented form, but with no syntax highlighting 
-or anything on top. Would be great to add JSON folding/unfolding support to that, e.g. with 
-https://github.com/pgrabovets/json-view or https://github.com/mohsen1/json-formatter-js
+JSON values (a Postgres `json`/`jsonb` column, say) are rendered as a collapsible
+tree with syntax highlighting, and deep or large values start collapsed. A
+"raw" link on each cell shows the original indented text, so it can still be
+copied, and with JavaScript disabled the cell is the plain indented block it
+always was.
+
+`static/js/json-format.js` does this with no dependency and no CDN; only the
+tree-building part is shared with the tests (`test/drivers.js`).
 
 
 To do
@@ -122,11 +127,11 @@ To do
 
 These are some of the things I'd like to do:
 
-* fix URL building in links properly; e.g. horizontal / vertical links don't take possible query params into account
-* fix page layout — the top and the bottom should be fixed, non-scrollable
-* add JSON support
 * add selecting columns for view in /:db/:table/:column/:value
-* add links for referring records — to find records pointing to this one. 
-    e.g. when looking at a product, find all documents refering to this product or 
-    when looking at a company, find all products of that company (the reverse 
-    of foreign key `references` relation) 
+* add links for referring records — to find records pointing to this one.
+    e.g. when looking at a product, find all documents refering to this product or
+    when looking at a company, find all products of that company (the reverse
+    of foreign key `references` relation)
+
+The Pug transition (the legacy `view/` directory is gone), link building and
+JSON folding are done; see `issues/` for what was found and fixed.

@@ -249,6 +249,55 @@ async function run() {
                            '/x/y?a=1&b=2');
     });
 
+    // ---- JSON tree building (issue 12) ----
+
+    console.log('\n  json formatting');
+
+    const jf = require('../static/js/json-format.js');
+
+    await ok('buildTree describes a nested value', async () => {
+        const t = jf.buildTree({ a: 1, b: [true, null, 'x'] }, 0);
+        assert.strictEqual(t.kind, 'object');
+        assert.strictEqual(t.summary, '{2}');
+        assert.strictEqual(t.collapsed, false);
+        assert.deepStrictEqual(t.children.map(c => c.key), ['a', 'b']);
+        assert.deepStrictEqual(t.children.map(c => c.comma), [true, false]);
+
+        assert.strictEqual(t.children[0].kind, 'number');
+        assert.strictEqual(t.children[0].text, '1');
+
+        const arr = t.children[1];
+        assert.strictEqual(arr.kind, 'array');
+        assert.strictEqual(arr.summary, '[3]');
+        // array children are keyed by index
+        assert.deepStrictEqual(arr.children.map(c => c.key), ['0', '1', '2']);
+        assert.deepStrictEqual(arr.children.map(c => c.kind), ['boolean', 'null', 'string']);
+        assert.strictEqual(arr.children[2].text, '"x"');
+    });
+
+    await ok('buildTree renders primitives the way JSON would', async () => {
+        assert.strictEqual(jf.buildTree('hi', 0).text, '"hi"');
+        assert.strictEqual(jf.buildTree(42, 0).text, '42');
+        assert.strictEqual(jf.buildTree(true, 0).text, 'true');
+        assert.strictEqual(jf.buildTree(null, 0).text, 'null');
+        assert.strictEqual(jf.buildTree({}, 0).summary, '{0}');
+        assert.strictEqual(jf.buildTree([], 0).summary, '[0]');
+    });
+
+    await ok('buildTree collapses deep and large containers by default', async () => {
+        const deep = { a: { b: { c: { d: 1 } } } };
+        const t = jf.buildTree(deep, 0);
+        assert.strictEqual(t.collapsed, false);                                    // depth 0
+        assert.strictEqual(t.children[0].collapsed, false);                        // depth 1
+        assert.strictEqual(t.children[0].children[0].collapsed, false);            // depth 2
+        assert.strictEqual(t.children[0].children[0].children[0].collapsed, true); // depth 3
+
+        const big = {};
+        for (let i = 0; i <= jf.MAX_ITEMS; i++) { big['k' + i] = i; }
+        assert.strictEqual(jf.buildTree(big, 0).collapsed, true);
+        assert.strictEqual(jf.buildTree({ k: 1 }, 0).collapsed, false);
+    });
+
     // ---- addon loading (issue 07) ----
 
     console.log('\n  addon loading');
