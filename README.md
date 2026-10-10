@@ -125,13 +125,7 @@ tree-building part is shared with the tests (`test/drivers.js`).
 To do
 -----
 
-These are some of the things I'd like to do:
-
-* add selecting columns for view in /:db/:table/:column/:value
-* add links for referring records — to find records pointing to this one.
-    e.g. when looking at a product, find all documents refering to this product or
-    when looking at a company, find all products of that company (the reverse
-    of foreign key `references` relation)
-
-The Pug transition (the legacy `view/` directory is gone), link building and
-JSON folding are done; see `issues/` for what was found and fixed.
+Everything that used to be listed here - the Pug transition (the legacy `view/`
+directory is gone), link building, the fixed page layout, JSON support, column
+selection and links to referring records - is done. See `issues/` for what was
+found along the way, and the Postgres/MySQL caveats in the MCP notes above.

@@ -6,6 +6,9 @@ block data
     tr
       each data,key in values[0]
         th= key
+      //- rows of other tables that point at each record (issue 14)
+      if referring_links
+        th Referenced by
     
     - var i = 0 
     while i < rows_show
@@ -15,4 +18,9 @@ block data
             td.null null
           else 
             include inc/row_detail_value.pug
+        if referring_links
+          td.data.refs
+            if referring_links[i]
+              each ref in referring_links[i]
+                a.ref(href=ref.url)= ref.label
       - i++

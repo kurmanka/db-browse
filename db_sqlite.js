@@ -176,6 +176,13 @@ function getTableColumns(connection, table, doneReturn) {
                     });
 }
 
+// Incoming foreign keys: SQLite's PRAGMA foreign_key_list() shows a table's
+// *outgoing* keys only, so finding the tables that point here would mean
+// walking every table. Not implemented: the row view just shows no links.
+function getReferencing(connection, table, doneReturn) {
+    doneReturn(null, []);
+}
+
 function showValueRequest(connection, table, where, order_limit_offset, columns, doneReturn) {
     // columns is optional: callers that omit it pass the callback in its place
     if (typeof columns === 'function') { doneReturn = columns; columns = null; }
@@ -230,5 +237,6 @@ exports.showAllTable       = showAllTable;
 exports.showColumnRequest  = showColumnRequest;
 exports.showValueRequest   = showValueRequest;
 exports.getTableColumns    = getTableColumns;
+exports.getReferencing     = getReferencing;
 exports.rowsCounter        = rowsCounter;
 exports.getSQL             = getSQL;

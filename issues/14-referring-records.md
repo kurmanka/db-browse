@@ -48,4 +48,53 @@ row to the rows that point at it:
 
 ## Status
 
-- [ ] fixed
+- [x] fixed (Postgres; MySQL/SQLite not implemented)
+
+## What changed
+
+- New driver method `getReferencing(connection, table, done)` returning
+  `[{ constraint, table, column, referenced_column }]`. Postgres implements it
+  with one query over `pg_constraint` (`confrelid = $1::regclass`, `contype =
+  'f'`), mapping `conkey`/`confkey` through `pg_attribute`; **composite keys are
+  skipped**, since a single-value link cannot express them. `db_mysql.js` and
+  `db_sqlite.js` return `[]` (documented in the code): SQLite's
+  `foreign_key_list` only lists a table's outgoing keys, and there is no MySQL
+  server here to verify an `information_schema` query against.
+- `show_rows()` fetches the columns and the incoming keys together (one extra
+  query on Postgres) and builds, for every record, one link per incoming key:
+  `/:db/:referring_table/:referring_column/:value`, with the value taken from
+  that record and the URL made by `buildUrl` (issue 10), so it is encoded.
+- `row_detail_hor.pug` adds a "Referenced by" column (header plus a cell per
+  record); `row_detail_one.pug` adds a "Referenced by" block under each record.
+  The `ver` view is unchanged: it is column-oriented, with one cell per record,
+  so a per-record link has nowhere to go.
+- `CLAUDE.md` documents the new method.
+
+## Verification
+
+Live, on `submittal1` (`user_account` is referenced by 20 single-column keys):
+
+    GET /submittal1/user_account/user_id/_ASC/hor/2
+      <th>Referenced by</th>
+      href="/submittal1/access_right/given_to_user_id/1"   (class="ref")
+      href="/submittal1/access_right/user_id/1"
+      href="/submittal1/company_account/admin_user_account_id/1"
+      …
+
+    GET /submittal1/user_account/user_id/_ASC/one/1
+      <div class="refs"><b>Referenced by:</b> … </div>
+
+    GET /submittal1/access_right/given_to_user_id/1     (following a link)
+      200, "Results from access_right", 2620 rows
+
+A `notes2` (SQLite) row view renders no "Referenced by", as intended.
+
+One bug was found and fixed while verifying: `array_agg(attname)` comes back
+from `pg` as the raw `{a,b}` **string** (there is no parser for `name[]`), so the
+single-column check dropped every row. The aggregate now casts to `::text`.
+
+`test/drivers.js` covers the mapping (single-column kept, composite and
+null-array rows dropped) and that the table name is passed as a parameter.
+
+    $ node test/run.js
+    7 / 29 / 20 / 62 passed, 0 failed

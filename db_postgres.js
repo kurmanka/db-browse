@@ -209,6 +209,50 @@ function showValueRequest(connection, table, where, order_limit_offset, columns,
                     });
 }
 
+// Incoming foreign keys: the tables/columns whose rows point at this table.
+// Returns [{ constraint, table, column, referenced_column }]. Composite keys
+// are skipped: a single-column link cannot express them.
+function getReferencing(connection, table, doneReturn) {
+    try {
+        table = ident(table);
+    } catch (e) {
+        return doneReturn(e);
+    }
+
+    connection.query(
+        "SELECT c.conname AS constraint_name, " +
+        "       c.conrelid::pg_catalog.regclass AS referencing_table, " +
+        // attname::text, not attname: array_agg(name) comes back as the raw
+        // "{a,b}" string (pg has no parser for name[]), while text[] is parsed
+        "       (SELECT array_agg(a.attname::text ORDER BY k.ord) " +
+        "          FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord) " +
+        "          JOIN pg_catalog.pg_attribute a " +
+        "            ON a.attrelid = c.conrelid AND a.attnum = k.attnum) AS referencing_columns, " +
+        "       (SELECT array_agg(a.attname::text ORDER BY k.ord) " +
+        "          FROM unnest(c.confkey) WITH ORDINALITY AS k(attnum, ord) " +
+        "          JOIN pg_catalog.pg_attribute a " +
+        "            ON a.attrelid = c.confrelid AND a.attnum = k.attnum) AS referenced_columns " +
+        "FROM pg_catalog.pg_constraint c " +
+        "WHERE c.confrelid = $1::regclass AND c.contype = 'f' " +
+        "ORDER BY 2, 1",
+        [table],
+        function (err, result) {
+            if (err) { return doneReturn(err); }
+            var refs = (result ? result.rows : []).filter(function (r) {
+                return r.referencing_columns && r.referencing_columns.length === 1
+                    && r.referenced_columns  && r.referenced_columns.length === 1;
+            }).map(function (r) {
+                return {
+                    constraint:        r.constraint_name,
+                    table:             r.referencing_table,
+                    column:            r.referencing_columns[0],
+                    referenced_column: r.referenced_columns[0]
+                };
+            });
+            doneReturn(null, refs);
+        });
+}
+
 function getSQL (connection, sql, doneReturn){
     connection.query(sql, function(err, result) {
         if (err) {
@@ -266,6 +310,7 @@ exports.showAllTable = showAllTable;
 exports.showColumnRequest = showColumnRequest;
 exports.showValueRequest = showValueRequest;
 exports.getTableColumns = getTableColumns;
+exports.getReferencing = getReferencing;
 exports.rowsCounter = rowsCounter;
 exports.getSQL = getSQL;
 exports.ident = ident;      // exported for tests

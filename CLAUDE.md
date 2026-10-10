@@ -38,6 +38,7 @@ prepare_req_params → loadUser → prepare_dbconnection → prepare_locals → 
 - `showAllTable(connection, done)`
 - `getTableDetails(connection, table, done)`
 - `getTableColumns(connection, table, done)` — the table's column names, in order
+- `getReferencing(connection, table, done)` — incoming foreign keys as `{constraint, table, column, referenced_column}`, single-column keys only; Postgres implements it, MySQL/SQLite return `[]`
 - `showColumnRequest(connection, column, table, limit, done)`
 - `showValueRequest(connection, table, where, order_limit_offset, columns, done)` — `columns` is an optional array of exact column names (`null`/omitted means `*`); a caller that omits it may pass the callback in its place
 - `rowsCounter(connection, table, done)`

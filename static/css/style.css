@@ -332,3 +332,15 @@ details.cols label.col {
     margin: 0 1em 0.3em 0;
     white-space: nowrap;
 }
+
+/* links to the rows that refer to a record (issue 14) */
+.refs b {
+    font-weight: normal;
+    color: #888;
+}
+
+a.ref {
+    display: inline-block;
+    margin-right: 0.8em;
+    color: #5555dd;
+}

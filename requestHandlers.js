@@ -652,15 +652,21 @@ function show_rows(req, res) {
     // get the data
     async.waterfall([
         function (done){
-            // the picker needs the full list, and ?cols= must be checked
-            // against it rather than trusted
-            getDbType(l.dbType).getTableColumns(l.connection, l.table, done);
+            var db = getDbType(l.dbType);
+            // the picker needs the full column list, ?cols= must be checked
+            // against it, and the referring-record links come from the
+            // incoming foreign keys
+            async.parallel({
+                columns:     function (cb) { db.getTableColumns(l.connection, l.table, cb); },
+                referencing: function (cb) { db.getReferencing(l.connection, l.table, cb); }
+            }, done);
         },
 
-        function (allColumns, done){
+        function (meta, done){
             var db = getDbType(l.dbType);
-            allColumns = allColumns || [];
+            var allColumns = meta.columns || [];
             l.allColumns = allColumns;
+            l.referencing = meta.referencing || [];
 
             if (wanted) {
                 var unknown = wanted.filter(function (c) {
@@ -702,11 +708,35 @@ function show_rows(req, res) {
             } else {
                 l.values = results;
                 l.links  = row_detail_make_links( req, res, results );
+                l.referring_links = make_referring_links( req, res, results );
                 done(null);
             }
         }
     ], fin
     );
+}
+
+
+// For each record, a link per incoming foreign key: the rows of the referring
+// table whose column holds this record's referenced value. Empty when the
+// driver reports no incoming keys (sqlite/mysql today).
+function make_referring_links( req, res, data ) {
+    var l = res.locals;
+    var refs = l.referencing || [];
+    if (!refs.length) { return null; }
+
+    var per_row = data.map(function (row) {
+        return refs.map(function (ref) {
+            var value = row[ref.referenced_column];
+            if (value === null || value === undefined) { return null; }
+            return {
+                label: ref.table + '.' + ref.column,
+                url:   buildUrl(req, [ l.dbId, ref.table, ref.column, String(value) ])
+            };
+        }).filter(Boolean);
+    });
+
+    return per_row.some(function (r) { return r.length; }) ? per_row : null;
 }
 
 

@@ -185,6 +185,30 @@ async function run() {
         assert.ok(/^select "MyCol", "other" from items/.test(sql), sql);
     });
 
+    await ok('postgres getReferencing keeps only single-column keys', async () => {
+        let sql, params;
+        const conn = { query: (s, prm, cb) => {
+            sql = s; params = prm;
+            cb(null, { rows: [
+                { constraint_name: 'fk_one', referencing_table: 'public.child',
+                  referencing_columns: ['parent_id'], referenced_columns: ['id'] },
+                { constraint_name: 'fk_two', referencing_table: 'public.comp',
+                  referencing_columns: ['a', 'b'], referenced_columns: ['x', 'y'] },
+                { constraint_name: 'fk_none', referencing_table: 'public.odd',
+                  referencing_columns: null, referenced_columns: null }
+            ] });
+        } };
+
+        const refs = await new Promise((resolve, reject) =>
+            db_postgres.getReferencing(conn, 'parent', (e, r) => e ? reject(e) : resolve(r)));
+
+        // the table name is a parameter, not interpolated
+        assert.ok(/confrelid = \$1::regclass/.test(sql), sql);
+        assert.deepStrictEqual(params, ['parent']);
+        assert.deepStrictEqual(refs, [{ constraint: 'fk_one', table: 'public.child',
+                                        column: 'parent_id', referenced_column: 'id' }]);
+    });
+
     // ---- HTTP status classification ----
 
     console.log('\n  error status classification');

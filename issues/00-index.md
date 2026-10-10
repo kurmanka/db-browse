@@ -28,4 +28,4 @@ planned fix, and a status checkbox. Fixes are committed one per issue.
 | [11](11-fixed-page-layout.md) | Top and bottom of the page should be fixed | low | fixed |
 | [12](12-json-support.md) | JSON folding / syntax highlighting | low | fixed |
 | [13](13-select-columns-for-view.md) | Select columns for the value/row view | medium | fixed |
-| [14](14-referring-records.md) | Links to referring records (reverse foreign key) | medium | open |
+| [14](14-referring-records.md) | Links to referring records (reverse foreign key) | medium | fixed (postgres) |

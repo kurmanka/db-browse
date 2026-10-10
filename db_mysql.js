@@ -103,6 +103,13 @@ function getTableColumns(connection, table, doneReturn) {
                     });
 }
 
+// Incoming foreign keys: not implemented yet. information_schema
+// .KEY_COLUMN_USAGE would answer it, but there is no MySQL server here to
+// verify against, so the row view shows no links rather than guessing.
+function getReferencing(connection, table, doneReturn) {
+    doneReturn(null, []);
+}
+
 function showValueRequest(connection, table, where, order_limit_offset, columns, doneReturn) {
     // columns is optional: callers that omit it pass the callback in its place
     if (typeof columns === 'function') { doneReturn = columns; columns = null; }
@@ -164,5 +171,6 @@ exports.showAllTable = showAllTable;
 exports.showColumnRequest = showColumnRequest;
 exports.showValueRequest = showValueRequest;
 exports.getTableColumns = getTableColumns;
+exports.getReferencing = getReferencing;
 exports.rowsCounter = rowsCounter;
 exports.getSQL = getSQL;

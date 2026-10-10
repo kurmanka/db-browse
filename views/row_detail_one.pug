@@ -15,4 +15,11 @@ block data
             td.null null
           else 
             include inc/row_detail_value.pug
+
+    //- rows of other tables that point at this record (issue 14)
+    if referring_links && referring_links[i] && referring_links[i].length
+      div.refs
+        b Referenced by:
+        each ref in referring_links[i]
+          a.ref(href=ref.url)= ref.label
     - i++
