@@ -45,4 +45,24 @@ Worth handling at the same time: a table that exists but whose `sql` is `NULL`
 
 ## Status
 
-- [ ] fixed
+- [x] fixed
+
+## What changed
+
+`db_sqlite.getTableDetails` treats an empty `sqlite_master` row as not-found and
+calls back with `Table '<name>' not found`, so `table_details` falls through to
+`noSuchTable`.
+
+A new `test/drivers.js` (wired into `test/run.js`) covers the SQLite driver
+without a server, including this case — it fails against the old code.
+
+## Verification
+
+    GET /notes2/does_not_exist → "No such table: does_not_exist"
+    GET /notes2/meta          → columns + "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)"
+
+    $ node test/drivers.js
+    6 passed, 0 failed
+
+(The status code for the "no such table" page is still 200 here; issue 04 makes
+it 404.)

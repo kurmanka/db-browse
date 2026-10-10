@@ -12,7 +12,7 @@ planned fix, and a status checkbox. Fixes are committed one per issue.
 |---|---|---|---|
 | [01](01-routes-test-stale-server.md) | `test/routes.js` can pass against a stale server | high (test integrity) | fixed |
 | [02](02-db-schema-pg-dump-command.md) | `/:db/.schema` builds a broken `pg_dump` command | medium | fixed |
-| [03](03-sqlite-missing-table.md) | A missing SQLite table renders an empty page with HTTP 200 | medium | open |
+| [03](03-sqlite-missing-table.md) | A missing SQLite table renders an empty page with HTTP 200 | medium | fixed |
 | [04](04-http-status-codes.md) | "Not found" answers with HTTP 500 | medium | open |
 | [05](05-postgres-identifier-escaping.md) | Postgres identifiers are not escaped (web UI injection) | high (security) | open |
 | [06](06-raw-sql-guard.md) | The raw-SQL DDL guard is a bypassable regex | medium | open |

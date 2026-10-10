@@ -132,7 +132,15 @@ function getTableDetails(connection, table, doneReturn) {
             connection.query("SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
                             [table],
                             function (err, rows) {
-                                done(err, rows);
+                                if (err) { return done(err); }
+                                // A table that does not exist gives an empty
+                                // result set, not an error (and PRAGMA table_info
+                                // above behaves the same way). Say so, or the
+                                // caller happily renders an empty table page.
+                                if (!rows.length) {
+                                    return done(new Error("Table '" + table + "' not found"));
+                                }
+                                done(null, rows);
                             });
         }
     ], doneReturn);
