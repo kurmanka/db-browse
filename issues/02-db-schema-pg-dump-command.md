@@ -43,4 +43,23 @@ HTTP 500. `pg_dump` itself is installed at
 
 ## Status
 
-- [ ] fixed
+- [x] fixed
+
+## What changed
+
+`produce_db_schema` builds an argument array and runs it with
+`child_process.execFile`:
+
+- `-U` is added only when a user is configured;
+- host and port are pushed independently (no `=` vs `+=` mix-up);
+- the environment is inherited (so a bare `pg_dump` still resolves on `PATH`)
+  with `PGPASSWORD` added; the old code replaced the whole environment;
+- no shell is involved, so config values cannot be split or interpreted.
+
+## Verification
+
+    db_schema command: pg_dump -h localhost -s submittal1
+    GET /submittal1/.schema → HTTP 200, real CREATE TABLE statements
+
+Previously the same request produced `pg_dump -U undefined -h localhost -s
+submittal1` and HTTP 500.

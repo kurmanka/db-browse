@@ -816,7 +816,7 @@ function sqlRemove (req, res) {
 
 function produce_db_schema (req, res, next) {
 
-    var exec      = child_process.exec;
+    var execFile  = child_process.execFile;
     var pg_path   = config.pg_dump_path || "pg_dump";
 
     var dbconfig  = req.dbconfig; // same as config.db[l.dbId]
@@ -824,22 +824,27 @@ function produce_db_schema (req, res, next) {
     var db_name   = dbconfig.database;
     var pass      = dbconfig.password;
     var buffer    = dbconfig.dump_buffer || 2000;
-    var extra_params = '';
 
-    if (dbconfig.host) {
-        extra_params = " -h " + dbconfig.host;
-    }
+    // Build an argument list and run it without a shell. Values from the config
+    // are passed as single arguments, so they cannot be split or interpreted as
+    // shell syntax, and the host/port flags cannot collide with each other.
+    var args = [];
+    if (user)          { args.push('-U', user); }
+    if (dbconfig.host) { args.push('-h', dbconfig.host); }
+    if (dbconfig.port) { args.push('-p', String(dbconfig.port)); }
+    args.push('-s', db_name);
 
-    if (dbconfig.port) {
-        extra_params = " -p " + dbconfig.port;
-    }
-
-    var command = pg_path + " -U " + user + extra_params + " -s " + db_name;
-    console.log( 'db_schema command:', command );
+    console.log( 'db_schema command:', pg_path, args.join(' ') );
     console.log( 'db_schema buffer:', buffer );
 
-    exec( command, 
-        { env: { PGPASSWORD: pass }, maxBuffer: buffer * 1024 }, 
+    // inherit the environment (PATH, so a bare 'pg_dump' resolves) and add the
+    // password; the old code passed only PGPASSWORD, which dropped PATH
+    var env = {};
+    for (var k in process.env) { env[k] = process.env[k]; }
+    if (pass) { env.PGPASSWORD = pass; }
+
+    execFile( pg_path, args,
+        { env: env, maxBuffer: buffer * 1024 },
         function (err, stdout, stderr) {
             res.locals.schema = stdout;
             next(err);
