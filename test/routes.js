@@ -8,8 +8,9 @@ const assert     = require('assert');
 const fs         = require('fs');
 const net        = require('net');
 
-const PORT = 1888;
-const BASE = 'http://localhost:' + PORT;
+const DEFAULT_PORT = 1888;
+let   PORT = DEFAULT_PORT;
+let   BASE = 'http://localhost:' + PORT;
 const ROOT = path.join(__dirname, '..');
 
 let passed = 0;
@@ -116,9 +117,9 @@ async function firstColumn(db, table, cookie) {
 // ---- server lifecycle ------------------------------------------------------
 
 // Resolves true if something is already listening on the port.
-function portIsOpen() {
+function portIsOpen(port) {
     return new Promise((resolve) => {
-        const socket = net.connect({ port: PORT, host: 'localhost' });
+        const socket = net.connect({ port: port, host: 'localhost' });
         const done = (open) => { socket.destroy(); resolve(open); };
         socket.setTimeout(500);
         socket.once('connect', () => done(true));
@@ -127,14 +128,31 @@ function portIsOpen() {
     });
 }
 
+// The suite only ever tests a server it started itself, on a port it knows was
+// free: the configured one when available, otherwise any free port, so it can
+// run next to a live instance (DBB_TEST_PORT pins one if that matters).
+async function pickPort() {
+    if (process.env.DBB_TEST_PORT) { return Number(process.env.DBB_TEST_PORT); }
+    if (!(await portIsOpen(DEFAULT_PORT))) { return DEFAULT_PORT; }
+
+    return new Promise((resolve, reject) => {
+        const probe = net.createServer();
+        probe.on('error', reject);
+        probe.listen(0, 'localhost', () => {
+            const p = probe.address().port;
+            probe.close(() => resolve(p));
+        });
+    });
+}
+
 // Waits for the child server to actually accept connections. "Server has
-// started" on stdout is NOT a readiness signal: start.js prints it before the
-// socket is bound, so a bind failure (EADDRINUSE) arrives afterwards.
-function startServer() {
+// started" on stdout is NOT a readiness signal: start.js announces readiness
+// from its 'listening' event, and a bind failure arrives as an exit.
+function startServer(port) {
     return (async () => {
-        if (await portIsOpen()) {
-            throw new Error('Port ' + PORT + ' is already in use; refusing to test '
-                          + 'a foreign process. Stop the running server first.');
+        if (await portIsOpen(port)) {
+            throw new Error('Port ' + port + ' is already in use; refusing to test '
+                          + 'a foreign process.');
         }
 
         await new Promise((resolve, reject) => {
@@ -147,8 +165,8 @@ function startServer() {
             server = spawn('node', ['start.js'], {
                 cwd:   ROOT,
                 // keep the test hermetic: do not touch the session store the
-                // user's config.js points at
-                env:   { ...process.env, DBB_SESSION_MEMORY: '1' },
+                // user's config.js points at, and do not compete for its port
+                env:   { ...process.env, DBB_SESSION_MEMORY: '1', DBB_PORT: String(port) },
                 stdio: ['ignore', 'pipe', 'pipe'],
             });
             server.stdout.on('data', (chunk) => { output += chunk; });
@@ -161,7 +179,7 @@ function startServer() {
 
             const deadline = Date.now() + 8000;
             (function poll() {
-                portIsOpen().then((open) => {
+                portIsOpen(port).then((open) => {
                     if (open) { return pass(); }
                     if (Date.now() > deadline) {
                         return fail(new Error('Server start timed out.' + tail()));
@@ -312,6 +330,20 @@ async function runTests() {
                 assert.strictEqual(r.status, 404);
                 assert.ok(/Unknown column/.test(r.text), 'says which column is unknown');
             });
+
+            // the table-details page sets its own Content-Type; without a
+            // charset the browser guesses and the sort arrows turn to mojibake
+            await ok('table details is served as UTF-8', async () => {
+                const r = await get('/' + target.id + '/' + target.table,
+                                    { headers: { Cookie: cookie } });
+                assert.strictEqual(r.status, 200);
+                assert.ok(/charset=utf-8/i.test(r.headers.get('content-type') || ''),
+                          'Content-Type carries the charset');
+                assert.ok(/<meta charset="utf-8"\s*\/?>/i.test(r.text),
+                          'the page declares the charset');
+                assert.ok(r.text.indexOf('\u2934') !== -1, 'the sort arrow survives');
+                assert.ok(r.text.indexOf('\u2014') !== -1, 'the em dash survives');
+            });
         }
 
         // --- addon config endpoint ---
@@ -357,7 +389,12 @@ async function runTests() {
 
 (async () => {
     try {
-        await startServer();
+        PORT = await pickPort();
+        BASE = 'http://localhost:' + PORT;
+        if (PORT !== DEFAULT_PORT) {
+            console.log('Port ' + DEFAULT_PORT + ' is in use; using ' + PORT + ' for the test server.');
+        }
+        await startServer(PORT);
     } catch (e) {
         console.error('Could not start server:', e.message);
         process.exit(1);

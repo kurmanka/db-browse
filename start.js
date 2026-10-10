@@ -295,13 +295,17 @@ app.get('/:db_id/:table/:column/_:direction/:view?/:limit?', middleware, request
 app.get('/:db_id/:table/:column/:value/:view?/:limit?', middleware, requestHandlers.show_rows); 
 
 
-server = app.listen(config.listen.port, config.listen.host);
+// DBB_PORT lets a caller (the test suite, or a second instance for a
+// comparison) listen somewhere other than the port in config.js.
+var listen_port = process.env.DBB_PORT || config.listen.port;
+
+server = app.listen(listen_port, config.listen.host);
 
 // Without a handler, a listen error (EADDRINUSE above all) is an unhandled
 // 'error' event: the process dies with a stack trace. Say what happened
 // instead, and exit non-zero.
 server.on('error', function (err) {
-    console.error("Cannot listen on http://" + config.listen.host + ":" + config.listen.port + ": " + err.message);
+    console.error("Cannot listen on http://" + config.listen.host + ":" + listen_port + ": " + err.message);
     process.exit(1);
 });
 
@@ -309,7 +313,7 @@ server.on('error', function (err) {
 // to app.listen() above was a lie (the bind happens later), and scripts that
 // waited for this line would go on to talk to somebody else's server.
 server.on('listening', function () {
-    console.log("Server has started. Listening at http://" + config.listen.host + ":" + config.listen.port);
+    console.log("Server has started. Listening at http://" + config.listen.host + ":" + listen_port);
 });
 
 

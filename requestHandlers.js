@@ -542,8 +542,10 @@ function showPageTotalRecords (req, res, error, html) {
             if (error) {
                 console.log(error);
             }
-            // send the main part of the page
-            res.writeHead(200, {"Content-Type": "text/html"});
+            // send the main part of the page. The charset matters: writeHead
+            // overrides the header Express would have set, and without it the
+            // browser guesses an encoding and mangles the non-ASCII characters.
+            res.writeHead(200, {"Content-Type": "text/html; charset=utf-8"});
             res.write(html);
 
             db.rowsCounter(l.connection, l.table, done);

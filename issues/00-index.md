@@ -29,3 +29,9 @@ planned fix, and a status checkbox. Fixes are committed one per issue.
 | [12](12-json-support.md) | JSON folding / syntax highlighting | low | fixed |
 | [13](13-select-columns-for-view.md) | Select columns for the value/row view | medium | fixed |
 | [14](14-referring-records.md) | Links to referring records (reverse foreign key) | medium | fixed (postgres) |
+
+## Found after the first pass
+
+| # | Title | Severity | Status |
+|---|---|---|---|
+| [15](15-utf8-charset.md) | Non-ASCII characters mangled on the table-details page | medium | fixed |

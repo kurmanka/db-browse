@@ -84,3 +84,14 @@ child.
     $ node test/run.js         # clean
     7 passed, 0 failed / 9 passed, 0 failed / 62 passed, 0 failed
     exit: 0
+
+## Follow-up
+
+Refined while fixing issue 15: the suite no longer gives up when port 1888 is
+taken (the app runs under pm2 here). It asks the OS for a free port, spawns its
+own server there with `DBB_PORT`, and still refuses to test anything it did not
+start. `DBB_TEST_PORT` pins a specific port.
+
+    $ node test/run.js         # with the app already on 1888
+    Port 1888 is in use; using 51908 for the test server.
+    exit: 0

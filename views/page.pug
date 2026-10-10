@@ -1,6 +1,10 @@
 //- the shared page layout; every other template extends it
 html
   head
+    //- the legacy parent.html declared this; without it a page whose
+    //- Content-Type carries no charset is decoded as latin-1 and every
+    //- non-ASCII character (the sort arrows, the em dash) turns to mojibake
+    meta(charset="utf-8")
     title
       block title
     link(rel="stylesheet", href="/_/css/style.css")
