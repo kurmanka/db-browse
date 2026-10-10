@@ -7,7 +7,9 @@ block title
 
 block topnav2
 
-  p.nav2(style='float:right')  
+  //- a direct child of body is a flex item, where float does not apply: the
+  //- right alignment comes from the stylesheet instead
+  p.nav2
       - var i = 0
       - var size = Object.keys(table_views).length
       each label,code in table_views
