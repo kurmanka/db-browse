@@ -333,6 +333,44 @@ async function runTests() {
                           'no link should be built from the count(*) column');
             });
 
+            // --- query-string filters on the grouped page (issue 18) ---
+
+            const groupedUrl = '/' + target.id + '/' + target.table + '/'
+                             + encodeURIComponent(target.column);
+
+            await ok('grouped column page applies query-string filters', async () => {
+                const plain = await get(groupedUrl, { headers: { Cookie: cookie } });
+                if (plain.status !== 200 || plain.text.indexOf('No data') !== -1) {
+                    return;   // nothing to narrow down
+                }
+                const r = await get(groupedUrl + '?'
+                                  + encodeURIComponent(target.column)
+                                  + '=no_such_value_xyz',
+                                    { headers: { Cookie: cookie } });
+                assert.strictEqual(r.status, 200);
+                assert.ok(r.text.indexOf('No data') !== -1,
+                          'a filter that matches nothing leaves no groups');
+            });
+
+            await ok('grouped column page keeps its filters in the links', async () => {
+                const r = await get(groupedUrl + '?'
+                                  + encodeURIComponent(target.column) + '=NOTNULL',
+                                    { headers: { Cookie: cookie } });
+                if (r.status !== 200 || r.text.indexOf('No data') !== -1) {
+                    return;   // no non-null value to link to
+                }
+                assert.ok(/href="[^"]*\?[^"]*NOTNULL/.test(r.text),
+                          'the value and "show more" links should carry the filter');
+            });
+
+            await ok('grouped column page keeps ?limit= for itself', async () => {
+                // if `limit` were taken as a column filter, SQLite would answer
+                // "no such column: limit" and the page would be a 404
+                const r = await get(groupedUrl + '?limit=5',
+                                    { headers: { Cookie: cookie } });
+                assert.strictEqual(r.status, 200);
+            });
+
             await ok('?cols= narrows the row view to the chosen columns', async () => {
                 const r = await get('/' + target.id + '/' + target.table + '/' + target.column
                                   + '/_ASC?cols=' + encodeURIComponent(target.column),

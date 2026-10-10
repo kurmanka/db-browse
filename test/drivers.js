@@ -40,8 +40,8 @@ const p = {
         db_sqlite.rowsCounter(c, t, (err, r) => err ? reject(err) : resolve(r))),
     showValueRequest: (c, t, where, olo) => new Promise((resolve, reject) =>
         db_sqlite.showValueRequest(c, t, where, olo, (err, r) => err ? reject(err) : resolve(r))),
-    showColumnRequest: (c, col, t, limit) => new Promise((resolve, reject) =>
-        db_sqlite.showColumnRequest(c, col, t, limit, (err, r) => err ? reject(err) : resolve(r))),
+    showColumnRequest: (c, col, t, limit, where) => new Promise((resolve, reject) =>
+        db_sqlite.showColumnRequest(c, col, t, limit, where, (err, r) => err ? reject(err) : resolve(r))),
     getTableColumns: (c, t) => new Promise((resolve, reject) =>
         db_sqlite.getTableColumns(c, t, (err, r) => err ? reject(err) : resolve(r))),
 };
@@ -94,6 +94,31 @@ async function run() {
         assert.strictEqual(Number(rows[0].count), 1);
     });
 
+    // the grouped page's query-string filters (issue 18)
+    await ok('showColumnRequest narrows the rows before grouping', async () => {
+        const rows = await p.showColumnRequest(conn, 'name', 'items', 10, { name: 'a' });
+        assert.strictEqual(rows.length, 1);
+        assert.strictEqual(rows[0].name, 'a');
+        assert.strictEqual(Number(rows[0].count), 1);
+    });
+
+    await ok('showColumnRequest understands NOTNULL', async () => {
+        const rows = await p.showColumnRequest(conn, 'name', 'items', 10,
+                                               { payload: 'NOTNULL' });
+        assert.deepStrictEqual(rows.map(r => r.name), ['a']);
+    });
+
+    await ok('showColumnRequest with an unmatched filter returns no groups', async () => {
+        const rows = await p.showColumnRequest(conn, 'name', 'items', 10,
+                                               { name: 'no_such_value' });
+        assert.deepStrictEqual(rows, []);
+    });
+
+    await ok('showColumnRequest refuses a hostile filter column', async () => {
+        await assert.rejects(() =>
+            p.showColumnRequest(conn, 'name', 'items', 10, { 'name) or (1=1': 'a' }));
+    });
+
     // ---- column selection (issue 13) ----
 
     await ok('getTableColumns lists the columns in order', async () => {
@@ -144,6 +169,25 @@ async function run() {
     await ok('postgres showColumnRequest refuses a hostile column', async () => {
         await assert.rejects(() => pCall(db_postgres.showColumnRequest, 'a) or (1=1', 'items', 10),
                              /Invalid identifier/);
+    });
+
+    await ok('postgres showColumnRequest refuses a hostile where key', async () => {
+        await assert.rejects(
+            () => pCall(db_postgres.showColumnRequest, 'name', 'items', 10,
+                        { 'a) or (1=1': 'x' }),
+            /Invalid identifier/);
+    });
+
+    await ok('postgres showColumnRequest parameterizes the filter and groups', async () => {
+        let sql, params;
+        const conn = { query: (s, prm, cb) => { sql = s; params = prm; cb(null, { rows: [] }); } };
+        await new Promise((resolve, reject) => db_postgres.showColumnRequest(
+            conn, 'name', 'public.items', 5,
+            { note: 'NOTNULL', name: 'a' },
+            (e, r) => e ? reject(e) : resolve(r)));
+
+        assert.ok(/select name, count\(\*\) as count from public\.items where note IS NOT NULL AND name=\$1 group by name order by count desc LIMIT 5/.test(sql), sql);
+        assert.deepStrictEqual(params, ['a']);
     });
 
     await ok('postgres showValueRequest refuses a hostile where key', async () => {
@@ -300,6 +344,24 @@ async function run() {
                            '/db/t/c/a%2Fb%3Fc%23d');
         assert.strictEqual(rh.buildUrl(req({}, { a: '1' }), ['x', 'y'], { b: '2' }),
                            '/x/y?a=1&b=2');
+        // a null/undefined extra removes a key: the grouped page drops its own
+        // `limit` from the value links (the row view would read it as a filter)
+        assert.strictEqual(rh.buildUrl(req({}, { a: '1', limit: '20' }), ['x'],
+                                       { limit: null }),
+                           '/x?a=1');
+        assert.strictEqual(rh.buildUrl(req({}, { a: '1', limit: '20' }), ['x'],
+                                       { limit: undefined }),
+                           '/x?a=1');
+    });
+
+    await ok('whereFromQuery drops the view controls', async () => {
+        assert.deepStrictEqual(rh.whereFromQuery({ a: '1', cols: 'b' }, { cols: 1 }),
+                               { a: '1' });
+        assert.deepStrictEqual(rh.whereFromQuery({ a: '1', limit: '20', cols: 'b' },
+                                                 { limit: 1, cols: 1 }),
+                               { a: '1' });
+        assert.deepStrictEqual(rh.whereFromQuery({ a: '1' }), { a: '1' });
+        assert.deepStrictEqual(rh.whereFromQuery(undefined, { limit: 1 }), {});
     });
 
     await ok('parseCols handles both query forms', async () => {

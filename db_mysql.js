@@ -86,10 +86,32 @@ function getTableDetails(connection, table, doneReturn) {
     ],doneReturn);
 }
 
-function showColumnRequest(connection, column, table, limit, doneReturn) {
+// The values of one column with their row counts, most frequent first. `where`
+// is optional (callers that omit it pass the callback in its place): a
+// column -> value map that restricts the rows before they are grouped, the same
+// shape showValueRequest takes. NOTNULL means "is not null".
+function showColumnRequest(connection, column, table, limit, where, doneReturn) {
+    if (typeof where === 'function') { doneReturn = where; where = null; }
+
+    var conditions = [];
+    var values = [];
+
+    for (var col in (where || {})) {
+        if (where[col] === 'NOTNULL') {
+            conditions.push(mysql.escapeId(col) + " IS NOT NULL");
+        } else {
+            conditions.push(mysql.escapeId(col) + "=?");
+            values.push(where[col]);
+        }
+    }
+
+    var whereClause = conditions.length ? " where " + conditions.join(" AND ") : '';
+
     connection.query("select " + mysql.escapeId(column) + ", count(*) as count from " +
-                    mysql.escapeId(table) + " group by " + mysql.escapeId(column) +
-                    " order by count desc limit " + limit,
+                    mysql.escapeId(table) + whereClause +
+                    " group by " + mysql.escapeId(column) +
+                    " order by count desc" + limitClause(limit),
+                    values,
                     function(err, rows, fields) {
                         doneReturn(err, rows);
                     });

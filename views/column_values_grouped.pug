@@ -27,16 +27,17 @@ block content
               //- linking it produced bogus URLs such as /db/table/count/1
               td.data= cell
             else
-              //- an absolute, encoded link to the rows holding this value
+              //- an absolute, encoded link to the rows holding this value; the
+              //- query-string filters the page was opened with come along
               td.data 
-                a(href='/' + encodeURIComponent(dbId) + '/' + encodeURIComponent(table) + '/' + encodeURIComponent(key) + '/' + encodeURIComponent(cell) class="subtle")= cell
+                a(href= valueUrls[i] class="subtle")= cell
 
         - i++
         
     div#columnCounter
       a #{values.length} rows
       |  · 
-      a(href="?limit="+nextlimit) show more
+      a(href= moreUrl) show more
 
   else 
     p No data

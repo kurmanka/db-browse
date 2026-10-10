@@ -137,12 +137,32 @@ feature off and hide the checkbox. See [issue 17](issues/17-compact-row-view.md)
 tree only for a value that is actually shown in full.
 
 
+Query-string filters
+--------------------
+
+Both views of a single column take `?column=value` pairs and show only the rows
+where every one of them matches:
+
+    /notes2/notes/domain/_ASC?name=NOTNULL      rows with a non-null name
+    /notes2/notes/domain?name=README.md         counts of the domains that
+                                                hold a README.md
+
+`NOTNULL` means "is not null"; anything else is equality. The filter names are
+escaped (MySQL, SQLite) or validated (Postgres) by the driver, and the values
+are bound, so a query key can never contribute SQL. The links a page generates —
+the view switch, "see more"/"see all", a value drilled into, "show more" on the
+grouped page — keep the filters, so the restriction survives navigation. Two
+query keys are not filters: `cols` picks the columns of the row view, and on the
+grouped page `limit` is the number of groups to show. See
+[issue 18](issues/18-query-params-on-column-page.md).
+
+
 To do
 -----
 
 Everything that used to be listed here - the Pug transition (the legacy `view/`
 directory is gone), link building, the fixed page layout, JSON support, column
-selection, links to referring records and the compact row view - is done. See
-`issues/` for what was found along the way, and the Postgres/MySQL caveats in
-the MCP notes above.
+selection, links to referring records, query-string filters and the compact row
+view - is done. See `issues/` for what was found along the way, and the
+Postgres/MySQL caveats in the MCP notes above.
 

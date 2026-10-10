@@ -144,7 +144,7 @@ function showError (req, res, msg, title, status) {
 // A URL from path segments plus the request's query string, so that switching
 // view, paging or drilling down does not silently drop filters. Each segment is
 // percent-encoded (values may contain '/', '?', '#', spaces), and `extra` can
-// override or add query keys.
+// override or add query keys, or remove one by passing null/undefined.
 function buildUrl(req, segments, extra) {
     var path = segments.map(function (s) {
         return encodeURIComponent(s === undefined || s === null ? '' : String(s));
@@ -153,7 +153,10 @@ function buildUrl(req, segments, extra) {
     var params = {};
     var k;
     for (k in req.query) { params[k] = req.query[k]; }
-    for (k in (extra || {})) { params[k] = extra[k]; }
+    for (k in (extra || {})) {
+        if (extra[k] === undefined || extra[k] === null) { delete params[k]; }
+        else { params[k] = extra[k]; }
+    }
 
     var qs = querystring.stringify(params);
     return '/' + path + (qs ? '?' + qs : '');
@@ -169,6 +172,22 @@ function crumbPath(parts) {
 // Query keys that control the row view instead of filtering it. Everything else
 // in the query string is treated as "column = value" by show_rows.
 var RESERVED_QUERY = { cols: 1 };
+
+// The grouped column page understands even less of its query string: `limit` is
+// its own "groups to show" control, and `cols` is carried along for the row view
+// its value links lead to. Both would otherwise be read as column filters.
+var COLUMN_QUERY_CONTROLS = { limit: 1, cols: 1 };
+
+// The request's query string as a column -> value filter map, minus the keys
+// that control the view rather than restrict it.
+function whereFromQuery(query, reserved) {
+    var where = {};
+    for (var k in (query || {})) {
+        if (reserved && reserved[k]) { continue; }
+        where[k] = query[k];
+    }
+    return where;
+}
 
 // ?cols=a,b or ?cols=a&cols=b  ->  ['a', 'b']; null when absent or empty
 function parseCols(value) {
@@ -606,13 +625,30 @@ function _showColumn(req, res, next) {
     var l = res.locals;
     l.nextlimit = limit + 20;
 
+    // The grouped page takes the same "column = value" filters as the row view,
+    // so /db/table/column?other=value counts only the matching rows.
+    var where = whereFromQuery(req.query, COLUMN_QUERY_CONTROLS);
+
     async.waterfall([
         function (done){
             db = getDbType(l.dbType);
-            db.showColumnRequest(l.connection, l.column, l.table, limit, done);
+            db.showColumnRequest(l.connection, l.column, l.table, limit, where, done);
         },
         function( columnData, done ) {
             l.values = columnData;
+            // One link per group: the rows behind that value, with the filters
+            // still applied. `limit` is dropped on purpose: it is this page's
+            // group count, and the row view would read it as a column filter.
+            // The value is read under the result's own name for the grouped
+            // column (the two differ when the URL quotes a mixed-case name).
+            l.valueUrls = (columnData || []).map(function (row) {
+                var valueKey = Object.keys(row)[0];
+                return buildUrl(req,
+                    [ l.dbId, l.table, l.column, String(row[valueKey]) ],
+                    { limit: null });
+            });
+            l.moreUrl = buildUrl(req, [ l.dbId, l.table, l.column ],
+                                 { limit: l.nextlimit });
             done(null);
         }
     ], 
@@ -620,8 +656,11 @@ function _showColumn(req, res, next) {
     );
 }
 
-_showColumn.cache_key      = function(req) { return req.url; }
-_showColumn.produce_locals = ['values','nextlimit'];
+// The key is versioned: a memcached entry survives a deploy, and one written
+// before the value links were produced would restore only part of the locals
+// below and render an empty href.
+_showColumn.cache_key      = function(req) { return 'v2:' + req.url; }
+_showColumn.produce_locals = ['values','nextlimit','valueUrls','moreUrl'];
 _showColumn.template       = 'column_values_grouped';
 
 function showColumn(req, res) {
@@ -711,12 +750,7 @@ function show_rows(req, res) {
             }
             l.selectedColumns = wanted || allColumns;
 
-            var where = {};
-            // copy req.query content into where, minus the view controls
-            for( var k in req.query ) {
-                if (RESERVED_QUERY[k]) { continue; }
-                where[k] = req.query[k];
-            }
+            var where = whereFromQuery(req.query, RESERVED_QUERY);
             if (l.value) { where[l.column] = l.value; }
             // if order_limit_offset.order_by, require that col to have a value
             if (order_limit_offset && order_limit_offset.order_by) {
@@ -1160,6 +1194,7 @@ exports.show_db_schema    = show_db_schema;
 exports.errorStatus       = errorStatus;   // exported for tests
 exports.sqlRefusal        = sqlRefusal;    // exported for tests
 exports.buildUrl          = buildUrl;      // exported for tests
+exports.whereFromQuery    = whereFromQuery;// exported for tests
 exports.parseCols         = parseCols;     // exported for tests
 exports.compactChars      = compactChars;  // exported for tests
 exports.compactOn         = compactOn;     // exported for tests
