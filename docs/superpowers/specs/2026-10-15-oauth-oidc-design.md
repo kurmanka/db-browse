@@ -16,7 +16,7 @@ revocable OAuth 2.1 tokens.
 |---|---|
 | Identity source | Upstream OpenID Connect provider (generic OIDC: Google Workspace, Okta, Entra, Keycloak, ...). The app stores no passwords for OIDC users. |
 | Web UI login | OIDC authorization-code flow with PKCE. Session stores `sub`, email and groups. |
-| Authorization | Allowlist in config: emails and/or a group claim; either match admits. Empty allowlist refuses everyone. Same list gates web and MCP. |
+| Authorization | Allowlist in config: emails, a group claim, and optionally the names in `authenticate_userfile` (`allow_global_userfile`); any match admits. All three sources are optional; if none yields an entry, everyone is refused. Same list gates web and MCP. |
 | MCP | `/mcp` is an OAuth 2.1 protected resource. The app is also the authorization server MCP clients talk to, and brokers the user's login to the upstream provider. Tokens are issued by the app. |
 | Per-database access | **Out of scope**; a possible future item. Everyone allowed sees every database, as today. |
 | Existing logins | `users.txt` / `config.authenticate` keep working when `config.oidc` is not set. `config.mcp.token` stays as an admin fallback, documented as deprecated. |
@@ -48,14 +48,24 @@ exports.oidc = {
     client_id: '...',
     client_secret: '...',
     redirect_uri: 'https://dbb.example.com/oidc/callback',
-    allow_emails: ['ann@example.com'],
-    allow_groups: ['db-readers'],
-    groups_claim: 'groups',          // default
+    allow_emails: ['ann@example.com'],   // optional
+    allow_groups: ['db-readers'],        // optional
+    allow_global_userfile: false,        // optional, default false
+    groups_claim: 'groups',              // default
 };
 ```
 
 - Email match is case-insensitive and requires `email_verified !== false`.
 - Group match reads `groups_claim` from the ID token (array or string).
+- `allow_global_userfile: true` also admits a user whose verified email equals
+  the name part of an `authenticate_userfile` line (`name:password`, split on
+  the first colon, compared case-insensitively). The password is ignored and
+  never used for OIDC. The file is re-read at each check, as the password
+  login does today, so edits take effect at the next login or token
+  issue/refresh. Names that are not emails (e.g. `ivan`) simply never match.
+- The flag applies only to `authenticate_userfile`. A custom
+  `config.authenticate` function cannot be enumerated, so with only that set
+  the flag has no effect and startup logs a warning.
 - The check runs at login and when MCP tokens are issued or refreshed. A user
   removed from the list keeps web access until the session expires, and MCP
   access until the access token expires (1 h) and the refresh is refused.
@@ -112,8 +122,9 @@ subsection.
   with a plain message that does not say which check failed.
 - Invalid OAuth requests follow RFC 6749 error responses; unknown client or
   redirect URI never redirects (shown as an error page).
-- Fail closed: misconfiguration (OIDC on, empty allowlist) refuses all logins
-  and logs why at startup.
+- Fail closed: misconfiguration (OIDC on, but no `allow_emails`,
+  `allow_groups`, or usable userfile with `allow_global_userfile`) refuses all
+  logins and logs why at startup.
 
 ## Security notes
 
@@ -131,7 +142,9 @@ subsection.
 `test/oauth.js`, added to `test/run.js`, with a mock OIDC provider started
 in-process (discovery, JWKS, authorization, token). No real provider is
 needed. Cases: web login allowed / denied by email and by group; empty
-allowlist; forged signature, wrong `aud`, expired token, bad `nonce`, `state`
+allowlist; userfile email admitted with `allow_global_userfile` and refused
+without it; userfile entry with a non-email name never matches; userfile edit
+picked up at the next login; unverified email refused; forged signature, wrong `aud`, expired token, bad `nonce`, `state`
 mismatch; full MCP flow (register → authorize → token → `/mcp` call);
 PKCE mismatch; reused code; revoked and expired tokens; refresh rotation; the
 static admin token still works; `users.txt` login unchanged when OIDC is off.
