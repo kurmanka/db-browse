@@ -2,6 +2,8 @@ config.js
 node_modules/
 users.txt
 usersRequests.sqlite
+auth.sqlite
+auth.sqlite-*
 yarn.lock
 *table_groups.txt
 *table_index.yml

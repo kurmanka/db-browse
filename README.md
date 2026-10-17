@@ -20,6 +20,9 @@ the session storage settings, etc.
 
 Please see config.js.example for details and examples. 
 
+`DBB_CONFIG=/path/to/other-config.js node start.js` loads that file instead of
+`./config.js` (a relative path is taken from the current directory).
+
 Starting
 --------
 
@@ -36,22 +39,110 @@ its SQL-template features keep working. `ect` is deliberately not a dependency o
 db-browse, since nothing outside this example uses it.
 
 
+Login with OpenID Connect
+-------------------------
+
+Instead of the plaintext `users.txt`, the app can send users to an OpenID
+Connect provider (Google Workspace, Okta, Entra ID, Keycloak, ...) and admit
+only those on an allowlist. Set `exports.oidc` (see config.js.example):
+
+1. Register the app with the provider as a web application (authorization
+   code flow), with the redirect / callback URL `<origin>/oidc/callback`,
+   for example `https://dbb.example.com/oidc/callback`. Put the same URL in
+   `oidc.redirect_uri`, and the provider's issuer URL, client id and client
+   secret in `oidc.issuer`, `oidc.client_id`, `oidc.client_secret`.
+2. Fill the allowlist: `allow_emails` (emails, compared case-insensitively),
+   `allow_groups`
+   (values of the `groups` claim, or of `groups_claim`), and/or
+   `allow_global_userfile: true` to admit the emails listed as names in
+   `authenticate_userfile` (their passwords are ignored). Any match admits.
+   With none of them set everyone is refused, and startup says so. A login
+   whose `email_verified` claim is false (`false` or the string `"false"`) is
+   refused; a provider that omits the claim is trusted.
+
+With `oidc` set there is no password login: `POST /login` does not exist,
+`/login` redirects to the provider, and every page redirects there when the
+browser is not signed in. `/logout` ends only the local session. Provider
+logins and OAuth state live in `auth.sqlite` (`exports.auth_db`). Needs Node 20
+or newer.
+
+Use TLS (a reverse proxy) for anything beyond localhost: the session cookie and
+the provider's code travel over this connection. Behind a proxy, also set
+`exports.trust_proxy` (for example `1`, the number of proxies; not `true`) so
+that `req.ip` is the client's address.
+
+
 MCP interface (for agents)
 --------------------------
 
 Agents can browse the configured databases, read-only, over MCP (streamable
-HTTP). Set a token in config.js to enable it:
+HTTP), at `<origin>/mcp`. There are two ways to authenticate them.
+
+OAuth (recommended), with OIDC login configured as above:
+
+    exports.mcp = { oauth: { public_url: 'https://dbb.example.com' } };
+
+An MCP client that supports OAuth discovers the rest by itself: it gets a 401
+pointing at `/.well-known/oauth-protected-resource/mcp`, registers itself
+(`/register`), and sends the user through `/authorize` to the OIDC provider.
+The same allowlist applies; each client gets its own access token (1 hour,
+`access_ttl`) and refresh token (30 days, `refresh_ttl`), revocable at
+`/revoke`. `public_url` is the address clients use to reach the app, and must
+be just an origin (`https://host[:port]`, no path): the OAuth endpoints and
+metadata are served at the root of the host, so the app cannot sit under a
+path prefix of a proxy. It must be `https` unless it is `localhost` or
+`127.0.0.1`. The OAuth endpoints are rate-limited per client address (per 15
+minutes: 100 `/authorize`, 50 `/token`, 50 `/revoke`; 20 `/register` per hour)
+— behind a proxy set `trust_proxy`, or all clients share one limit.
+
+Known limitation: there is no consent screen. Anyone can register a client
+(`/register` is open) with a redirect URI of their own, and send an
+allowlisted user a crafted `/authorize` link. The user sees only the
+provider's real login page — or nothing at all, if already signed in there —
+and once they complete it, the attacker's client receives a code and then
+tokens for that user's identity. That is read access to every configured
+database (and the raw `query` tool when `allow_clear_sql` is on) for as long as
+the user stays on the allowlist: the refresh token (30 days) rotates on every
+use. If that matters, do not enable `mcp.oauth` until a consent step exists,
+and watch `auth.sqlite` for unexpected clients.
+
+Revoking MCP access (the app has no UI for it): with the `sqlite3` CLI on the
+store (`auth_db`, default `auth.sqlite`),
+
+    sqlite3 auth.sqlite "SELECT client_id, info FROM clients;"
+    sqlite3 auth.sqlite "SELECT client_id, email, kind, expires_at FROM tokens;"
+    sqlite3 auth.sqlite "DELETE FROM tokens WHERE email = 'ann@example.com';"
+    sqlite3 auth.sqlite "DELETE FROM tokens WHERE client_id = '<client id>';"
+    sqlite3 auth.sqlite "DELETE FROM clients WHERE client_id = '<client id>';"
+
+Deleting the tokens is what cuts access, at once. Deleting only a `clients`
+row does not: existing access tokens are checked without looking the client
+up (it does stop that client's refreshes and new logins). Removing a user from
+the allowlist instead takes effect for MCP when their access token expires
+(`access_ttl`, 1 hour by default) and the next refresh is refused, and for the
+web UI when their session ends and they have to log in again.
+
+With `mcp.oauth` on, the paths `/authorize`, `/token`, `/register` and
+`/revoke` (and everything under them) belong to OAuth and shadow web-UI
+databases with those ids. For confidential clients (those registered with a
+secret), the SDK expires the client secret after 30 days, independent of
+`refresh_ttl`.
+
+Static token (deprecated; one shared token, no identity):
 
     exports.mcp = { token: 'a long random string' };
 
 and point the agent at `http://host:port/mcp` with the header
-`Authorization: Bearer <token>`. Tools: `list_databases`, `list_tables`,
+`Authorization: Bearer <token>`. It can be set together with `oauth`, as an
+admin fallback.
+
+Tools: `list_databases`, `list_tables`,
 `describe_table`, `count_rows`, `column_values`, `browse_rows`, and `query`
 (raw read-only SQL; only available when `allow_clear_sql` is on).
 
 Enabling MCP needs Node 20 or newer (the MCP SDK's HTTP server depends on
-`@hono/node-server`, which requires it). With no token configured the SDK is
-not loaded, and the rest of the app's requirements are unchanged.
+`@hono/node-server`, which requires it). With neither a token nor `oauth`
+configured the SDK is not loaded, and the rest of the app's requirements are unchanged.
 
 Every database in `config.db` is exposed. Read-only is enforced by the database
 engine, never by inspecting the SQL: the MCP interface uses its own connections.
@@ -106,7 +197,8 @@ Notes:
   rejected here, although the web UI accepts them (the `query` tool, when
   `allow_clear_sql` is on, can still use them). `list_tables` shows only the
   `public` schema.
-- One shared static token: no per-agent identity.
+- The static token is one shared secret with no per-agent identity; prefer
+  OAuth.
 
 
 JSON support

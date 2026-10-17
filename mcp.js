@@ -10,16 +10,23 @@ var bodyParser = require('body-parser');
 
 var pkg = require('./package.json');
 var mcp_db = require('./mcp_db.js');
+var mcpResourceUrl = require('./oauth_provider.js').mcpResourceUrl;   // loads no SDK
 
 // The SDK (and @hono/node-server under it) needs a newer Node than the rest of
-// the app, so it is loaded only when MCP is enabled: mount() with a token.
+// the app, so it is loaded only when MCP is enabled: mount() with a token or
+// an OAuth provider.
 var sdk = null;
 function loadSdk() {
     if (!sdk) {
+        var router = require('@modelcontextprotocol/sdk/server/auth/router.js');
         sdk = {
             McpServer: require('@modelcontextprotocol/sdk/server/mcp.js').McpServer,
             StreamableHTTPServerTransport:
                 require('@modelcontextprotocol/sdk/server/streamableHttp.js').StreamableHTTPServerTransport,
+            mcpAuthRouter: router.mcpAuthRouter,
+            getOAuthProtectedResourceMetadataUrl: router.getOAuthProtectedResourceMetadataUrl,
+            requireBearerAuth:
+                require('@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js').requireBearerAuth,
             z: require('zod').z
         };
     }
@@ -46,14 +53,19 @@ function sha256(s) {
     return crypto.createHash('sha256').update(String(s)).digest();
 }
 
-// Authorization: Bearer <token>. Both sides are hashed first, so the compare is
-// constant-time whatever the lengths.
-function bearerAuth(token) {
-    var expected = sha256(token);
+// Authorization: Bearer <token> (the static config.mcp.token), or, when
+// `oauth` (requireBearerAuth middleware) is given, an OAuth access token it
+// accepts; without `token` only the latter. The static compare hashes both
+// sides first, so it is constant-time whatever the lengths.
+function bearerAuth(token, oauth) {
+    var expected = token ? sha256(token) : null;
     return function (req, res, next) {
         var m = /^Bearer (.+)$/i.exec(req.headers.authorization || '');
-        if (m && crypto.timingSafeEqual(sha256(m[1]), expected)) {
+        if (expected && m && crypto.timingSafeEqual(sha256(m[1]), expected)) {
             return next();
+        }
+        if (oauth) {
+            return oauth(req, res, next);
         }
         res.status(401).set('WWW-Authenticate', 'Bearer').json({ error: 'unauthorized' });
     };
@@ -71,8 +83,10 @@ function failure(err) {
 // Registers a tool. fn(args) returns a JSON-serializable value, or throws /
 // rejects; the latter becomes a tool error rather than an unhandled exception.
 function register(server, name, description, shape, fn) {
-    server.registerTool(name, { description: description, inputSchema: shape }, async function (args) {
-        console.log('mcp %s %s', name, JSON.stringify(args || {}).slice(0, 200));
+    server.registerTool(name, { description: description, inputSchema: shape }, async function (args, extra) {
+        var email = extra && extra.authInfo && extra.authInfo.extra && extra.authInfo.extra.email;
+        console.log('mcp %s %s%s', name, JSON.stringify(args || {}).slice(0, 200),
+                    typeof email === 'string' ? ' user=' + JSON.stringify(email) : '');
         try {
             var value = await fn(args || {});
             return { content: [{ type: 'text', text: JSON.stringify(value, jsonReplacer, 2) }] };
@@ -218,14 +232,39 @@ function buildServer(config) {
 }
 
 
-// Returns true if mounted. Needs config.mcp.token; without it nothing is mounted.
-function mount(app, config) {
-    if (!config.mcp || !config.mcp.token) {
+// Returns true if mounted. Needs config.mcp.token or `authProvider` (an
+// oauth_provider.js provider); with neither, nothing is mounted. With a
+// provider, the SDK's OAuth endpoints and metadata are mounted at the root
+// (before /mcp), and /mcp also accepts that provider's access tokens, if
+// issued for <config.mcp.oauth.public_url>/mcp.
+function mount(app, config, authProvider) {
+    var token = config.mcp && config.mcp.token;
+    if (!token && !authProvider) {
         return false;
     }
 
     loadSdk();                        // now, so a problem shows at startup
-    var auth = bearerAuth(config.mcp.token);
+    var oauth = null;
+    if (authProvider) {
+        var resource = mcpResourceUrl(config);
+        if (!resource) {
+            throw new Error('mcp: OAuth needs config.mcp.oauth.public_url');
+        }
+        var resourceUrl = new URL(resource);
+        // the SDK's default rate limits stay on
+        app.use(sdk.mcpAuthRouter({
+            provider: authProvider,
+            issuerUrl: new URL(config.mcp.oauth.public_url),
+            resourceServerUrl: resourceUrl
+        }));
+        // the URL mcpAuthRouter serves the protected-resource metadata at
+        oauth = sdk.requireBearerAuth({
+            verifier: authProvider,
+            resourceMetadataUrl: sdk.getOAuthProtectedResourceMetadataUrl(resourceUrl),
+            expectedResource: resourceUrl
+        });
+    }
+    var auth = bearerAuth(token, oauth);
 
     app.post('/mcp', auth, bodyParser.json(), async function (req, res) {
         var server = buildServer(config);
