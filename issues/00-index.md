@@ -43,3 +43,4 @@ planned fix, and a status checkbox. Fixes are committed one per issue.
 | # | Title | Severity | Status |
 |---|---|---|---|
 | [18](18-query-params-on-column-page.md) | The grouped column page ignores query-string filters | medium | fixed |
+| [19](19-oauth-oidc.md) | OAuth / OIDC authentication for the web UI and MCP | medium | in progress |
