@@ -581,10 +581,366 @@ async function webLoginSection() {
     }
 }
 
+// ---- oauth provider --------------------------------------------------------
+
+async function providerSection() {
+    console.log('oauth provider');
+    const crypto     = require('crypto');
+    const express    = require('express');
+    const session    = require('express-session');
+    const auth_store = require('../auth_store.js');
+    const mock_oidc  = require('./helpers/mock_oidc.js');
+    const oidcMod    = require('../oidc.js');
+    const providerMod = require('../oauth_provider.js');
+    const { mcpAuthRouter } = require('@modelcontextprotocol/sdk/server/auth/router.js');
+
+    const file = path.join(os.tmpdir(), 'db-browse-provider-test-' + Date.now() + '.sqlite');
+    const store = auth_store.open(file);
+    const idp = await mock_oidc.start();
+    const app = express();
+    const server = await listen(app);
+    const base = 'http://127.0.0.1:' + server.address().port;
+    const config = {
+        oidc: Object.assign(idp.config(), {
+            redirect_uri: base + '/oidc/callback',
+            allow_emails: ['ann@example.com']
+        }),
+        mcp: { oauth: {} }
+    };
+    const oidc = oidcMod.create(config, store);
+    const provider = providerMod.create(config, store, oidc);
+    const noLimit = { rateLimit: false };
+    app.use(mcpAuthRouter({
+        provider,
+        issuerUrl: new URL(base),
+        resourceServerUrl: new URL(base + '/mcp'),
+        authorizationOptions: noLimit, tokenOptions: noLimit,
+        clientRegistrationOptions: noLimit, revocationOptions: noLimit
+    }));
+    app.use(session({ secret: 'test', resave: false, saveUninitialized: false }));
+    oidc.mountWeb(app, { mcp: provider.complete });
+
+    const logged = [];
+    const origLog = console.log;
+    console.log = function () {
+        logged.push(Array.from(arguments).join(' '));
+        origLog.apply(console, arguments);
+    };
+    const secrets = [];     // every code and token seen, for the log check
+
+    const s256 = v => crypto.createHash('sha256').update(v).digest('base64url');
+    const RESOURCE = base + '/mcp';
+    const CB = 'http://127.0.0.1:8765/cb';
+
+    async function register(redirect_uris) {
+        const res = await fetch(base + '/register', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ redirect_uris, token_endpoint_auth_method: 'none', client_name: 'test' })
+        });
+        return { status: res.status, body: await res.json() };
+    }
+    async function client(uris) {
+        const r = await register(uris || [CB]);
+        assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+        return r.body;
+    }
+    function authorizeUrl(c, o) {
+        o = o || {};
+        const u = new URL(base + '/authorize');
+        u.searchParams.set('response_type', 'code');
+        u.searchParams.set('client_id', o.client_id || c.client_id);
+        u.searchParams.set('redirect_uri', o.redirect_uri || c.redirect_uris[0]);
+        u.searchParams.set('code_challenge', s256(o.verifier));
+        u.searchParams.set('code_challenge_method', 'S256');
+        if (o.state) { u.searchParams.set('state', o.state); }
+        u.searchParams.set('resource', RESOURCE);
+        return u.href;
+    }
+    // /authorize → IdP → /oidc/callback; returns the callback response.
+    async function authorize(c, o) {
+        const get = browser();
+        const a = await get(authorizeUrl(c, o));
+        assert.strictEqual(a.status, 302, 'authorize ' + a.status + ' ' + a.text_);
+        assert.ok(a.headers.get('location').startsWith(idp.issuer + '/authorize'), a.headers.get('location'));
+        const z = await get(a.headers.get('location'));
+        assert.strictEqual(z.status, 302, 'idp ' + z.status);
+        return get(z.headers.get('location'));
+    }
+    // A fresh code for client c; returns {code, verifier, location}.
+    async function code(c, state) {
+        const verifier = auth_store.randomToken() + 'x';
+        const res = await authorize(c, { verifier, state });
+        assert.strictEqual(res.status, 302, 'callback ' + res.status + ' ' + res.text_);
+        const loc = new URL(res.headers.get('location'));
+        const value = loc.searchParams.get('code');
+        assert.ok(value, 'no code in ' + loc.href);
+        secrets.push(value);
+        return { code: value, verifier, location: loc };
+    }
+    async function token(body) {
+        const res = await fetch(base + '/token', {
+            method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams(body)
+        });
+        const json = await res.json();
+        for (const k of ['access_token', 'refresh_token']) { if (json[k]) { secrets.push(json[k]); } }
+        return { status: res.status, body: json };
+    }
+    function exchange(c, got, verifier) {
+        return token({ grant_type: 'authorization_code', client_id: c.client_id, code: got.code,
+                       code_verifier: verifier || got.verifier, redirect_uri: c.redirect_uris[0],
+                       resource: RESOURCE });
+    }
+    function refresh(c, rt) {
+        return token({ grant_type: 'refresh_token', client_id: c.client_id, refresh_token: rt });
+    }
+    async function tokensFor(c) {
+        const t = await exchange(c, await code(c));
+        assert.strictEqual(t.status, 200, JSON.stringify(t.body));
+        return t.body;
+    }
+    async function revoke(c, tok) {
+        const res = await fetch(base + '/revoke', {
+            method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ client_id: c.client_id, token: tok })
+        });
+        return res.status;
+    }
+    const verifies = async t => {
+        try { await provider.verifyAccessToken(t); return true; } catch (e) { return false; }
+    };
+
+    await ok('register → authorize → mock IdP → callback → code → token works', async () => {
+        const c = await client();
+        assert.ok(c.client_id, 'client_id generated');
+        const got = await code(c, 'client-state-1');
+        assert.strictEqual(got.location.origin + got.location.pathname, CB);
+        assert.strictEqual(got.location.searchParams.get('state'), 'client-state-1');
+        const t = await exchange(c, got);
+        assert.strictEqual(t.status, 200, JSON.stringify(t.body));
+        assert.strictEqual(t.body.token_type.toLowerCase(), 'bearer');
+        assert.strictEqual(t.body.expires_in, 3600);
+        assert.ok(/^[A-Za-z0-9_-]{43}$/.test(t.body.access_token));
+        assert.ok(/^[A-Za-z0-9_-]{43}$/.test(t.body.refresh_token));
+        const info = await provider.verifyAccessToken(t.body.access_token);
+        assert.strictEqual(info.token, t.body.access_token);
+        assert.strictEqual(info.clientId, c.client_id);
+        assert.deepStrictEqual(info.scopes, []);
+        assert.ok(Math.abs(info.expiresAt - (now() + 3600)) <= 2, 'expiresAt ' + info.expiresAt);
+        assert.strictEqual(info.resource.href, RESOURCE);
+        assert.deepStrictEqual(info.extra, { email: 'ann@example.com' });
+    });
+
+    await ok('no state given → none in the redirect', async () => {
+        const got = await code(await client());
+        assert.strictEqual(got.location.searchParams.has('state'), false);
+    });
+
+    await ok('PKCE mismatch is rejected (and burns the code)', async () => {
+        const c = await client();
+        const got = await code(c);
+        const bad = await exchange(c, got, auth_store.randomToken() + 'y');
+        assert.strictEqual(bad.status, 400);
+        assert.strictEqual(bad.body.error, 'invalid_grant');
+        assert.strictEqual((await exchange(c, got)).status, 400, 'code survived a PKCE failure');
+    });
+
+    await ok('reused code is rejected', async () => {
+        const c = await client();
+        const got = await code(c);
+        assert.strictEqual((await exchange(c, got)).status, 200);
+        const again = await exchange(c, got);
+        assert.strictEqual(again.status, 400);
+        assert.strictEqual(again.body.error, 'invalid_grant');
+    });
+
+    await ok('code with a different redirect_uri or resource is rejected', async () => {
+        const c = await client([CB, 'https://app.example/cb']);
+        let got = await code(c);
+        let t = await token({ grant_type: 'authorization_code', client_id: c.client_id, code: got.code,
+                              code_verifier: got.verifier, redirect_uri: 'https://app.example/cb' });
+        assert.strictEqual(t.status, 400, JSON.stringify(t.body));
+        got = await code(c);
+        t = await token({ grant_type: 'authorization_code', client_id: c.client_id, code: got.code,
+                          code_verifier: got.verifier, resource: 'https://other.example/mcp' });
+        assert.strictEqual(t.status, 400, JSON.stringify(t.body));
+    });
+
+    await ok('unknown client_id on /authorize → error, no redirect', async () => {
+        const res = await browser()(authorizeUrl({ client_id: 'nope', redirect_uris: [CB] },
+                                                 { verifier: 'v'.repeat(43) }));
+        assert.strictEqual(res.status, 400, res.text_);
+        assert.strictEqual(res.headers.get('location'), null);
+    });
+
+    await ok('unregistered redirect_uri → error, no redirect', async () => {
+        const c = await client();
+        const res = await browser()(authorizeUrl(c, { verifier: 'v'.repeat(43),
+                                                      redirect_uri: 'https://evil.example/cb' }));
+        assert.strictEqual(res.status, 400, res.text_);
+        assert.strictEqual(res.headers.get('location'), null);
+    });
+
+    await ok('registration with http://evil.example redirect is rejected', async () => {
+        for (const uris of [['http://evil.example/cb'], [CB, 'http://evil.example/cb'],
+                            ['http://localhost.evil.example/cb'], ['ftp://x.example/cb'], ['ftp://localhost/cb'],
+                            ['https://app.example/cb#frag'], []]) {
+            const r = await register(uris);
+            assert.strictEqual(r.status, 400, JSON.stringify(uris) + ' ' + JSON.stringify(r.body));
+            assert.ok(/^invalid_(redirect_uri|client_metadata)$/.test(r.body.error), r.body.error);
+        }
+    });
+
+    await ok('http://127.0.0.1:8765/cb is accepted (and localhost, https)', async () => {
+        for (const u of [CB, 'http://localhost/cb', 'http://localhost:3000', 'https://app.example/cb']) {
+            const r = await register([u]);
+            assert.strictEqual(r.status, 201, u + ' ' + JSON.stringify(r.body));
+            assert.deepStrictEqual(store.getClient(r.body.client_id).redirect_uris, [u]);
+        }
+    });
+
+    await ok('refresh rotates; the old refresh token fails', async () => {
+        const c = await client();
+        const t1 = await tokensFor(c);
+        const r = await refresh(c, t1.refresh_token);
+        assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+        assert.notStrictEqual(r.body.refresh_token, t1.refresh_token);
+        assert.notStrictEqual(r.body.access_token, t1.access_token);
+        const info = await provider.verifyAccessToken(r.body.access_token);
+        assert.strictEqual(info.clientId, c.client_id);
+        assert.strictEqual(info.resource.href, RESOURCE);
+        const old = await refresh(c, t1.refresh_token);
+        assert.strictEqual(old.status, 400);
+        assert.strictEqual(old.body.error, 'invalid_grant');
+        assert.strictEqual((await refresh(c, r.body.refresh_token)).status, 200);
+    });
+
+    await ok('a refresh token is not an access token and vice versa', async () => {
+        const c = await client();
+        const t = await tokensFor(c);
+        assert.strictEqual(await verifies(t.refresh_token), false);
+        assert.strictEqual((await refresh(c, t.access_token)).status, 400);
+        assert.strictEqual(await verifies(t.access_token), true);
+    });
+
+    await ok('refresh refused after the user leaves the allowlist', async () => {
+        const c = await client();
+        const t = await tokensFor(c);
+        const saved = config.oidc.allow_emails;
+        config.oidc.allow_emails = ['someone-else@example.com'];
+        try {
+            const r = await refresh(c, t.refresh_token);
+            assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+            assert.strictEqual(r.body.error, 'invalid_grant');
+        } finally {
+            config.oidc.allow_emails = saved;
+        }
+    });
+
+    await ok('revoked access token fails verifyAccessToken', async () => {
+        const c = await client();
+        const t = await tokensFor(c);
+        assert.strictEqual(await verifies(t.access_token), true);
+        assert.strictEqual(await revoke(c, t.access_token), 200);
+        assert.strictEqual(await verifies(t.access_token), false);
+        assert.strictEqual(await revoke(c, t.refresh_token), 200);
+        assert.strictEqual((await refresh(c, t.refresh_token)).status, 400);
+        assert.strictEqual(await revoke(c, 'not-a-token'), 200);
+    });
+
+    await ok('expired access token fails', async () => {
+        const c = await client();
+        const t = await tokensFor(c);
+        const raw = new Database(file);
+        raw.prepare('UPDATE tokens SET expires_at = ? WHERE token_hash = ?')
+           .run(now() - 1, auth_store.hash(t.access_token));
+        raw.close();
+        assert.strictEqual(await verifies(t.access_token), false);
+        assert.strictEqual(await verifies('garbage'), false);
+    });
+
+    await ok('expired code is rejected', async () => {
+        const c = await client();
+        const got = await code(c);
+        const raw = new Database(file);
+        raw.prepare('UPDATE codes SET expires_at = ? WHERE code_hash = ?').run(now() - 1, auth_store.hash(got.code));
+        raw.close();
+        assert.strictEqual((await exchange(c, got)).status, 400);
+    });
+
+    await ok('config TTLs are honoured; codes live 60 s', async () => {
+        const cfg = { oidc: config.oidc, mcp: { oauth: { access_ttl: 120, refresh_ttl: 240 } } };
+        const p2 = providerMod.create(cfg, store, oidc);
+        const c = await client();
+        const got = await code(c);
+        const raw = new Database(file, { readonly: true });
+        const row = raw.prepare('SELECT expires_at FROM codes WHERE code_hash = ?').get(auth_store.hash(got.code));
+        assert.ok(row.expires_at - now() <= 60 && row.expires_at - now() >= 58, 'code ttl ' + (row.expires_at - now()));
+        const clientInfo = store.getClient(c.client_id);
+        const t = await p2.exchangeAuthorizationCode(clientInfo, got.code, got.verifier, CB);
+        secrets.push(t.access_token, t.refresh_token);
+        assert.strictEqual(t.expires_in, 120);
+        const ttl = h => raw.prepare('SELECT expires_at FROM tokens WHERE token_hash = ?').get(auth_store.hash(h)).expires_at - now();
+        assert.ok(Math.abs(ttl(t.access_token) - 120) <= 2);
+        assert.ok(Math.abs(ttl(t.refresh_token) - 240) <= 2);
+        raw.close();
+    });
+
+    await ok('a token issued to client A cannot be used, revoked or refreshed by client B', async () => {
+        const a = await client();
+        const b = await client();
+        const got = await code(a);
+        const stolen = await exchange(b, got);
+        assert.strictEqual(stolen.status, 400, 'B exchanged A\'s code');
+        const t = await tokensFor(a);
+        const r = await refresh(b, t.refresh_token);
+        assert.strictEqual(r.status, 400);
+        assert.strictEqual(r.body.error, 'invalid_grant');
+        await revoke(b, t.access_token);
+        await revoke(b, t.refresh_token);
+        assert.strictEqual(await verifies(t.access_token), true, 'B revoked A\'s access token');
+        assert.strictEqual((await refresh(a, t.refresh_token)).status, 200, 'B killed A\'s refresh token');
+    });
+
+    await ok('disallowed user never gets a code (403 at callback)', async () => {
+        const c = await client();
+        idp.next({ email: 'bob@example.com' });
+        const res = await authorize(c, { verifier: auth_store.randomToken(), state: 's' });
+        assert.strictEqual(res.status, 403, res.text_);
+        assert.strictEqual(res.headers.get('location'), null);
+        const raw = new Database(file, { readonly: true });
+        assert.strictEqual(raw.prepare("SELECT count(*) AS n FROM codes WHERE email = 'bob@example.com'").get().n, 0);
+        raw.close();
+    });
+
+    await ok('codes and tokens are never stored raw or logged', () => {
+        assert.ok(secrets.length > 10);
+        const raw = new Database(file, { readonly: true });
+        const values = [];
+        for (const t of ['codes', 'tokens']) {
+            for (const row of raw.prepare('SELECT * FROM ' + t).all()) { values.push(...Object.values(row)); }
+        }
+        raw.close();
+        for (const s of secrets) {
+            assert.ok(!values.includes(s), 'raw secret stored');
+            for (const line of logged) { assert.ok(!line.includes(s), 'secret logged: ' + line); }
+        }
+    });
+
+    console.log = origLog;
+    await closeServer(server);
+    await idp.close();
+    store.close();
+    for (const f of [file, file + '-wal', file + '-shm']) {
+        try { fs.unlinkSync(f); } catch (e) { /* absent */ }
+    }
+}
+
 async function main() {
     await storeSection();
     await allowlistSection();
     await webLoginSection();
+    await providerSection();
     console.log('\n' + passed + ' passed, ' + failed + ' failed');
     process.exit(failed ? 1 : 0);
 }

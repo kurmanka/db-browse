@@ -31,7 +31,7 @@ function open(file) {
         + 'expires_at INTEGER NOT NULL);'
         + 'CREATE TABLE IF NOT EXISTS tokens ('
         + 'token_hash TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL, client_id TEXT NOT NULL, '
-        + 'email TEXT NOT NULL, groups TEXT NOT NULL, expires_at INTEGER NOT NULL);'
+        + 'email TEXT NOT NULL, groups TEXT NOT NULL, resource TEXT, expires_at INTEGER NOT NULL);'
     );
 
     const q = {
@@ -41,7 +41,7 @@ function open(file) {
         takePending: db.prepare('DELETE FROM pending WHERE state = ? RETURNING *'),
         putCode: db.prepare('INSERT OR REPLACE INTO codes (code_hash, client_id, email, groups, challenge, redirect_uri, resource, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
         takeCode: db.prepare('DELETE FROM codes WHERE code_hash = ? RETURNING *'),
-        putToken: db.prepare('INSERT OR REPLACE INTO tokens (token_hash, kind, client_id, email, groups, expires_at) VALUES (?, ?, ?, ?, ?, ?)'),
+        putToken: db.prepare('INSERT OR REPLACE INTO tokens (token_hash, kind, client_id, email, groups, resource, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'),
         getToken: db.prepare('SELECT * FROM tokens WHERE token_hash = ? AND expires_at > ?'),
         takeToken: db.prepare('DELETE FROM tokens WHERE token_hash = ? RETURNING *'),
         revoke: db.prepare('DELETE FROM tokens WHERE token_hash = ?'),
@@ -90,7 +90,7 @@ function open(file) {
         putToken(t) {
             purgeExpired();
             q.putToken.run(t.token_hash, t.kind, t.client_id, t.email,
-                           JSON.stringify(t.groups || []), t.expires_at);
+                           JSON.stringify(t.groups || []), t.resource, t.expires_at);
         },
         getToken(tokenHash) {
             const row = q.getToken.get(tokenHash, nowSec());
