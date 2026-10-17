@@ -7,11 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm install       # install dependencies
 node start.js     # start the server (requires config.js)
-node test/run.js  # all tests (sqlite, drivers, routes, mcp)
+node test/run.js  # all tests (sqlite, drivers, routes, mcp, oauth)
 ```
 
-`test/run.js` runs `sqlite.js`, `drivers.js`, `routes.js` and `mcp.js` in
-sequence. `routes.js` spawns its own server on a free port — the configured one
+`test/run.js` runs `sqlite.js`, `drivers.js`, `routes.js`, `mcp.js` and
+`oauth.js` in sequence. `routes.js` spawns its own server on a free port — the configured one
 when it is free, otherwise one the OS hands out — so the suite can run next to a
 live instance; it never tests a server it did not start (`DBB_TEST_PORT` pins a
 port). Postgres/MySQL MCP tests are skipped unless `DBB_TEST_PG_URL` /
@@ -24,6 +24,10 @@ Two environment overrides are useful with the tests and for side-by-side runs:
 - `DBB_SESSION_MEMORY=1` — drop the configured session store and use
   express-session's in-memory one, so a test run does not write into the user's
   session directory. Test-only; never for a real deployment.
+- `DBB_CONFIG=<file>` — load this config file instead of `./config.js`
+  (relative to the current directory). `util.configPath()` resolves it for both
+  `start.js` and `requestHandlers.js`, so they share one config object.
+  `test/oauth.js` ("app wiring") uses it to spawn `start.js` with OIDC on.
 
 ## Architecture
 
@@ -81,7 +85,19 @@ Cache backend is Memcached (disabled by default via `config.cache = false`). Whe
 
 ### MCP interface
 
-`mcp.js` mounts `POST /mcp` (streamable HTTP, stateless) when `config.mcp.token` is set; `start.js` calls `mcp.mount(app, config)` before the session middleware. Tools call the same `db_*.js` functions as the web UI, but on **separate read-only connections** from `mcp_db.js` (not the `database` cache in `start.js`): SQLite opened read-only plus, in `db_sqlite.js` when `cc.readonly` is set, only statements SQLite reports as read-only (`stmt.readonly`) and every ATTACHed schema detached after each call; Postgres/MySQL via a per-call read-only transaction (MySQL also `SET SESSION TRANSACTION READ ONLY` per call, for DDL; unverified on a real server); calls serialized per connection, with a watchdog in `wrap()` that drops a connection whose statement does not return within `timeout_ms` + 5 s. `mcp.js` loads the MCP SDK and zod only inside `mount()` when a token is set (the SDK needs Node >= 20; the rest of the app does not). `callDb(config, dbId, fn)` also converts exceptions thrown inside `db_*.js` callbacks into rejections. `dbId` is untrusted agent input: `dbEntry(config, id)` in `mcp.js` and an own-property check in `mcp_db.getConnection` make names like `constructor` / `__proto__` "No such database". For Postgres, `checkIdentifiers` in `mcp.js` rejects table/column/order_by/where names that are not plain identifiers. `db_postgres.js` validates identifiers itself (`ident()`), so this is a second, stricter layer: it keeps MCP to plain names while the web UI also accepts quoted/mixed-case ones. Tests: `node test/mcp.js`; Postgres/MySQL sections need `DBB_TEST_PG_URL` / `DBB_TEST_MYSQL_URL` (MySQL has never been run against a real server). Design: `docs/superpowers/specs/2026-10-04-mcp-interface-design.md`.
+`mcp.js` mounts `POST /mcp` (streamable HTTP, stateless) when `config.mcp.token` is set or an OAuth provider is passed (see Authentication); `start.js` calls `mcp.mount(app, config, provider)` before the session middleware. Tools call the same `db_*.js` functions as the web UI, but on **separate read-only connections** from `mcp_db.js` (not the `database` cache in `start.js`): SQLite opened read-only plus, in `db_sqlite.js` when `cc.readonly` is set, only statements SQLite reports as read-only (`stmt.readonly`) and every ATTACHed schema detached after each call; Postgres/MySQL via a per-call read-only transaction (MySQL also `SET SESSION TRANSACTION READ ONLY` per call, for DDL; unverified on a real server); calls serialized per connection, with a watchdog in `wrap()` that drops a connection whose statement does not return within `timeout_ms` + 5 s. `mcp.js` loads the MCP SDK and zod only inside `mount()` when a token is set (the SDK needs Node >= 20; the rest of the app does not). `callDb(config, dbId, fn)` also converts exceptions thrown inside `db_*.js` callbacks into rejections. `dbId` is untrusted agent input: `dbEntry(config, id)` in `mcp.js` and an own-property check in `mcp_db.getConnection` make names like `constructor` / `__proto__` "No such database". For Postgres, `checkIdentifiers` in `mcp.js` rejects table/column/order_by/where names that are not plain identifiers. `db_postgres.js` validates identifiers itself (`ident()`), so this is a second, stricter layer: it keeps MCP to plain names while the web UI also accepts quoted/mixed-case ones. Tests: `node test/mcp.js`; Postgres/MySQL sections need `DBB_TEST_PG_URL` / `DBB_TEST_MYSQL_URL` (MySQL has never been run against a real server). Design: `docs/superpowers/specs/2026-10-04-mcp-interface-design.md`.
+
+### Authentication
+
+Without `config.oidc`: the `users.txt` / `config.authenticate` password login (`POST /login`, `loadUser` renders `login.pug`), unchanged. With `config.oidc`: OIDC only, and `POST /login` is not registered.
+
+- `auth_store.js` — SQLite store (`config.auth_db`, default `auth.sqlite`), opened at startup only when `config.oidc` is set. Tables: `clients` (dynamically registered MCP clients), `pending` (in-flight upstream logins: state, nonce, PKCE verifier, kind `web`/`mcp`, data), `codes` (our authorization codes, SHA-256 hashed, 60 s, single use), `tokens` (hashed access/refresh tokens with client, email, groups, resource, expiry). Expired rows are purged on every write.
+- `allowlist.js` — `isAllowed(config, claims, done)` (verified email in `allow_emails`, a group in `allow_groups`, or a name in `authenticate_userfile` with `allow_global_userfile`; nothing configured refuses all) and `problems(config)` (startup warnings).
+- `oidc.js` — `create(config, store)` (null without `config.oidc`): upstream code flow + PKCE, ID token verified with `jose` (ESM, lazy `import()`). `mountWeb(app, hooks)` adds `GET /login`, `/oidc/login`, `/oidc/callback`; a web login is bound to `req.session.oidc_state`; an `mcp` login calls `hooks.mcp`.
+- `oauth_provider.js` — `create(config, store, oidc)`: the SDK `OAuthServerProvider` behind `mcpAuthRouter`; `/authorize` brokers to `oidc.begin('mcp', ...)`, `complete()` (the `hooks.mcp`) issues our code; tokens are bound to the resource `<public_url>/mcp`.
+- `mcp.js` — `mount(app, config, provider)` mounts the SDK's OAuth endpoints and metadata at the root and accepts the static `config.mcp.token` or a provider-issued access token.
+
+Request flow in `start.js`: config checks (exit if `mcp.oauth` lacks `oidc` or a bare-origin `public_url`; log `allowlist.problems`) → `trust proxy` from `config.trust_proxy` → body parsers, request logs (the `/oidc/callback` query is left out) → `mcp.mount` (OAuth endpoints + `/mcp`, no sessions) → `express_session` → `oidc.mountWeb` → app routes, where `loadUser` redirects unauthenticated requests to `/login?to=<encodeURIComponent(originalUrl)>` when OIDC is on. Tests: `node test/oauth.js` (mock IdP in `test/helpers/mock_oidc.js`). Design: `docs/superpowers/specs/2026-10-15-oauth-oidc-design.md`.
 
 ### SQL history
 
@@ -114,6 +130,10 @@ exports.cache_memcached      // 'host:port'
 exports.pg_dump_path         // path to pg_dump binary
 exports.allow_clear_sql      // bool — enable raw SQL execution feature
 exports.addons               // { [name]: { ... } }
+exports.oidc                 // OIDC login + allowlist (see Authentication)
+exports.mcp                  // { token (deprecated), oauth: { public_url, access_ttl, refresh_ttl }, max_rows, timeout_ms }
+exports.auth_db              // auth store path, default 'auth.sqlite'
+exports.trust_proxy          // optional Express 'trust proxy' value
 ```
 
 `db_map` on a DB entry enables cross-table navigation links in row detail views (loaded from YAML, see `sudb_table_index.yml` for example shape).

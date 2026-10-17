@@ -1,7 +1,7 @@
 # OAuth / OIDC authentication for db-browse — design
 
 Date: 2026-10-15
-Status: proposed
+Status: implemented (amended 2026-10-17 to match the build)
 
 ## Goal
 
@@ -15,7 +15,7 @@ revocable OAuth 2.1 tokens.
 | Question | Decision |
 |---|---|
 | Identity source | Upstream OpenID Connect provider (generic OIDC: Google Workspace, Okta, Entra, Keycloak, ...). The app stores no passwords for OIDC users. |
-| Web UI login | OIDC authorization-code flow with PKCE. Session stores `sub`, email and groups. |
+| Web UI login | OIDC authorization-code flow with PKCE. Session stores the user (email, else `sub`) and groups. |
 | Authorization | Allowlist in config: emails, a group claim, and optionally the names in `authenticate_userfile` (`allow_global_userfile`); any match admits. All three sources are optional; if none yields an entry, everyone is refused. Same list gates web and MCP. |
 | MCP | `/mcp` is an OAuth 2.1 protected resource. The app is also the authorization server MCP clients talk to, and brokers the user's login to the upstream provider. Tokens are issued by the app. |
 | Per-database access | **Out of scope**; a possible future item. Everyone allowed sees every database, as today. |
@@ -27,18 +27,26 @@ revocable OAuth 2.1 tokens.
 
 - Reads `config.oidc`; does nothing when it is unset.
 - Discovery (`/.well-known/openid-configuration`) is fetched lazily and cached.
-- `GET /login` (when OIDC is on) starts the flow: random `state`, `nonce`,
-  PKCE verifier kept in the session, redirect to the provider's authorization
-  endpoint. `GET /oidc/callback` checks `state`, exchanges the code, and
-  verifies the ID token with `jose` (signature against the provider's JWKS,
-  `iss`, `aud`, `exp`, `nonce`).
-- On success it runs the allowlist check (below), then sets
-  `req.session.authentication = true` and `req.session.user` (email, falling
-  back to `sub`) plus `req.session.groups`. `loadUser` in `start.js` is
-  unchanged: it already keys on `req.session.authentication`.
+- `GET /login` (and `/oidc/login`) starts the flow: random `state`, `nonce`
+  and PKCE verifier, kept as a row of the store's `pending` table (10 min,
+  single use), not in the session; redirect to the provider's authorization
+  endpoint. `GET /oidc/callback` takes the pending row by `state`, exchanges
+  the code, and verifies the ID token with `jose` (signature against the
+  provider's JWKS, `iss`, `aud`, `exp`, `nonce`). Both routes are mounted
+  right after the session middleware.
+- A web login is also bound to the browser that began it: `/login` puts
+  `state` into `req.session.oidc_state`, and the callback refuses a web login
+  whose `state` does not match (login-CSRF defence). MCP logins are not bound
+  this way: the MCP `/authorize` endpoint runs before the session middleware.
+- On success it runs the allowlist check (below), regenerates the session,
+  then sets `req.session.authentication = true` and `req.session.user`
+  (email, falling back to `sub`) plus `req.session.groups`. With OIDC on,
+  `loadUser` in `start.js` redirects an unauthenticated request to
+  `/login?to=<original URL>`; `to` is accepted only as a local path.
 - `/logout` is unchanged (local session only; no provider-side logout).
 - The existing `POST /login` form handler is not mounted when OIDC is on, so
-  the password path cannot be used to bypass the allowlist.
+  the password path cannot be used to bypass the allowlist. With OIDC off,
+  the password login is unchanged.
 
 ### Allowlist
 
@@ -68,20 +76,25 @@ exports.oidc = {
   the flag has no effect and startup logs a warning.
 - The check runs at login and when MCP tokens are issued or refreshed. A user
   removed from the list keeps web access until the session expires, and MCP
-  access until the access token expires (1 h) and the refresh is refused.
+  access until the access token expires (`access_ttl`) and the refresh is
+  refused. A refresh re-checks the email and groups captured at login: a
+  group removed at the provider takes effect at the next login, or when the
+  refresh token expires (`refresh_ttl`). The refresh token is consumed before
+  the check, so a transient allowlist read error kills it (fail closed).
 
 ### MCP authorization server
 
-Built on the MCP SDK's server auth helpers
-(`@modelcontextprotocol/sdk/server/auth`: `mcpAuthRouter`, `requireBearerAuth`,
-the `OAuthServerProvider` interface) where they fit; the plan must confirm the
-installed SDK version's behaviour before relying on them.
+`oauth_provider.js`, behind the MCP SDK's (1.32) `mcpAuthRouter` and
+`requireBearerAuth`, used as-is with the SDK's default rate limits (per
+`req.ip`). Enabled by the presence of `config.mcp.oauth`, which needs
+`config.oidc` and a `public_url`.
 
-Endpoints, mounted before `express_session` like `/mcp` today:
+Endpoints, mounted at the root of `public_url` before `express_session`,
+like `/mcp`:
 
 | Endpoint | Purpose |
 |---|---|
-| `/.well-known/oauth-protected-resource` | RFC 9728 metadata for `/mcp` |
+| `/.well-known/oauth-protected-resource/mcp` | RFC 9728 metadata for `/mcp` |
 | `/.well-known/oauth-authorization-server` | RFC 8414 metadata |
 | `POST /register` | RFC 7591 dynamic client registration |
 | `GET /authorize` | PKCE (S256 only) authorization request |
@@ -94,25 +107,55 @@ issues its own one-time authorization code bound to client, redirect URI and
 PKCE challenge → client posts the code and verifier to `/token`.
 
 Tokens are opaque 256-bit random values. Only SHA-256 hashes are stored.
-Access tokens last 1 hour; refresh tokens rotate on use. `/mcp` accepts a
-bearer token that is valid and unexpired, and (as today) the static
+Access tokens last `access_ttl` (default 1 hour); refresh tokens last
+`refresh_ttl` (default 30 days) and rotate on use. Every grant is for one
+resource, `<public_url>/mcp`: a request without `resource` gets it, and
+`/authorize` refuses any other. `/mcp` accepts a bearer token that is valid,
+unexpired and issued for that resource, and (as today) the static
 `config.mcp.token`. An unauthenticated call gets 401 with
 `WWW-Authenticate: Bearer resource_metadata="…"`.
 
+There is no per-client consent screen: the user is sent straight to the
+provider (see the known limitations below).
+
 ### `auth_store.js` — persistence
 
-A separate SQLite file, `auth.sqlite`, opened lazily like `sqliteDB.js`:
-`clients`, `codes` (short TTL, single use), `tokens` (hash, client, user,
-kind, expiry, revoked). Expired rows are purged opportunistically. Web
-sessions remain in the existing session store.
+A separate SQLite file, `config.auth_db` (default `auth.sqlite`, relative to
+the working directory), opened at startup when `config.oidc` is set:
+`clients` (registered clients), `pending` (in-flight upstream logins: state,
+nonce, verifier, kind `web`/`mcp`, data), `codes` (hash, 60 s, single use),
+`tokens` (hash, kind `access`/`refresh`, client, email, groups, nullable
+`resource`, expiry; revocation deletes the row). Expired rows are purged on
+every write. Web sessions remain in the existing session store.
 
 ## Config
 
-`config.oidc` as above, plus an optional `config.mcp.oauth` block (enable
-flag, token lifetimes, `public_url` — the externally visible base URL used in
-metadata and redirects, required when behind a proxy). `config.js.example`
-and README get the new section; `CLAUDE.md` gets an "Authentication"
-subsection.
+```js
+exports.oidc = { /* as above */ };
+exports.mcp = {
+    token: '...',                 // optional, deprecated static admin token
+    oauth: {                      // present = OAuth for MCP on (needs oidc)
+        public_url: 'https://dbb.example.com',  // required; an origin, no path
+        access_ttl: 3600,         // seconds, default 1 hour
+        refresh_ttl: 2592000,     // seconds, default 30 days
+    },
+};
+exports.auth_db = 'auth.sqlite';  // the store, default auth.sqlite
+exports.trust_proxy = 1;          // optional: Express 'trust proxy'
+```
+
+- `public_url` is the issuer and the base of every OAuth URL. The SDK serves
+  the endpoints at the host root, so it must be an origin: startup exits
+  with a message if it is missing, unparseable, or has a path, query or
+  fragment, or if `mcp.oauth` is set without `oidc`.
+- `trust_proxy`, when set, goes to `app.set('trust proxy', ...)`; behind a
+  reverse proxy it gives each client its own `req.ip`, and so its own rate
+  limit bucket.
+- `DBB_CONFIG` (environment) names a config file to load instead of
+  `./config.js`; tests use it to run `start.js` with OIDC on.
+
+`config.js.example` and README get the new section; `CLAUDE.md` gets an
+"Authentication" subsection.
 
 ## Error handling
 
@@ -128,14 +171,16 @@ subsection.
 
 ## Security notes
 
-- Redirect URIs for dynamically registered clients must be exact-match;
-  `http://localhost` / `127.0.0.1` allowed for native clients, otherwise
-  `https` only.
+- Redirect URIs for dynamically registered clients must be `https`, or
+  `http://localhost` / `127.0.0.1` for native clients, without a fragment.
+  They match exactly, except that a loopback URI matches with any port
+  (RFC 8252 section 7.3, the SDK's rule).
 - Authorization codes are single use and expire within 60 s.
-- `client_secret` and tokens are never logged.
-- TLS is the operator's responsibility (as for the existing MCP token);
-  `public_url` should be `https://` outside localhost, and startup warns if
-  it is not.
+- `client_secret`, codes and tokens are never logged; the request log omits
+  the query string of `/oidc/callback`.
+- TLS is the operator's responsibility (as for the existing MCP token). The
+  SDK refuses to start with a `public_url` that is not `https://`, except on
+  `localhost` / `127.0.0.1`.
 
 ## Testing
 
@@ -148,18 +193,29 @@ picked up at the next login; unverified email refused; forged signature, wrong `
 mismatch; full MCP flow (register → authorize → token → `/mcp` call);
 PKCE mismatch; reused code; revoked and expired tokens; refresh rotation; the
 static admin token still works; `users.txt` login unchanged when OIDC is off.
+The "app wiring" section spawns `start.js` with `DBB_CONFIG` pointing at a
+temporary config (OIDC and `mcp.oauth` on) and checks the redirects, the
+missing `POST /login`, the full web and MCP flows and the startup refusals.
 
-## Out of scope
+## Out of scope / known limitations
 
 - Per-database or per-user permissions (future).
+- No consent screen (follow-up). With dynamic registration, anyone can
+  register a client with their own redirect URI; if the victim already has a
+  session at the provider, a crafted `/authorize` link completes without any
+  prompt and delivers a code for the victim's identity to that redirect URI.
+  MCP authorization guidance recommends asking for consent per client; until
+  then, the allowlist bounds who can be affected, not which clients.
 - Provider-side logout / single logout.
 - Providers that are OAuth 2.0 only (e.g. GitHub) — would need a separate
   userinfo-based identity step.
 - A UI for listing or revoking tokens (revocation is via `/revoke` and
   direct edits of `auth.sqlite`).
 
-## Open for the plan
+## Resolved in the plan
 
-- Confirm `jose` as a direct dependency and its Node requirement versus the
-  app's current minimum (MCP already needs Node ≥ 20).
-- Confirm which SDK auth helpers can be used as-is versus wrapped.
+- `jose` (v6, ESM-only) is a direct dependency, loaded with a dynamic
+  `import()`; it needs Node >= 20, as MCP already does.
+- The SDK's `mcpAuthRouter`, `requireBearerAuth` and `OAuthServerProvider`
+  (1.32) are used as-is; PKCE is checked by the provider at code exchange
+  (`skipLocalPkceValidation`), after the code is taken.

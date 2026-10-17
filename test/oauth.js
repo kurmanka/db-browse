@@ -1254,12 +1254,321 @@ async function mcpSection() {
     }
 }
 
+// ---- app wiring (spawned start.js) -----------------------------------------
+//
+// Runs the real start.js with DBB_CONFIG pointing at a temporary config, on a
+// free port, with in-memory sessions. Everything it writes goes to a temp dir:
+// the real config.js, users.txt and usersRequests.sqlite are never touched.
+
+function freePort() {
+    return new Promise((resolve, reject) => {
+        const probe = require('net').createServer();
+        probe.on('error', reject);
+        probe.listen(0, 'localhost', () => {
+            const p = probe.address().port;
+            probe.close(() => resolve(p));
+        });
+    });
+}
+
+function portIsOpen(port) {
+    return new Promise((resolve) => {
+        const socket = require('net').connect({ port, host: 'localhost' });
+        const done = (open) => { socket.destroy(); resolve(open); };
+        socket.setTimeout(500);
+        socket.once('connect', () => done(true));
+        socket.once('timeout', () => done(false));
+        socket.once('error',   () => done(false));
+    });
+}
+
+// Spawns start.js with `configFile`. Resolves {child, output()} once the port
+// accepts connections; rejects if the child exits first.
+function spawnApp(dir, configFile, port) {
+    const { spawn } = require('child_process');
+    const child = spawn(process.execPath, ['start.js'], {
+        cwd: path.join(__dirname, '..'),
+        env: Object.assign({}, process.env, {
+            DBB_CONFIG: configFile, DBB_PORT: String(port), DBB_SESSION_MEMORY: '1',
+            SQLITE_PATH: path.join(dir, 'usersRequests.sqlite')
+        }),
+        stdio: ['ignore', 'pipe', 'pipe']
+    });
+    let out = '';
+    child.stdout.on('data', c => { out += c; });
+    child.stderr.on('data', c => { out += c; });
+    const exited = new Promise(resolve => child.on('exit', code => resolve(code)));
+    const ready = new Promise((resolve, reject) => {
+        let settled = false;
+        exited.then(code => {
+            if (!settled) { settled = true; reject(new Error('server exited (' + code + '): ' + out.trim())); }
+        });
+        const deadline = Date.now() + 10000;
+        (function poll() {
+            if (settled) { return; }
+            portIsOpen(port).then(open => {
+                if (settled) { return; }
+                if (open) { settled = true; return resolve(); }
+                if (Date.now() > deadline) { settled = true; return reject(new Error('start timed out: ' + out)); }
+                setTimeout(poll, 100);
+            });
+        })();
+    });
+    return { child, exited, ready, output: () => out };
+}
+
+function writeConfig(file, cfg) {
+    fs.writeFileSync(file, 'module.exports = ' + JSON.stringify(cfg, null, 2) + ';\n');
+}
+
+async function wiringSection() {
+    console.log('app wiring');
+    const crypto    = require('crypto');
+    const mock_oidc = require('./helpers/mock_oidc.js');
+    const dir  = fs.mkdtempSync(path.join(os.tmpdir(), 'db-browse-wiring-'));
+    const dbFile = path.join(dir, 'fixture.sqlite');
+    const fixture = new Database(dbFile);
+    fixture.exec('CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)');
+    fixture.close();
+
+    const idp  = await mock_oidc.start();
+    const port = await freePort();
+    const base = 'http://localhost:' + port;
+    const STATIC = 'static-test-token-' + crypto.randomBytes(8).toString('hex');
+    const config = {
+        listen: { host: 'localhost', port },
+        db: { lite: { type: 'sqlite', database: dbFile } },
+        session_config: { secret: 'wiring-test', resave: false, saveUninitialized: false },
+        oidc: Object.assign(idp.config(), {
+            redirect_uri: base + '/oidc/callback',
+            allow_emails: ['ann@example.com']
+        }),
+        mcp: { token: STATIC, oauth: { public_url: base } },
+        auth_db: path.join(dir, 'auth.sqlite'),
+        addons: {}      // listDatabase.pug needs app.addons, set only with config.addons
+    };
+    const configFile = path.join(dir, 'config.js');
+    writeConfig(configFile, config);
+
+    // A config the app must refuse to start with; resolves {code, output}.
+    async function refusedStart(name, cfg) {
+        const f = path.join(dir, name + '.js');
+        writeConfig(f, cfg);
+        const app = spawnApp(dir, f, await freePort());
+        app.ready.catch(() => {});
+        const timer = setTimeout(() => app.child.kill(), 10000);
+        const code = await app.exited;
+        clearTimeout(timer);
+        return { code, output: app.output() };
+    }
+
+    const app = spawnApp(dir, configFile, port);
+    const secrets = [STATIC, idp.config().client_secret];
+    try {
+        await app.ready;
+
+        // /login → IdP → /oidc/callback in one browser; returns the callback response.
+        async function browserLogin(get, to) {
+            const start = await get(base + '/login?to=' + encodeURIComponent(to));
+            assert.strictEqual(start.status, 302, 'login ' + start.status + ' ' + start.text_);
+            const z = await get(start.headers.get('location'));
+            assert.strictEqual(z.status, 302, 'authorize ' + z.status);
+            return get(z.headers.get('location'));
+        }
+
+        await ok('GET / redirects to /login?to=%2F', async () => {
+            const r = await fetch(base + '/', { redirect: 'manual' });
+            assert.strictEqual(r.status, 302);
+            assert.strictEqual(r.headers.get('location'), '/login?to=%2F');
+        });
+
+        await ok('a deep link redirects to /login with the path in to=', async () => {
+            const r = await fetch(base + '/lite/items?x=1', { redirect: 'manual' });
+            assert.strictEqual(r.status, 302);
+            assert.strictEqual(r.headers.get('location'), '/login?to=' + encodeURIComponent('/lite/items?x=1'));
+        });
+
+        await ok('GET /login redirects to the issuer with S256 challenge', async () => {
+            const r = await fetch(base + '/login?to=%2F', { redirect: 'manual' });
+            assert.strictEqual(r.status, 302);
+            const u = new URL(r.headers.get('location'));
+            assert.strictEqual(u.origin + u.pathname, idp.issuer + '/authorize');
+            assert.strictEqual(u.searchParams.get('code_challenge_method'), 'S256');
+            assert.ok(/^[A-Za-z0-9_-]{43}$/.test(u.searchParams.get('code_challenge')));
+            assert.strictEqual(u.searchParams.get('redirect_uri'), base + '/oidc/callback');
+        });
+
+        await ok('POST /login returns 404 (no password bypass)', async () => {
+            const r = await fetch(base + '/login', {
+                method: 'POST', redirect: 'manual',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: 'user=ann%40example.com&pass=x&to=%2F'
+            });
+            assert.strictEqual(r.status, 404);
+            assert.ok(!r.headers.get('set-cookie'), 'set a cookie');
+        });
+
+        await ok('full browser flow as ann@example.com ends on / with 200', async () => {
+            const get = browser();
+            const cb = await browserLogin(get, '/lite');
+            assert.strictEqual(cb.status, 302, cb.text_);
+            assert.strictEqual(cb.headers.get('location'), '/lite');
+            const home = await get(base + '/');
+            assert.strictEqual(home.status, 200, home.text_.slice(0, 200));
+            assert.ok(home.text_.includes('lite'), 'database list');
+            assert.ok(home.text_.includes('/logout'), 'logout link');
+            const tables = await get(base + '/lite');
+            assert.strictEqual(tables.status, 200);
+            assert.ok(tables.text_.includes('items'), 'table list');
+        });
+
+        await ok('other@example.com gets 403 at the callback', async () => {
+            idp.next({ email: 'other@example.com' });
+            const get = browser();
+            const cb = await browserLogin(get, '/');
+            assert.strictEqual(cb.status, 403);
+            const home = await get(base + '/');
+            assert.strictEqual(home.status, 302);
+        });
+
+        await ok('POST /mcp without a token → 401 with resource_metadata', async () => {
+            const r = await fetch(base + '/mcp', {
+                method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+            assert.strictEqual(r.status, 401);
+            const h = r.headers.get('www-authenticate') || '';
+            assert.ok(h.includes('resource_metadata="' + base + '/.well-known/oauth-protected-resource/mcp"'), h);
+            assert.ok(!r.headers.get('set-cookie'), '/mcp created a session');
+        });
+
+        await ok('POST /mcp with the static token is not 401', async () => {
+            const r = await fetch(base + '/mcp', {
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + STATIC, 'Content-Type': 'application/json',
+                           Accept: 'application/json, text/event-stream' },
+                body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
+            });
+            assert.notStrictEqual(r.status, 401);
+            assert.strictEqual(r.status, 200);
+        });
+
+        await ok('both /.well-known metadata documents return 200', async () => {
+            const prm = await fetch(base + '/.well-known/oauth-protected-resource/mcp');
+            assert.strictEqual(prm.status, 200);
+            assert.strictEqual((await prm.json()).resource, base + '/mcp');
+            const as = await fetch(base + '/.well-known/oauth-authorization-server');
+            assert.strictEqual(as.status, 200);
+            assert.strictEqual((await as.json()).token_endpoint, base + '/token');
+        });
+
+        await ok('MCP OAuth: register, authorize, token and a tools/list call', async () => {
+            const CB = 'http://127.0.0.1:8765/cb';
+            const reg = await fetch(base + '/register', {
+                method: 'POST', headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ redirect_uris: [CB], token_endpoint_auth_method: 'none' })
+            });
+            assert.strictEqual(reg.status, 201);
+            const c = await reg.json();
+            const verifier = crypto.randomBytes(32).toString('base64url');
+            const u = new URL(base + '/authorize');
+            u.search = new URLSearchParams({
+                response_type: 'code', client_id: c.client_id, redirect_uri: CB,
+                code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url'),
+                code_challenge_method: 'S256', state: 'st'
+            }).toString();
+            const get = browser();
+            const a = await get(u.href);
+            assert.strictEqual(a.status, 302, 'authorize ' + a.status + ' ' + a.text_);
+            const z = await get(a.headers.get('location'));
+            const cb = await get(z.headers.get('location'));
+            assert.strictEqual(cb.status, 302, 'callback ' + cb.status + ' ' + cb.text_);
+            const back = new URL(cb.headers.get('location'));
+            assert.strictEqual(back.origin + back.pathname, CB);
+            assert.strictEqual(back.searchParams.get('state'), 'st');
+            const code = back.searchParams.get('code');
+            secrets.push(code);
+            const t = await fetch(base + '/token', {
+                method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ grant_type: 'authorization_code', client_id: c.client_id,
+                                            code, code_verifier: verifier, redirect_uri: CB })
+            });
+            const tok = await t.json();
+            assert.strictEqual(t.status, 200, JSON.stringify(tok.error || ''));
+            secrets.push(tok.access_token, tok.refresh_token);
+            const r = await fetch(base + '/mcp', {
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + tok.access_token, 'Content-Type': 'application/json',
+                           Accept: 'application/json, text/event-stream' },
+                body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
+            });
+            assert.strictEqual(r.status, 200);
+        });
+
+        await ok('the server never logs codes, tokens or the client secret', () => {
+            const out = app.output();
+            for (const s of secrets.concat(idp.codes())) {
+                assert.ok(s && !out.includes(s), 'secret in server output: ' +
+                          out.split('\n').filter(l => l.includes(s)).map(l => l.split(s).join('<SECRET>')).join(' | '));
+            }
+        });
+    } finally {
+        app.child.kill();
+        await app.exited;
+    }
+
+    await ok('config with mcp.oauth but no oidc exits non-zero with a message', async () => {
+        const cfg = Object.assign({}, config);
+        delete cfg.oidc;
+        const r = await refusedStart('no-oidc', cfg);
+        assert.notStrictEqual(r.code, 0);
+        assert.ok(/mcp\.oauth/.test(r.output) && /oidc/.test(r.output), r.output);
+        assert.ok(!/Server has started/.test(r.output), r.output);
+    });
+
+    await ok('mcp.oauth.public_url with a path, query or hash, or missing, exits non-zero', async () => {
+        for (const pub of [base + '/dbb', base + '/?x=1', base + '/#f', 'not a url', undefined]) {
+            const cfg = Object.assign({}, config, { mcp: { oauth: pub === undefined ? {} : { public_url: pub } } });
+            const r = await refusedStart('bad-public-url', cfg);
+            assert.notStrictEqual(r.code, 0, String(pub));
+            assert.ok(/public_url/.test(r.output), r.output);
+        }
+    });
+
+    await ok('oidc with no usable allowlist starts with a warning and refuses everyone', async () => {
+        const f = path.join(dir, 'no-allowlist.js');
+        const p = await freePort();
+        const b = 'http://localhost:' + p;
+        writeConfig(f, Object.assign({}, config, {
+            listen: { host: 'localhost', port: p },
+            oidc: Object.assign(idp.config(), { redirect_uri: b + '/oidc/callback' }),
+            mcp: undefined
+        }));
+        const app2 = spawnApp(dir, f, p);
+        try {
+            await app2.ready;
+            assert.ok(/Warning: oidc is enabled but no allowlist source is usable/.test(app2.output()),
+                      app2.output());
+            const get = browser();
+            const start = await get(b + '/login');
+            const z = await get(start.headers.get('location'));
+            const cb = await get(z.headers.get('location'));
+            assert.strictEqual(cb.status, 403);
+        } finally {
+            app2.child.kill();
+            await app2.exited;
+        }
+    });
+
+    await idp.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+}
+
 async function main() {
     await storeSection();
     await allowlistSection();
     await webLoginSection();
     await providerSection();
     await mcpSection();
+    await wiringSection();
     console.log('\n' + passed + ' passed, ' + failed + ' failed');
     process.exit(failed ? 1 : 0);
 }

@@ -14,3 +14,12 @@ exports.getArrayOfStrings = function (string, done) {
     done(null, array);
 }
 
+
+// The config file to load: $DBB_CONFIG (relative to the current directory)
+// when set, else config.js next to this file. start.js and requestHandlers.js
+// both require this path, so they share one config object.
+exports.configPath = function () {
+    var path = require('path');
+    return process.env.DBB_CONFIG ? path.resolve(process.env.DBB_CONFIG)
+                                  : path.join(__dirname, 'config.js');
+}

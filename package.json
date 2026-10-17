@@ -9,6 +9,7 @@
     "test:drivers": "node test/drivers.js",
     "test:routes": "node test/routes.js",
     "test:mcp": "node test/mcp.js",
+    "test:oauth": "node test/oauth.js",
     "start": "node start.js"
   },
   "repository": {

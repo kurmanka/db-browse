@@ -36,4 +36,6 @@ OAuth-2.0-only providers such as GitHub, a UI for token management.
 
 ## Status
 
-- [ ] implemented (tasks 1–6 of the plan)
+- [x] implemented (tasks 1–6 of the plan)
+- [ ] follow-up: a per-client consent screen, and per-database access (see the
+  spec's "Out of scope / known limitations")

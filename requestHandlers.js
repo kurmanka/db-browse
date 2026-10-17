@@ -1,4 +1,4 @@
-var config = require("./config");
+var config = require(require("./util.js").configPath());
 
 const fs      = require('fs');
 const querystring = require('querystring');
@@ -31,7 +31,7 @@ if (config.authenticate) {
 exports.prepare_locals =
 function prepare_locals (req, res, next) {
     var authenticate = false;
-    if (config.authenticate || config.authenticate_userfile) {
+    if (config.authenticate || config.authenticate_userfile || config.oidc) {
         authenticate = true;
     }
 

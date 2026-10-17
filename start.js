@@ -22,9 +22,13 @@ var requestHandlers = require('./requestHandlers.js');
 var sqlt = require('./sqlt.js');
 var util = require('./util.js');
 var mcp = require('./mcp.js');
+var auth_store = require('./auth_store.js');
+var allowlist = require('./allowlist.js');
+var oidc_mod = require('./oidc.js');
+var oauth_provider = require('./oauth_provider.js');
 
-// configuration
-var config = require('./config.js');
+// configuration: ./config.js, or the file named by DBB_CONFIG
+var config = require(util.configPath());
 
 // Tests (and confined environments) may not be able to write to the session
 // store directory named in config.js. DBB_SESSION_MEMORY=1 falls back to
@@ -34,9 +38,53 @@ if (process.env.DBB_SESSION_MEMORY) {
     delete config.session_config.store;
 }
 
+// A configuration the app cannot run safely with stops it here, before it
+// listens.
+function startup_error(msg) {
+    console.error('Configuration error: ' + msg);
+    process.exit(1);
+}
+
+// config.mcp.oauth.public_url is the OAuth issuer, and the SDK serves the
+// OAuth endpoints and metadata at the root of it: it must be a bare origin.
+function public_url_problem(v) {
+    if (typeof v !== 'string' || !v) { return 'is missing'; }
+    var u;
+    try { u = new URL(v); } catch (e) { return 'is not a URL'; }
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') { return 'must be an http(s) URL'; }
+    if (u.pathname !== '/' || v.indexOf('?') >= 0 || v.indexOf('#') >= 0 || u.username || u.password) {
+        return 'must be an origin such as https://dbb.example.com (no path, query or fragment)';
+    }
+    return null;
+}
+
+if (config.mcp && config.mcp.oauth) {
+    if (!config.oidc) {
+        startup_error('config.mcp.oauth needs config.oidc: MCP logins go through the OIDC provider');
+    }
+    var pub_problem = public_url_problem(config.mcp.oauth.public_url);
+    if (pub_problem) { startup_error('config.mcp.oauth.public_url ' + pub_problem); }
+}
+allowlist.problems(config).forEach(function (msg) {
+    console.log('Warning: ' + msg);
+});
+
+// OIDC web login, and the OAuth authorization server for MCP clients on top
+// of it. Both off (null) without config.oidc / config.mcp.oauth.
+var auth_db  = config.oidc ? auth_store.open(config.auth_db || 'auth.sqlite') : null;
+var oidc     = oidc_mod.create(config, auth_db);
+var provider = (oidc && config.mcp && config.mcp.oauth)
+             ? oauth_provider.create(config, auth_db, oidc) : null;
+
 // create the express app
 var app = express();
 var server; // .listen() returns that
+
+// Behind a reverse proxy, req.ip (and so the per-client rate limits on the
+// OAuth endpoints) needs this; see the 'trust proxy' setting in the Express docs.
+if (config.trust_proxy !== undefined) {
+    app.set('trust proxy', config.trust_proxy);
+}
 
 if (0) {
     // enable if debugging is needed
@@ -51,6 +99,12 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(cookieParser());
 
+// The query of /oidc/callback carries the identity provider's authorization
+// code: the request logs below leave it out.
+function loggable_url(url) {
+    return /^\/oidc\/callback/i.test(url) ? url.replace(/\?.*$/, '?...') : url;
+}
+
 // very simple loging of the incomming requests to console
 // from http://expressjs.com/api.html#app.use
 // but don't log the damn /favicon.ico requests
@@ -59,20 +113,34 @@ app.use(function(req, res, next){
     if(req.url == '/favicon.ico') {
         res.status(404).send('Not found');
     } else {
-        console.log('%s %s', req.method, req.url);
+        console.log('%s %s', req.method, loggable_url(req.url));
         next();
     }
 });
 
-// logging with response time
-app.use(morgan('tiny'));
+// logging with response time: morgan's 'tiny' format, with the URL as above
+morgan.token('loggable-url', function (req) {
+    return loggable_url(req.originalUrl || req.url);
+});
+app.use(morgan(':method :loggable-url :status :res[content-length] - :response-time ms'));
 
-// MCP interface (a no-op unless config.mcp.token is set). It has to come before
+// MCP interface (a no-op unless config.mcp.token or config.mcp.oauth is set),
+// with the OAuth endpoints when there is a provider. It has to come before
 // the session middleware, or every agent request would create a session file.
-mcp.mount(app, config);
+try {
+    mcp.mount(app, config, provider || undefined);
+} catch (e) {
+    startup_error(e.message);
+}
 
 // sessions
 app.use(express_session(config.session_config));
+
+// OIDC: GET /login, /oidc/login and /oidc/callback. After the session
+// middleware: a web login is bound to the browser's session.
+if (oidc) {
+    oidc.mountWeb(app, { mcp: provider ? provider.complete : undefined });
+}
 
 app.use( '/_/', serve_static('./static') );
 
@@ -167,7 +235,9 @@ if ( config.authenticate_userfile && !config.authenticate ) {
 // Login form's action attribute now points to /login
 // while the 'to' parameter tells us, where to redirect to
 // in case of success.
-app.post('/login', function(req, res) { //get and check users data
+// With OIDC on there is no password login at all: the users.txt check must
+// not become a way around the allowlist.
+if (!oidc) app.post('/login', function(req, res) { //get and check users data
 
     async.waterfall([
         function (done){
@@ -411,6 +481,12 @@ function db_connect( req, dbId, done ) {
 }
 
 function loadUser(req, res, next) {
+    if (oidc) {
+        // GET /login (oidc.js) checks `to` and starts the provider login
+        if (req.session.authentication) { return next(); }
+        return res.redirect('/login?to=' + encodeURIComponent(req.originalUrl));
+    }
+
     if (!config.authenticate) { return next(); }
 
     if (req.session.authentication) {
