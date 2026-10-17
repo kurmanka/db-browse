@@ -141,8 +141,98 @@ async function storeSection() {
     }
 }
 
+// ---- allowlist -------------------------------------------------------------
+
+async function allowlistSection() {
+    console.log('allowlist');
+    const allowlist = require('../allowlist.js');
+    const check = (config, claims) => new Promise((resolve, reject) => {
+        allowlist.isAllowed(config, claims, (err, v) => err ? reject(err) : resolve(v));
+    });
+    const file = path.join(os.tmpdir(), 'db-browse-allow-test-' + Date.now() + '.txt');
+    const oidc = o => ({ oidc: o });
+    const ufConfig = flag => ({ authenticate_userfile: file, oidc: { allow_global_userfile: flag } });
+
+    await ok('allow_emails matches case-insensitively', async () => {
+        const c = oidc({ allow_emails: ['Ann@Example.com'] });
+        assert.strictEqual(await check(c, { email: 'ann@example.COM' }), true);
+        assert.strictEqual(await check(c, { email: 'bob@example.com' }), false);
+    });
+
+    await ok('email_verified false is refused, absent is accepted', async () => {
+        const c = oidc({ allow_emails: ['ann@example.com'] });
+        assert.strictEqual(await check(c, { email: 'ann@example.com', email_verified: false }), false);
+        assert.strictEqual(await check(c, { email: 'ann@example.com', email_verified: true }), true);
+        assert.strictEqual(await check(c, { email: 'ann@example.com' }), true);
+    });
+
+    await ok('missing email is refused without throwing', async () => {
+        const c = oidc({ allow_emails: ['ann@example.com'], allow_groups: ['g'] });
+        assert.strictEqual(await check(c, {}), false);
+        assert.strictEqual(await check(c, { groups: ['g'] }), false);
+        assert.strictEqual(await check(c, undefined), false);
+    });
+
+    await ok('allow_groups with array, string, missing', async () => {
+        const c = oidc({ allow_groups: ['staff'] });
+        assert.strictEqual(await check(c, { email: 'x@example.com', groups: ['a', 'staff'] }), true);
+        assert.strictEqual(await check(c, { email: 'x@example.com', groups: 'staff' }), true);
+        assert.strictEqual(await check(c, { email: 'x@example.com' }), false);
+        assert.strictEqual(await check(c, { email: 'x@example.com', groups: ['other'] }), false);
+    });
+
+    await ok('userfile names match only with allow_global_userfile', async () => {
+        fs.writeFileSync(file, 'ann@example.com:pw\nivan:pw\n');
+        assert.strictEqual(await check(ufConfig(true), { email: 'Ann@example.com' }), true);
+        assert.strictEqual(await check(ufConfig(false), { email: 'ann@example.com' }), false);
+        assert.strictEqual(await check(ufConfig(true), { email: 'bob@example.com' }), false);
+    });
+
+    await ok('password with a colon still matches by name', async () => {
+        fs.writeFileSync(file, 'ann@example.com:p:w\n');
+        assert.strictEqual(await check(ufConfig(true), { email: 'ann@example.com' }), true);
+    });
+
+    await ok('userfile line without an email never matches', async () => {
+        fs.writeFileSync(file, 'ivan:pw\n');
+        assert.strictEqual(await check(ufConfig(true), { email: 'ivan@example.com' }), false);
+    });
+
+    await ok('missing userfile is an empty list', async () => {
+        const c = { authenticate_userfile: file + '.nope', oidc: { allow_global_userfile: true } };
+        assert.strictEqual(await check(c, { email: 'ann@example.com' }), false);
+    });
+
+    await ok('userfile is re-read on every call', async () => {
+        fs.writeFileSync(file, 'ann@example.com:pw\n');
+        assert.strictEqual(await check(ufConfig(true), { email: 'ann@example.com' }), true);
+        fs.writeFileSync(file, 'bob@example.com:pw\n');
+        assert.strictEqual(await check(ufConfig(true), { email: 'ann@example.com' }), false);
+    });
+
+    await ok('nothing configured refuses everyone', async () => {
+        assert.strictEqual(await check({}, { email: 'ann@example.com' }), false);
+        assert.strictEqual(await check(oidc({}), { email: 'ann@example.com' }), false);
+    });
+
+    await ok('problems()', () => {
+        assert.ok(allowlist.problems(oidc({})).length >= 1, 'empty allowlist');
+        assert.ok(allowlist.problems(oidc({ allow_emails: [] , allow_groups: [] })).length >= 1);
+        assert.deepStrictEqual(allowlist.problems(oidc({ allow_emails: ['a@example.com'] })), []);
+        assert.deepStrictEqual(allowlist.problems(oidc({ allow_groups: ['g'] })), []);
+        assert.deepStrictEqual(allowlist.problems(
+            { authenticate_userfile: '/x', oidc: { allow_global_userfile: true } }), []);
+        const w = allowlist.problems({ authenticate: () => {}, oidc: { allow_global_userfile: true } });
+        assert.ok(w.length >= 1, 'custom authenticate warning');
+        assert.deepStrictEqual(allowlist.problems({}), [], 'OIDC off');
+    });
+
+    try { fs.unlinkSync(file); } catch (e) { /* absent */ }
+}
+
 async function main() {
     await storeSection();
+    await allowlistSection();
     console.log('\n' + passed + ' passed, ' + failed + ' failed');
     process.exit(failed ? 1 : 0);
 }
