@@ -29,6 +29,7 @@
     "cookie-parser": "^1.4.7",
     "express": "^4.22.1",
     "express-session": "^1.19.0",
+    "jose": "^6.2.12",
     "js-yaml": "^4.1.1",
     "memcached": "*",
     "morgan": "^1.10.1",
