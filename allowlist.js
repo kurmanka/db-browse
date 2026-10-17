@@ -39,7 +39,10 @@ exports.isAllowed = function (config, claims, done) {
     var email  = claims && typeof claims.email === 'string' ? lower(claims.email) : '';
 
     var at = email.indexOf('@');
-    if (at < 1 || at === email.length - 1 || claims.email_verified === false) {
+    // Some providers send the claim as a string. Absent means trusted.
+    var v = claims ? claims.email_verified : undefined;
+    var unverified = v === false || v === 'false';
+    if (at < 1 || at === email.length - 1 || unverified) {
         return done(null, false);
     }
 

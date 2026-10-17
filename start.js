@@ -482,8 +482,10 @@ function db_connect( req, dbId, done ) {
 
 function loadUser(req, res, next) {
     if (oidc) {
-        // GET /login (oidc.js) checks `to` and starts the provider login
-        if (req.session.authentication) { return next(); }
+        // GET /login (oidc.js) checks `to` and starts the provider login.
+        // Only an OIDC login counts: a session left by the password login
+        // (before OIDC was switched on) has not passed the allowlist.
+        if (req.session.authentication && req.session.auth_via === 'oidc') { return next(); }
         return res.redirect('/login?to=' + encodeURIComponent(req.originalUrl));
     }
 

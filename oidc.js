@@ -211,6 +211,7 @@ function create(config, store) {
         // A fresh session id on login (no session fixation).
         await sessionCall(req.session, 'regenerate');
         req.session.authentication = true;
+        req.session.auth_via = 'oidc';      // loadUser accepts only these with OIDC on
         req.session.user   = r.claims.email || r.claims.sub;
         req.session.groups = r.claims.groups;
         await sessionCall(req.session, 'save');

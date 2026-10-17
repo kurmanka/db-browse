@@ -139,6 +139,27 @@ async function storeSection() {
     for (const f of [file, file + '-wal', file + '-shm']) {
         try { fs.unlinkSync(f); } catch (e) { /* absent */ }
     }
+
+    await ok('the store file (and -wal/-shm) is private: mode 0600 under umask 022', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'db-browse-store-mode-'));
+        const f = path.join(dir, 'auth.sqlite');
+        const old = process.umask(0o022);
+        let s2;
+        try {
+            s2 = auth_store.open(f);
+            s2.putToken(tok('m1', 'access', now() + 60));
+            const files = [f, f + '-wal', f + '-shm'].filter(x => fs.existsSync(x));
+            assert.ok(files.length >= 2, files.join(','));
+            for (const x of files) {
+                const mode = fs.statSync(x).mode & 0o777;
+                assert.strictEqual(mode & 0o077, 0, path.basename(x) + ' mode ' + mode.toString(8));
+            }
+        } finally {
+            process.umask(old);
+            if (s2) { s2.close(); }
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
 }
 
 // ---- allowlist -------------------------------------------------------------
@@ -164,6 +185,11 @@ async function allowlistSection() {
         assert.strictEqual(await check(c, { email: 'ann@example.com', email_verified: false }), false);
         assert.strictEqual(await check(c, { email: 'ann@example.com', email_verified: true }), true);
         assert.strictEqual(await check(c, { email: 'ann@example.com' }), true);
+    });
+
+    await ok('email_verified "false" (a string) is refused too', async () => {
+        const c = oidc({ allow_emails: ['ann@example.com'] });
+        assert.strictEqual(await check(c, { email: 'ann@example.com', email_verified: 'false' }), false);
     });
 
     await ok('missing email is refused without throwing', async () => {
@@ -1284,14 +1310,18 @@ function portIsOpen(port) {
 
 // Spawns start.js with `configFile`. Resolves {child, output()} once the port
 // accepts connections; rejects if the child exits first.
-function spawnApp(dir, configFile, port) {
+// With opts.fileSessions the config's own session store is kept (it must
+// point into a temp dir), so sessions survive a restart.
+function spawnApp(dir, configFile, port, opts) {
     const { spawn } = require('child_process');
+    const env = Object.assign({}, process.env, {
+        DBB_CONFIG: configFile, DBB_PORT: String(port), DBB_SESSION_MEMORY: '1',
+        SQLITE_PATH: path.join(dir, 'usersRequests.sqlite')
+    });
+    if (opts && opts.fileSessions) { delete env.DBB_SESSION_MEMORY; }
     const child = spawn(process.execPath, ['start.js'], {
         cwd: path.join(__dirname, '..'),
-        env: Object.assign({}, process.env, {
-            DBB_CONFIG: configFile, DBB_PORT: String(port), DBB_SESSION_MEMORY: '1',
-            SQLITE_PATH: path.join(dir, 'usersRequests.sqlite')
-        }),
+        env,
         stdio: ['ignore', 'pipe', 'pipe']
     });
     let out = '';
@@ -1319,6 +1349,16 @@ function spawnApp(dir, configFile, port) {
 
 function writeConfig(file, cfg) {
     fs.writeFileSync(file, 'module.exports = ' + JSON.stringify(cfg, null, 2) + ';\n');
+}
+
+// Like writeConfig, with session-file-store sessions in storeDir.
+function writeFileSessionConfig(file, cfg, storeDir) {
+    fs.writeFileSync(file,
+        'const session = require(' + JSON.stringify(require.resolve('express-session')) + ');\n' +
+        'const FileStore = require(' + JSON.stringify(require.resolve('session-file-store')) + ')(session);\n' +
+        'module.exports = ' + JSON.stringify(cfg, null, 2) + ';\n' +
+        'module.exports.session_config.store = new FileStore({ path: ' + JSON.stringify(storeDir) +
+        ', logFn: function () {} });\n');
 }
 
 async function wiringSection() {
@@ -1514,6 +1554,66 @@ async function wiringSection() {
         app.child.kill();
         await app.exited;
     }
+
+    // A session made by the users.txt login, persisted in the session store,
+    // must not count as signed in once OIDC is switched on.
+    await ok('a password-era session is sent to /login once OIDC is on', async () => {
+        const storeDir = path.join(dir, 'sessions');
+        const usersFile = path.join(dir, 'users.txt');
+        fs.writeFileSync(usersFile, 'ann@example.com:pw\n');
+        const common = {
+            db: config.db, addons: {}, auth_db: config.auth_db, authenticate_userfile: usersFile,
+            session_config: { secret: 'wiring-test', resave: false, saveUninitialized: false }
+        };
+        const pA = await freePort();
+        const fA = path.join(dir, 'password.js');
+        writeFileSessionConfig(fA, Object.assign({ listen: { host: 'localhost', port: pA } }, common), storeDir);
+        const a = spawnApp(dir, fA, pA, { fileSessions: true });
+        let cookie;
+        try {
+            await a.ready;
+            const r = await fetch('http://localhost:' + pA + '/login', {
+                method: 'POST', redirect: 'manual',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: 'user=ann%40example.com&pass=pw&to=%2F'
+            });
+            assert.strictEqual(r.status, 302, 'password login ' + r.status);
+            cookie = (r.headers.get('set-cookie') || '').split(';')[0];
+            assert.ok(cookie, 'no session cookie');
+            const home = await fetch('http://localhost:' + pA + '/', { headers: { cookie } });
+            assert.strictEqual(home.status, 200, 'password session works without OIDC');
+        } finally {
+            a.child.kill();
+            await a.exited;
+        }
+
+        const pB = await freePort();
+        const bBase = 'http://localhost:' + pB;
+        const fB = path.join(dir, 'oidc-filesessions.js');
+        writeFileSessionConfig(fB, Object.assign({ listen: { host: 'localhost', port: pB } }, common, {
+            oidc: Object.assign(idp.config(), {
+                redirect_uri: bBase + '/oidc/callback', allow_emails: ['ann@example.com'] })
+        }), storeDir);
+        const b = spawnApp(dir, fB, pB, { fileSessions: true });
+        try {
+            await b.ready;
+            for (const u of ['/', '/lite', '/ao/config?ao=x', '/_reset']) {
+                const r = await fetch(bBase + u, { redirect: 'manual', headers: { cookie } });
+                assert.strictEqual(r.status, 302, u + ' ' + r.status);
+                assert.strictEqual(r.headers.get('location'), '/login?to=' + encodeURIComponent(u), u);
+            }
+            // and a real OIDC login on the same instance still works
+            const get = browser();
+            const start = await get(bBase + '/login');
+            const z = await get(start.headers.get('location'));
+            const cb = await get(z.headers.get('location'));
+            assert.strictEqual(cb.status, 302, 'callback ' + cb.status);
+            assert.strictEqual((await get(bBase + '/')).status, 200);
+        } finally {
+            b.child.kill();
+            await b.exited;
+        }
+    });
 
     await ok('config with mcp.oauth but no oidc exits non-zero with a message', async () => {
         const cfg = Object.assign({}, config);

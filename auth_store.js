@@ -4,6 +4,7 @@
 // All times are epoch seconds.
 const crypto   = require('crypto');
 const Database = require('better-sqlite3');
+const fs       = require('fs');
 
 function hash(s) {
     return crypto.createHash('sha256').update(String(s)).digest('hex');
@@ -16,7 +17,27 @@ function randomToken() {
 const nowSec = () => Math.floor(Date.now() / 1000);
 const parse  = (s) => (s === null || s === undefined) ? s : JSON.parse(s);
 
+// The store holds token hashes and client secrets: owner-only. SQLite gives
+// -wal/-shm the database file's mode; they are chmod-ed too in case they
+// predate this. A chmod failure is logged, not fatal.
+function makePrivate(file) {
+    for (const f of [file, file + '-wal', file + '-shm']) {
+        try {
+            fs.chmodSync(f, 0o600);
+        } catch (e) {
+            if (e.code !== 'ENOENT') {
+                console.log('auth_store: cannot make ' + f + ' private: ' + e.message);
+                return;
+            }
+        }
+    }
+}
+
 function open(file) {
+    if (file !== ':memory:') {
+        fs.closeSync(fs.openSync(file, 'a', 0o600));
+        makePrivate(file);
+    }
     const db = new Database(file);
     db.pragma('journal_mode = WAL');
     db.exec(

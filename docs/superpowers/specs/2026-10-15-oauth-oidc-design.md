@@ -39,9 +39,11 @@ revocable OAuth 2.1 tokens.
   whose `state` does not match (login-CSRF defence). MCP logins are not bound
   this way: the MCP `/authorize` endpoint runs before the session middleware.
 - On success it runs the allowlist check (below), regenerates the session,
-  then sets `req.session.authentication = true` and `req.session.user`
-  (email, falling back to `sub`) plus `req.session.groups`. With OIDC on,
-  `loadUser` in `start.js` redirects an unauthenticated request to
+  then sets `req.session.authentication = true`, `req.session.auth_via =
+  'oidc'` and `req.session.user` (email, falling back to `sub`) plus
+  `req.session.groups`. With OIDC on, `loadUser` in `start.js` accepts only
+  sessions with `auth_via === 'oidc'` (a persisted password-login session
+  has not passed the allowlist) and redirects anything else to
   `/login?to=<original URL>`; `to` is accepted only as a local path.
 - `/logout` is unchanged (local session only; no provider-side logout).
 - The existing `POST /login` form handler is not mounted when OIDC is on, so
@@ -63,7 +65,9 @@ exports.oidc = {
 };
 ```
 
-- Email match is case-insensitive and requires `email_verified !== false`.
+- Email match is case-insensitive. A login whose `email_verified` claim is
+  `false` or the string `"false"` is refused outright; a provider that omits
+  the claim is trusted.
 - Group match reads `groups_claim` from the ID token (array or string).
 - `allow_global_userfile: true` also admits a user whose verified email equals
   the name part of an `authenticate_userfile` line (`name:password`, split on
@@ -126,7 +130,7 @@ the working directory), opened at startup when `config.oidc` is set:
 nonce, verifier, kind `web`/`mcp`, data), `codes` (hash, 60 s, single use),
 `tokens` (hash, kind `access`/`refresh`, client, email, groups, nullable
 `resource`, expiry; revocation deletes the row). Expired rows are purged on
-every write. Web sessions remain in the existing session store.
+every write. The file (and its `-wal`/`-shm`) is created with mode 0600. Web sessions remain in the existing session store.
 
 ## Config
 
@@ -201,11 +205,17 @@ missing `POST /login`, the full web and MCP flows and the startup refusals.
 
 - Per-database or per-user permissions (future).
 - No consent screen (follow-up). With dynamic registration, anyone can
-  register a client with their own redirect URI; if the victim already has a
-  session at the provider, a crafted `/authorize` link completes without any
-  prompt and delivers a code for the victim's identity to that redirect URI.
-  MCP authorization guidance recommends asking for consent per client; until
-  then, the allowlist bounds who can be affected, not which clients.
+  register a client with their own redirect URI. An allowlisted user who
+  completes the provider login for a crafted `/authorize` link (the
+  provider's real login page, or no prompt at all with an existing provider
+  session) delivers a code for their identity to that redirect URI. The
+  attacker then reads every configured database (and the raw `query` tool
+  with `allow_clear_sql`) for as long as the user stays allowlisted, since
+  the 30-day refresh token rotates. MCP authorization guidance recommends
+  per-client consent. Until then, revocation is by deleting `tokens` rows
+  (by `email` or `client_id`) in `auth.sqlite`; deleting a `clients` row
+  alone does not invalidate its access tokens (README, "Revoking MCP
+  access").
 - Provider-side logout / single logout.
 - Providers that are OAuth 2.0 only (e.g. GitHub) — would need a separate
   userinfo-based identity step.

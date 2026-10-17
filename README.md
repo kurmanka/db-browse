@@ -51,11 +51,14 @@ only those on an allowlist. Set `exports.oidc` (see config.js.example):
    for example `https://dbb.example.com/oidc/callback`. Put the same URL in
    `oidc.redirect_uri`, and the provider's issuer URL, client id and client
    secret in `oidc.issuer`, `oidc.client_id`, `oidc.client_secret`.
-2. Fill the allowlist: `allow_emails` (verified emails), `allow_groups`
+2. Fill the allowlist: `allow_emails` (emails, compared case-insensitively),
+   `allow_groups`
    (values of the `groups` claim, or of `groups_claim`), and/or
    `allow_global_userfile: true` to admit the emails listed as names in
    `authenticate_userfile` (their passwords are ignored). Any match admits.
-   With none of them set everyone is refused, and startup says so.
+   With none of them set everyone is refused, and startup says so. A login
+   whose `email_verified` claim is false (`false` or the string `"false"`) is
+   refused; a provider that omits the claim is trusted.
 
 With `oidc` set there is no password login: `POST /login` does not exist,
 `/login` redirects to the provider, and every page redirects there when the
@@ -92,12 +95,38 @@ path prefix of a proxy. It must be `https` unless it is `localhost` or
 minutes: 100 `/authorize`, 50 `/token`, 50 `/revoke`; 20 `/register` per hour)
 — behind a proxy set `trust_proxy`, or all clients share one limit.
 
-Known limitation: there is no consent screen. Any site can register a client
-with its own redirect URI; if a user who is already signed in at the provider
-follows a crafted `/authorize` link, the login completes without a prompt and
-that client receives a code, and so tokens, for the user's identity. Only
-allowlisted users can be affected, but if that matters, do not enable
-`mcp.oauth` until a consent step exists.
+Known limitation: there is no consent screen. Anyone can register a client
+(`/register` is open) with a redirect URI of their own, and send an
+allowlisted user a crafted `/authorize` link. The user sees only the
+provider's real login page — or nothing at all, if already signed in there —
+and once they complete it, the attacker's client receives a code and then
+tokens for that user's identity. That is read access to every configured
+database (and the raw `query` tool when `allow_clear_sql` is on) for as long as
+the user stays on the allowlist: the refresh token (30 days) rotates on every
+use. If that matters, do not enable `mcp.oauth` until a consent step exists,
+and watch `auth.sqlite` for unexpected clients.
+
+Revoking MCP access (the app has no UI for it): with the `sqlite3` CLI on the
+store (`auth_db`, default `auth.sqlite`),
+
+    sqlite3 auth.sqlite "SELECT client_id, info FROM clients;"
+    sqlite3 auth.sqlite "SELECT client_id, email, kind, expires_at FROM tokens;"
+    sqlite3 auth.sqlite "DELETE FROM tokens WHERE email = 'ann@example.com';"
+    sqlite3 auth.sqlite "DELETE FROM tokens WHERE client_id = '<client id>';"
+    sqlite3 auth.sqlite "DELETE FROM clients WHERE client_id = '<client id>';"
+
+Deleting the tokens is what cuts access, at once. Deleting only a `clients`
+row does not: existing access tokens are checked without looking the client
+up (it does stop that client's refreshes and new logins). Removing a user from
+the allowlist instead takes effect for MCP when their access token expires
+(`access_ttl`, 1 hour by default) and the next refresh is refused, and for the
+web UI when their session ends and they have to log in again.
+
+With `mcp.oauth` on, the paths `/authorize`, `/token`, `/register` and
+`/revoke` (and everything under them) belong to OAuth and shadow web-UI
+databases with those ids. For confidential clients (those registered with a
+secret), the SDK expires the client secret after 30 days, independent of
+`refresh_ttl`.
 
 Static token (deprecated; one shared token, no identity):
 

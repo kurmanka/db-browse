@@ -115,7 +115,9 @@ exports.oidc = {
     client_secret: '...',
     redirect_uri: 'https://dbb.example.com/oidc/callback',
     // the allowlist: any match admits; with none of these set, everyone is refused
-    allow_emails: ['ann@example.com'],   // verified email, case-insensitive
+    allow_emails: ['ann@example.com'],   // case-insensitive
+    // a login with email_verified false (or "false") is refused; a provider
+    // that omits the claim is trusted
     allow_groups: ['db-readers'],        // values of the groups claim
     allow_global_userfile: false,        // also the names in authenticate_userfile
     groups_claim: 'groups',              // default
