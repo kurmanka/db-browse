@@ -38,7 +38,10 @@ exports.isAllowed = function (config, claims, done) {
     var oidc   = (config && config.oidc) || {};
     var email  = claims && typeof claims.email === 'string' ? lower(claims.email) : '';
 
-    if (!email || claims.email_verified === false) { return done(null, false); }
+    var at = email.indexOf('@');
+    if (at < 1 || at === email.length - 1 || claims.email_verified === false) {
+        return done(null, false);
+    }
 
     var emails = asArray(oidc.allow_emails).map(lower);
     if (emails.indexOf(email) >= 0) { return done(null, true); }

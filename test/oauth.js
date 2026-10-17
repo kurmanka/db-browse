@@ -198,6 +198,14 @@ async function allowlistSection() {
         assert.strictEqual(await check(ufConfig(true), { email: 'ivan@example.com' }), false);
     });
 
+    await ok('email without a usable @ is never admitted', async () => {
+        fs.writeFileSync(file, 'ivan:pw\n');
+        const c = { authenticate_userfile: file, oidc: { allow_global_userfile: true, allow_emails: ['ivan'] } };
+        assert.strictEqual(await check(c, { email: 'ivan', email_verified: true }), false);
+        assert.strictEqual(await check(c, { email: 'ivan@', email_verified: true }), false);
+        assert.strictEqual(await check(c, { email: '@ivan', email_verified: true }), false);
+    });
+
     await ok('missing userfile is an empty list', async () => {
         const c = { authenticate_userfile: file + '.nope', oidc: { allow_global_userfile: true } };
         assert.strictEqual(await check(c, { email: 'ann@example.com' }), false);
