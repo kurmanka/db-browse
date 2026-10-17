@@ -605,7 +605,7 @@ async function providerSection() {
             redirect_uri: base + '/oidc/callback',
             allow_emails: ['ann@example.com']
         }),
-        mcp: { oauth: {} }
+        mcp: { oauth: { public_url: base + '/' } }
     };
     const oidc = oidcMod.create(config, store);
     const provider = providerMod.create(config, store, oidc);
@@ -653,7 +653,7 @@ async function providerSection() {
         u.searchParams.set('code_challenge', s256(o.verifier));
         u.searchParams.set('code_challenge_method', 'S256');
         if (o.state) { u.searchParams.set('state', o.state); }
-        u.searchParams.set('resource', RESOURCE);
+        if (o.resource !== null) { u.searchParams.set('resource', o.resource || RESOURCE); }
         return u.href;
     }
     // /authorize → IdP → /oidc/callback; returns the callback response.
@@ -667,9 +667,9 @@ async function providerSection() {
         return get(z.headers.get('location'));
     }
     // A fresh code for client c; returns {code, verifier, location}.
-    async function code(c, state) {
+    async function code(c, state, resource) {
         const verifier = auth_store.randomToken() + 'x';
-        const res = await authorize(c, { verifier, state });
+        const res = await authorize(c, { verifier, state, resource });
         assert.strictEqual(res.status, 302, 'callback ' + res.status + ' ' + res.text_);
         const loc = new URL(res.headers.get('location'));
         const value = loc.searchParams.get('code');
@@ -764,6 +764,43 @@ async function providerSection() {
         t = await token({ grant_type: 'authorization_code', client_id: c.client_id, code: got.code,
                           code_verifier: got.verifier, resource: 'https://other.example/mcp' });
         assert.strictEqual(t.status, 400, JSON.stringify(t.body));
+    });
+
+    await ok('no resource at /authorize → the grant is for <public_url>/mcp', async () => {
+        const c = await client();
+        const got = await code(c, undefined, null);
+        const t = await token({ grant_type: 'authorization_code', client_id: c.client_id, code: got.code,
+                                code_verifier: got.verifier, redirect_uri: c.redirect_uris[0] });
+        assert.strictEqual(t.status, 200, JSON.stringify(t.body));
+        assert.strictEqual((await provider.verifyAccessToken(t.body.access_token)).resource.href, RESOURCE);
+        const r = await refresh(c, t.body.refresh_token);
+        assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+        assert.strictEqual((await provider.verifyAccessToken(r.body.access_token)).resource.href, RESOURCE);
+    });
+
+    await ok('foreign resource at /authorize → invalid_target to the client, no login, no code', async () => {
+        const c = await client();
+        for (const resource of ['https://other.example/mcp', base + '/other', base + '/', base + '/mcp/x']) {
+            const res = await browser()(authorizeUrl(c, { verifier: 'v'.repeat(43), state: 's1', resource }));
+            assert.strictEqual(res.status, 302, resource + ' ' + res.status + ' ' + res.text_);
+            const loc = new URL(res.headers.get('location'));
+            assert.strictEqual(loc.origin + loc.pathname, CB, resource + ' → ' + loc.href);
+            assert.strictEqual(loc.searchParams.get('error'), 'invalid_target', loc.href);
+            assert.strictEqual(loc.searchParams.has('code'), false);
+            assert.strictEqual(loc.searchParams.get('state'), 's1');
+        }
+    });
+
+    await ok('a provider without public_url refuses every /authorize resource', async () => {
+        const p2 = providerMod.create({ oidc: config.oidc, mcp: { oauth: {} } }, store, oidc);
+        const c = store.getClient((await client()).client_id);
+        for (const resource of [undefined, new URL(RESOURCE)]) {
+            let redirected = false;
+            await assert.rejects(p2.authorize(c, { redirectUri: CB, codeChallenge: 'x'.repeat(43), resource },
+                                              { redirect: () => { redirected = true; } }),
+                                 e => e.errorCode === 'invalid_target');
+            assert.strictEqual(redirected, false);
+        }
     });
 
     await ok('unknown client_id on /authorize → error, no redirect', async () => {
@@ -936,11 +973,293 @@ async function providerSection() {
     }
 }
 
+// ---- /mcp with OAuth -------------------------------------------------------
+
+async function mcpSection() {
+    console.log('mcp');
+    const crypto     = require('crypto');
+    const express    = require('express');
+    const session    = require('express-session');
+    const auth_store = require('../auth_store.js');
+    const mock_oidc  = require('./helpers/mock_oidc.js');
+    const oidcMod    = require('../oidc.js');
+    const providerMod = require('../oauth_provider.js');
+    const mcp        = require('../mcp.js');
+    const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
+    const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/client/streamableHttp.js');
+
+    const stamp = Date.now();
+    const file  = path.join(os.tmpdir(), 'db-browse-mcp-oauth-test-' + stamp + '.sqlite');
+    const dbFile = path.join(os.tmpdir(), 'db-browse-mcp-oauth-fixture-' + stamp + '.sqlite');
+    const fixture = new Database(dbFile);
+    fixture.exec('CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)');
+    fixture.close();
+
+    const store = auth_store.open(file);
+    const idp = await mock_oidc.start();
+    const app = express();
+    const server = await listen(app);
+    const base = 'http://127.0.0.1:' + server.address().port;
+    const STATIC = 'static-test-token-' + crypto.randomBytes(8).toString('hex');
+    const config = {
+        db: { lite: { type: 'sqlite', database: dbFile, comment: 'fixture' } },
+        oidc: Object.assign(idp.config(), {
+            redirect_uri: base + '/oidc/callback',
+            allow_emails: ['ann@example.com']
+        }),
+        mcp: { token: STATIC, oauth: { public_url: base } }
+    };
+    const oidc = oidcMod.create(config, store);
+    const provider = providerMod.create(config, store, oidc);
+    const mounted = mcp.mount(app, config, provider);
+    app.use(session({ secret: 'test', resave: false, saveUninitialized: false }));
+    oidc.mountWeb(app, { mcp: provider.complete });
+
+    const logged = [];
+    const origLog = console.log;
+    console.log = function () {
+        logged.push(require('util').format.apply(null, arguments));
+        origLog.apply(console, arguments);
+    };
+    const secrets = [];
+
+    const RESOURCE = base + '/mcp';
+    const PRM_URL  = base + '/.well-known/oauth-protected-resource/mcp';
+    const CB = 'http://127.0.0.1:8765/cb';
+    const s256 = v => crypto.createHash('sha256').update(v).digest('base64url');
+
+    // register → /authorize (resource as given; null omits it) → IdP →
+    // callback → /token. Returns {client, tokens}.
+    async function oauthTokens(resource) {
+        const reg = await fetch(base + '/register', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ redirect_uris: [CB], token_endpoint_auth_method: 'none', client_name: 't' })
+        });
+        assert.strictEqual(reg.status, 201);
+        const c = await reg.json();
+        const verifier = auth_store.randomToken() + 'z';
+        const u = new URL(base + '/authorize');
+        u.searchParams.set('response_type', 'code');
+        u.searchParams.set('client_id', c.client_id);
+        u.searchParams.set('redirect_uri', CB);
+        u.searchParams.set('code_challenge', s256(verifier));
+        u.searchParams.set('code_challenge_method', 'S256');
+        if (resource !== null) { u.searchParams.set('resource', resource || RESOURCE); }
+        const get = browser();
+        const a = await get(u.href);
+        assert.strictEqual(a.status, 302, 'authorize ' + a.status + ' ' + a.text_);
+        const z = await get(a.headers.get('location'));
+        const cb = await get(z.headers.get('location'));
+        assert.strictEqual(cb.status, 302, 'callback ' + cb.status + ' ' + cb.text_);
+        const code = new URL(cb.headers.get('location')).searchParams.get('code');
+        assert.ok(code, 'no code');
+        secrets.push(code);
+        const t = await fetch(base + '/token', {
+            method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ grant_type: 'authorization_code', client_id: c.client_id, code,
+                                        code_verifier: verifier, redirect_uri: CB })
+        });
+        const body = await t.json();
+        assert.strictEqual(t.status, 200, JSON.stringify(body));
+        secrets.push(body.access_token, body.refresh_token);
+        return { client: c, tokens: body };
+    }
+    async function rawPost(headers) {
+        return fetch(base + '/mcp', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json',
+                                     Accept: 'application/json, text/event-stream' }, headers),
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
+        });
+    }
+    async function sdkClient(token) {
+        const client = new Client({ name: 'test', version: '0' });
+        await client.connect(new StreamableHTTPClientTransport(new URL(RESOURCE),
+            { requestInit: { headers: { Authorization: 'Bearer ' + token } } }));
+        return client;
+    }
+    function assert401(r) {
+        assert.strictEqual(r.status, 401);
+        const h = r.headers.get('www-authenticate') || '';
+        assert.ok(/^Bearer /.test(h), h);
+        assert.ok(h.includes('resource_metadata="' + PRM_URL + '"'), h);
+    }
+
+    await ok('mount() with a provider reports it mounted', () => assert.strictEqual(mounted, true));
+
+    await ok('OAuth token can call tools/list through the SDK client', async () => {
+        const { tokens } = await oauthTokens();
+        const client = await sdkClient(tokens.access_token);
+        try {
+            const names = (await client.listTools()).tools.map(t => t.name);
+            assert.ok(names.includes('list_tables'), names.join(','));
+            const r = await client.callTool({ name: 'list_tables', arguments: { db: 'lite' } });
+            assert.ok(JSON.parse(r.content[0].text).includes('items'), r.content[0].text);
+        } finally {
+            await client.close();
+        }
+    });
+
+    await ok('a tool call logs the user\'s email, never the token', () => {
+        const line = logged.find(l => /^mcp list_tables /.test(l));
+        assert.ok(line, 'no tool log line');
+        assert.ok(line.includes('ann@example.com'), line);
+    });
+
+    await ok('client omitting resource gets a token that works on /mcp', async () => {
+        const { tokens } = await oauthTokens(null);
+        const client = await sdkClient(tokens.access_token);
+        try {
+            assert.ok((await client.listTools()).tools.length > 0);
+        } finally {
+            await client.close();
+        }
+    });
+
+    await ok('static token still works', async () => {
+        const client = await sdkClient(STATIC);
+        try {
+            const r = await client.callTool({ name: 'list_databases', arguments: {} });
+            assert.strictEqual(JSON.parse(r.content[0].text)[0].id, 'lite');
+        } finally {
+            await client.close();
+        }
+        const line = logged.filter(l => /^mcp list_databases /.test(l)).pop();
+        assert.ok(line && !line.includes('@'), 'static-token call logged a user: ' + line);
+    });
+
+    await ok('no token → 401 with resource_metadata', async () => {
+        assert401(await rawPost({}));
+        const m = await fetch(PRM_URL);
+        assert.strictEqual(m.status, 200);
+        assert.ok(/json/.test(m.headers.get('content-type')), m.headers.get('content-type'));
+        const meta = await m.json();
+        assert.deepStrictEqual(meta.authorization_servers, [new URL(base).href]);
+        assert.strictEqual(meta.resource, RESOURCE);
+    });
+
+    await ok('wrong or malformed token → 401 with resource_metadata', async () => {
+        assert401(await rawPost({ Authorization: 'Bearer nope' }));
+        assert401(await rawPost({ Authorization: 'Basic ' + Buffer.from('a:b').toString('base64') }));
+        assert401(await rawPost({ Authorization: 'Bearer ' }));
+    });
+
+    await ok('GET /mcp with an OAuth token → 405 (stateless, as with the static token)', async () => {
+        const { tokens } = await oauthTokens();
+        const r = await fetch(base + '/mcp', { headers: { Authorization: 'Bearer ' + tokens.access_token } });
+        assert.strictEqual(r.status, 405);
+        assert401(await fetch(base + '/mcp'));
+    });
+
+    await ok('revoked token → 401', async () => {
+        const { client, tokens } = await oauthTokens();
+        assert.notStrictEqual((await rawPost({ Authorization: 'Bearer ' + tokens.access_token })).status, 401);
+        const rv = await fetch(base + '/revoke', {
+            method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ client_id: client.client_id, token: tokens.access_token })
+        });
+        assert.strictEqual(rv.status, 200);
+        assert401(await rawPost({ Authorization: 'Bearer ' + tokens.access_token }));
+    });
+
+    await ok('a refresh token is refused on /mcp', async () => {
+        const { tokens } = await oauthTokens();
+        assert401(await rawPost({ Authorization: 'Bearer ' + tokens.refresh_token }));
+    });
+
+    await ok('expired token → 401', async () => {
+        const { tokens } = await oauthTokens();
+        const raw = new Database(file);
+        raw.prepare('UPDATE tokens SET expires_at = ? WHERE token_hash = ?')
+           .run(now() - 1, auth_store.hash(tokens.access_token));
+        raw.close();
+        assert401(await rawPost({ Authorization: 'Bearer ' + tokens.access_token }));
+    });
+
+    await ok('protected-resource and authorization-server metadata are served', async () => {
+        const prm = await (await fetch(PRM_URL)).json();
+        assert.strictEqual(prm.resource, RESOURCE);
+        const r = await fetch(base + '/.well-known/oauth-authorization-server');
+        assert.strictEqual(r.status, 200);
+        const as = await r.json();
+        assert.strictEqual(as.issuer, new URL(base).href);
+        assert.strictEqual(as.authorization_endpoint, base + '/authorize');
+        assert.strictEqual(as.token_endpoint, base + '/token');
+        assert.strictEqual(as.registration_endpoint, base + '/register');
+        assert.strictEqual(as.revocation_endpoint, base + '/revoke');
+        assert.deepStrictEqual(as.code_challenge_methods_supported, ['S256']);
+    });
+
+    await ok('token issued for another resource is refused', async () => {
+        const t = auth_store.randomToken();
+        secrets.push(t);
+        const row = { token_hash: auth_store.hash(t), kind: 'access', client_id: 'c-other',
+                      email: 'ann@example.com', groups: [], expires_at: now() + 600 };
+        store.putToken(Object.assign({ resource: 'https://other.example/mcp' }, row));
+        assert401(await rawPost({ Authorization: 'Bearer ' + t }));
+        const t2 = auth_store.randomToken();
+        secrets.push(t2);
+        store.putToken(Object.assign({}, row, { token_hash: auth_store.hash(t2), resource: null }));
+        assert401(await rawPost({ Authorization: 'Bearer ' + t2 }));
+    });
+
+    await ok('mcp.mount returns false with neither token nor provider', async () => {
+        const bare = express();
+        assert.strictEqual(mcp.mount(bare, { db: {} }), false);
+        assert.strictEqual(mcp.mount(bare, { db: {}, mcp: { oauth: { public_url: base } } }), false);
+        const s = await listen(bare);
+        try {
+            const r = await fetch('http://127.0.0.1:' + s.address().port + '/mcp', { method: 'POST' });
+            assert.strictEqual(r.status, 404);
+        } finally {
+            await closeServer(s);
+        }
+    });
+
+    await ok('provider without token: OAuth works, any static-looking token is refused', async () => {
+        const app2 = express();
+        const s = await listen(app2);
+        const base2 = 'http://127.0.0.1:' + s.address().port;
+        const cfg2 = { db: config.db, oidc: config.oidc, mcp: { oauth: { public_url: base2 } } };
+        try {
+            assert.strictEqual(mcp.mount(app2, cfg2, providerMod.create(cfg2, store, oidc)), true);
+            const r = await fetch(base2 + '/mcp', {
+                method: 'POST', headers: { Authorization: 'Bearer ' + STATIC, 'Content-Type': 'application/json' },
+                body: '{}' });
+            assert.strictEqual(r.status, 401);
+            assert.ok((r.headers.get('www-authenticate') || '').includes(
+                'resource_metadata="' + base2 + '/.well-known/oauth-protected-resource/mcp"'));
+        } finally {
+            await closeServer(s);
+        }
+    });
+
+    await ok('a provider without mcp.oauth.public_url is a mount error', () => {
+        assert.throws(() => mcp.mount(express(), { db: {}, mcp: { token: 't' } }, provider), /public_url/);
+    });
+
+    await ok('tokens are never logged', () => {
+        assert.ok(secrets.length > 5);
+        for (const s of secrets.concat([STATIC])) {
+            for (const line of logged) { assert.ok(!line.includes(s), 'secret logged: ' + line); }
+        }
+    });
+
+    console.log = origLog;
+    await closeServer(server);
+    await idp.close();
+    store.close();
+    for (const f of [file, file + '-wal', file + '-shm', dbFile]) {
+        try { fs.unlinkSync(f); } catch (e) { /* absent */ }
+    }
+}
+
 async function main() {
     await storeSection();
     await allowlistSection();
     await webLoginSection();
     await providerSection();
+    await mcpSection();
     console.log('\n' + passed + ' passed, ' + failed + ' failed');
     process.exit(failed ? 1 : 0);
 }

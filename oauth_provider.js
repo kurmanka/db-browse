@@ -42,10 +42,18 @@ function pkceOk(verifier, challenge) {
     return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// The one resource tokens are issued for: <config.mcp.oauth.public_url>/mcp,
+// as a URL href; null without a public_url.
+function mcpResourceUrl(config) {
+    var pub = config && config.mcp && config.mcp.oauth && config.mcp.oauth.public_url;
+    return pub ? new URL(String(pub).replace(/\/+$/, '') + '/mcp').href : null;
+}
+
 function create(config, store, oidc) {
     var oc = (config && config.mcp && config.mcp.oauth) || {};
     var accessTtl  = oc.access_ttl  || 3600;
     var refreshTtl = oc.refresh_ttl || 2592000;
+    var mcpResource = mcpResourceUrl(config);
 
     function allowed(email, groups) {
         return new Promise(function (resolve) {
@@ -94,13 +102,19 @@ function create(config, store, oidc) {
         }
     };
 
+    // Every grant is for the MCP endpoint: a request without `resource` gets
+    // it, one naming anything else is refused (without public_url, all are).
     async function authorize(client, params, res) {
+        var resource = params.resource ? params.resource.href : mcpResource;
+        if (!mcpResource || resource !== mcpResource) {
+            throw oauthError('InvalidTargetError', 'resource must be ' + (mcpResource || 'configured'));
+        }
         var url = await oidc.begin('mcp', {
             client_id: client.client_id,
             redirect_uri: params.redirectUri,
             state: params.state,
             challenge: params.codeChallenge,
-            resource: params.resource ? params.resource.href : undefined
+            resource: resource
         });
         res.redirect(302, url);
     }
@@ -204,3 +218,4 @@ function create(config, store, oidc) {
 }
 
 exports.create = create;
+exports.mcpResourceUrl = mcpResourceUrl;
