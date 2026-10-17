@@ -168,43 +168,70 @@ function create(config, store) {
     function sendError(res, e) {
         var status = e && (e.status === 403 || e.status === 502) ? e.status : 500;
         if (status === 500) { console.log('oidc: unexpected error: ' + (e && e.message)); }
+        if (res.headersSent) { return; }
         res.status(status).type('text/plain').send(status === 403 ? DENIED : status === 502
             ? 'Identity provider unavailable.' : 'Login failed.');
     }
 
+    // Callback adapters: callback-style APIs as promises.
+    function allowed(claims) {
+        return new Promise(function (resolve) {
+            allowlist.isAllowed(config, claims, function (err, ok) {
+                if (err) { console.log('oidc: allowlist error: ' + err.message); }
+                resolve(!err && ok === true);
+            });
+        });
+    }
+    function sessionCall(session, method) {
+        return new Promise(function (resolve, reject) {
+            session[method](function (err) { return err ? reject(err) : resolve(); });
+        });
+    }
+
+    async function callback(req, res, hooks) {
+        // Read before anything replaces the session.
+        var bound = req.session ? req.session.oidc_state : undefined;
+        var r = await finish(req.query);
+        var kind = r.pending.kind;
+
+        if (kind === 'web') {
+            // Login CSRF: a web login must finish in the browser that began it.
+            if (req.session) { delete req.session.oidc_state; }
+            if (typeof bound !== 'string' || bound !== req.query.state) {
+                throw fail(403, 'state is not bound to this browser session');
+            }
+        } else if (kind !== 'mcp') {
+            throw fail(403, 'unknown pending kind');
+        }
+
+        if (!(await allowed(r.claims))) { throw fail(403, 'identity not on the allowlist'); }
+
+        if (kind === 'mcp') { return await hooks.mcp(r.pending, r.claims, res); }
+
+        // A fresh session id on login (no session fixation).
+        await sessionCall(req.session, 'regenerate');
+        req.session.authentication = true;
+        req.session.user   = r.claims.email || r.claims.sub;
+        req.session.groups = r.claims.groups;
+        await sessionCall(req.session, 'save');
+        res.redirect(302, safeLocal(r.pending.data && r.pending.data.to));
+    }
+
     function mountWeb(app, hooks) {
         function start(req, res) {
+            if (!req.session) {
+                return sendError(res, new Error('no session: mount oidc after the session middleware'));
+            }
             begin('web', { to: safeLocal(req.query.to) }).then(function (url) {
+                req.session.oidc_state = new URL(url).searchParams.get('state');
                 res.redirect(302, url);
-            }, function (e) { sendError(res, e); });
+            }).catch(function (e) { sendError(res, e); });
         }
         app.get('/login', start);
         app.get('/oidc/login', start);
 
         app.get('/oidc/callback', function (req, res) {
-            finish(req.query).then(function (r) {
-                allowlist.isAllowed(config, r.claims, function (err, allowed) {
-                    if (err || !allowed) {
-                        console.log('oidc: identity not on the allowlist' + (err ? ' (error)' : ''));
-                        return sendError(res, { status: 403 });
-                    }
-                    if (r.pending.kind === 'mcp') {
-                        return hooks.mcp(r.pending, r.claims, res);
-                    }
-                    if (r.pending.kind !== 'web') { return sendError(res, { status: 403 }); }
-                    // A fresh session id on login (no session fixation).
-                    req.session.regenerate(function (err2) {
-                        if (err2) { return sendError(res, err2); }
-                        req.session.authentication = true;
-                        req.session.user   = r.claims.email || r.claims.sub;
-                        req.session.groups = r.claims.groups;
-                        req.session.save(function (err3) {
-                            if (err3) { return sendError(res, err3); }
-                            res.redirect(302, safeLocal(r.pending.data && r.pending.data.to));
-                        });
-                    });
-                });
-            }, function (e) { sendError(res, e); });
+            callback(req, res, hooks).catch(function (e) { sendError(res, e); });
         });
     }
 

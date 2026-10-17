@@ -255,7 +255,8 @@ function closeServer(server) {
 
 // Starts an in-process app with sessions, oidc.mountWeb and GET /whoami.
 // `make` gets the app's base URL and returns the config.oidc to use.
-async function webApp(store, make) {
+async function webApp(store, make, opts) {
+    opts = opts || {};
     const express = require('express');
     const session = require('express-session');
     const oidcMod = require('../oidc.js');
@@ -264,12 +265,14 @@ async function webApp(store, make) {
     const base = 'http://127.0.0.1:' + server.address().port;
     const config = { oidc: make(base) };
     const oidc = oidcMod.create(config, store);
-    app.use(session({ secret: 'test', resave: false, saveUninitialized: false }));
-    oidc.mountWeb(app, { mcp: (pending, claims, res) => res.end('mcp') });
+    if (!opts.noSession) {
+        app.use(session({ secret: 'test', resave: false, saveUninitialized: false }));
+    }
+    oidc.mountWeb(app, opts.hooks || { mcp: (pending, claims, res) => res.end('mcp') });
     app.get('/whoami', (req, res) => res.json({
-        auth: req.session.authentication || false,
-        user: req.session.user || null,
-        groups: req.session.groups || null
+        auth: (req.session && req.session.authentication) || false,
+        user: (req.session && req.session.user) || null,
+        groups: (req.session && req.session.groups) || null
     }));
     return { base, server, oidc, close: () => closeServer(server) };
 }
@@ -468,6 +471,94 @@ async function webLoginSection() {
             await down.close();
         }
     });
+
+    // Starts /login in `get` and approves at the IdP; returns the callback URL
+    // without visiting it.
+    async function approved(get) {
+        const start = await get(web.base + '/login');
+        assert.strictEqual(start.status, 302, start.text_);
+        const authz = await get(start.headers.get('location'));
+        assert.strictEqual(authz.status, 302, authz.text_);
+        return authz.headers.get('location');
+    }
+
+    await ok('login CSRF: callback from a browser that never began the login → 403', async () => {
+        const attacker = browser();
+        const cb = await approved(attacker);
+        const victim = browser();
+        const res = await victim(cb);
+        assert.strictEqual(res.status, 403, res.text_);
+        assert.ok(/^text\/plain/.test(res.headers.get('content-type')));
+        assert.strictEqual(JSON.parse((await victim(web.base + '/whoami')).text_).user, null);
+    });
+
+    await ok('login CSRF: normal flow still works after the binding', async () => {
+        const r = await login('/x');
+        assert.strictEqual(r.res.status, 302, r.res.text_);
+        assert.strictEqual(r.res.headers.get('location'), '/x');
+        assert.strictEqual(r.who.user, 'ann@example.com');
+    });
+
+    await ok('login CSRF: stale oidc_state does not accept a newer state → 403', async () => {
+        const victim = browser();
+        const begun = await victim(web.base + '/login');      // victim never completes
+        assert.strictEqual(begun.status, 302);
+        const cb = await approved(browser());                   // attacker's newer state
+        const res = await victim(cb);
+        assert.strictEqual(res.status, 403, res.text_);
+        assert.strictEqual(JSON.parse((await victim(web.base + '/whoami')).text_).user, null);
+    });
+
+    const unhandled = [];
+    const onUnhandled = e => unhandled.push(e);
+    process.on('unhandledRejection', onUnhandled);
+    process.on('uncaughtException', onUnhandled);
+
+    await ok('hooks.mcp that throws → 500 text/plain, server keeps serving', async () => {
+        const boom = await webApp(store, base => Object.assign(idp.config(), {
+            redirect_uri: base + '/oidc/callback', allow_emails: ['ann@example.com']
+        }), { hooks: { mcp: () => { throw new Error('hook failed'); } } });
+        try {
+            const get = browser();
+            const authUrl = await boom.oidc.begin('mcp', { client: 'c1' });
+            const authz = await get(authUrl);
+            const res = await get(authz.headers.get('location'));
+            assert.strictEqual(res.status, 500, res.text_);
+            assert.ok(/^text\/plain/.test(res.headers.get('content-type')));
+            assert.ok(!/hook failed/.test(res.text_), 'error detail leaked');
+            const next = await get(boom.base + '/whoami');
+            assert.strictEqual(next.status, 200);
+        } finally {
+            await boom.close();
+        }
+    });
+
+    await ok('mountWeb without a session middleware → clean error, no crash', async () => {
+        const bare = await webApp(store, base => Object.assign(idp.config(), {
+            redirect_uri: base + '/oidc/callback', allow_emails: ['ann@example.com']
+        }), { noSession: true });
+        try {
+            const get = browser();
+            const res = await get(bare.base + '/login');
+            assert.strictEqual(res.status, 500, res.text_);
+            assert.ok(/^text\/plain/.test(res.headers.get('content-type')));
+            // A valid web state delivered to it anyway is refused, not a crash.
+            const authUrl = await bare.oidc.begin('web', { to: '/' });
+            const authz = await get(authUrl);
+            const cb = await get(authz.headers.get('location'));
+            assert.strictEqual(cb.status, 403, cb.text_);
+            assert.strictEqual((await get(bare.base + '/whoami')).status, 200);
+        } finally {
+            await bare.close();
+        }
+    });
+
+    await ok('no unhandled rejections or uncaught exceptions', async () => {
+        await new Promise(r => setTimeout(r, 50));
+        assert.deepStrictEqual(unhandled.map(e => String(e && e.message)), []);
+    });
+    process.removeListener('unhandledRejection', onUnhandled);
+    process.removeListener('uncaughtException', onUnhandled);
 
     await ok('logs contain no secrets or tokens', () => {
         const secret = idp.config().client_secret;
