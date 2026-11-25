@@ -99,6 +99,10 @@ Without `config.oidc`: the `users.txt` / `config.authenticate` password login (`
 
 Request flow in `start.js`: config checks (exit if `mcp.oauth` lacks `oidc` or a bare-origin `public_url`; log `allowlist.problems`) → `trust proxy` from `config.trust_proxy` → body parsers, request logs (the `/oidc/callback` query is left out) → `mcp.mount` (OAuth endpoints + `/mcp`, no sessions) → `express_session` → `oidc.mountWeb` → app routes, where `loadUser`, when OIDC is on, accepts only sessions with `auth_via === 'oidc'` (set by the OIDC callback; a password-era session does not count) and redirects the rest to `/login?to=<encodeURIComponent(originalUrl)>`. Tests: `node test/oauth.js` (mock IdP in `test/helpers/mock_oidc.js`). Design: `docs/superpowers/specs/2026-10-15-oauth-oidc-design.md`.
 
+### Per-user database access
+
+`access.js` decides which `config.db` entries a signed-in user may use. A database without an `allow` key is open to every signed-in user; `allow: []` is superusers only. `allow` and `exports.superusers` entries match an email/username case-insensitively, or a group written `group:<name>` (compared exactly, like `allowlist.js`). Malformed `allow` (not an array of strings) fails closed (superusers only); malformed `superusers` is an empty list; both show up in `access.problems(config)`. API: `canUse(config, who, dbId)`, `visible(config, who)`, `fromSession(session)`, and `access.ALL` (the static MCP token, may use everything); `who` is `{name, groups}`. Known gap: routes an addon registers itself in `a.setup()` bypass the check (addon features under `/:db_id/...` are covered). Tests: `node test/access.js`.
+
 ### SQL history
 
 `sqliteDB.js` manages a local `usersRequests.sqlite` file. The `sql` table stores executed queries with metadata (name, comment, dbid, user, timestamps, use count). Connection is lazy — opened on first use.
@@ -132,6 +136,7 @@ exports.allow_clear_sql      // bool — enable raw SQL execution feature
 exports.addons               // { [name]: { ... } }
 exports.oidc                 // OIDC login + allowlist (see Authentication)
 exports.mcp                  // { token (deprecated), oauth: { public_url, access_ttl, refresh_ttl }, max_rows, timeout_ms }
+exports.superusers           // entries (email/username or 'group:<name>') that may use every db; per-db `allow` lists, see Per-user database access
 exports.auth_db              // auth store path, default 'auth.sqlite'
 exports.trust_proxy          // optional Express 'trust proxy' value
 ```

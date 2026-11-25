@@ -19,6 +19,13 @@ exports.db = {
         password: 'dbbpass',
         database: 'base',
 
+    // optional access list: who may use this database. Entries are emails or
+    // usernames (case-insensitive) or 'group:<name>' (OIDC groups, exact match).
+    // Without this key every signed-in user may use it; an empty list means
+    // superusers only (see exports.superusers). Not an array of strings: treated
+    // as superusers only.
+        //allow: ['ann@example.com', 'group:analysts'],
+
     // optional free-text note, shown on the database list page
     // and the table list page, handy for telling databases apart
         //comment: 'staging replica, owned by team X',
@@ -73,6 +80,10 @@ exports.session_config = {
 // list of users and theirs passwords in plain text,
 // see users.txt.example
 exports.authenticate_userfile = 'users.txt';
+
+// Superusers may use every database whatever its `allow` list says. Same entry
+// forms as `allow`: an email/username or 'group:<name>'. Default: none.
+//exports.superusers = ['root@example.com', 'group:admins'];
 
 // memcached can be used for some caching
 exports.cache = false;
