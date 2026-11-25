@@ -190,6 +190,7 @@ app.post(/^\/([\w\d]+):sql\/*(\d*)/,
         console.dir(req.body);
 
         if (req.body.sql) {
+          requestHandlers.sqlRowAllowed(req, res, function () {
             if (req.body.run == 'Execute') {
                 requestHandlers.sqlRequest(req, res);
             }
@@ -202,6 +203,7 @@ app.post(/^\/([\w\d]+):sql\/*(\d*)/,
             else {
                 requestHandlers.sqlRequest(req, res);
             }
+          });
         } else {
             if (req.body.run) {
                 res.redirect('/:sql/' + req.params.sql_id);

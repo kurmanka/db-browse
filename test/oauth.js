@@ -306,9 +306,10 @@ async function webApp(store, make, opts) {
 // fetch with a cookie jar and no automatic redirects.
 function browser() {
     const jar = new Map();
-    return async function get(url) {
+    return async function get(url, init) {
         const cookie = Array.from(jar, ([k, v]) => k + '=' + v).join('; ');
-        const res = await fetch(url, { redirect: 'manual', headers: cookie ? { cookie } : {} });
+        const res = await fetch(url, Object.assign({ redirect: 'manual' }, init,
+            { headers: Object.assign({}, init && init.headers, cookie ? { cookie } : {}) }));
         for (const c of res.headers.getSetCookie()) {
             const kv = c.split(';')[0];
             const i = kv.indexOf('=');
@@ -1496,6 +1497,27 @@ async function wiringSection() {
             assert.strictEqual((await get(base + '/:sql/' + hiddenRow)).status, 404);
             assert.ok(!/access|superusers|\.allow/i.test(app.output().replace(/^.*(listening|Listening).*$/gm, '')),
                 'startup warning: ' + app.output());
+        });
+
+        await ok('per-database access: ann cannot Save or Remove a hidden history row', async () => {
+            const get = browser();
+            await browserLogin(get, '/');
+            for (const run of ['Remove', 'Save']) {
+                const r = await get(base + '/annsdb:sql/' + hiddenRow, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                    body: 'sql=' + encodeURIComponent('DROP ME') + '&run=' + run + '&name=hacked'
+                });
+                assert.strictEqual(r.status, 404, run + ' ' + r.status);
+                assert.ok(r.text_.includes('No such query.'), run);
+                const h = new Database(path.join(dir, 'usersRequests.sqlite'), { readonly: true });
+                const row = h.prepare('SELECT * FROM sql WHERE id=?').get(hiddenRow);
+                h.close();
+                assert.ok(row, run + ' removed the row');
+                assert.strictEqual(row.sql, 'SELECT 1', run + ' changed sql');
+                assert.strictEqual(row.name, 'secretq', run + ' changed name');
+                assert.strictEqual(row.dbid, 'hidden');
+            }
         });
 
         await ok('other@example.com gets 403 at the callback', async () => {
