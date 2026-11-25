@@ -755,7 +755,7 @@ async function providerSection() {
         assert.deepStrictEqual(info.scopes, []);
         assert.ok(Math.abs(info.expiresAt - (now() + 3600)) <= 2, 'expiresAt ' + info.expiresAt);
         assert.strictEqual(info.resource.href, RESOURCE);
-        assert.deepStrictEqual(info.extra, { email: 'ann@example.com' });
+        assert.deepStrictEqual(info.extra, { email: 'ann@example.com', groups: [] });
     });
 
     await ok('no state given → none in the redirect', async () => {
@@ -1029,10 +1029,12 @@ async function mcpSection() {
     const base = 'http://127.0.0.1:' + server.address().port;
     const STATIC = 'static-test-token-' + crypto.randomBytes(8).toString('hex');
     const config = {
-        db: { lite: { type: 'sqlite', database: dbFile, comment: 'fixture' } },
+        db: { lite: { type: 'sqlite', database: dbFile, comment: 'fixture' },
+              hidden: { type: 'sqlite', database: dbFile, allow: ['bob@example.com'] } },
+        superusers: ['root@example.com'],
         oidc: Object.assign(idp.config(), {
             redirect_uri: base + '/oidc/callback',
-            allow_emails: ['ann@example.com']
+            allow_emails: ['ann@example.com', 'root@example.com']
         }),
         mcp: { token: STATIC, oauth: { public_url: base } }
     };
@@ -1057,7 +1059,8 @@ async function mcpSection() {
 
     // register → /authorize (resource as given; null omits it) → IdP →
     // callback → /token. Returns {client, tokens}.
-    async function oauthTokens(resource) {
+    async function oauthTokens(resource, email) {
+        if (email) { idp.next({ email }); }
         const reg = await fetch(base + '/register', {
             method: 'POST', headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ redirect_uris: [CB], token_endpoint_auth_method: 'none', client_name: 't' })
@@ -1125,6 +1128,31 @@ async function mcpSection() {
         } finally {
             await client.close();
         }
+    });
+
+    await ok('per-database access over MCP: ann, root and the static token', async () => {
+        const ids = async (c) => JSON.parse((await c.callTool({ name: 'list_databases', arguments: {} }))
+                                              .content[0].text).map(d => d.id);
+        const ann = await sdkClient((await oauthTokens()).tokens.access_token);
+        try {
+            const list = await ids(ann);
+            assert.ok(list.includes('lite') && !list.includes('hidden'), list.join(','));
+            const r = await ann.callTool({ name: 'list_tables', arguments: { db: 'hidden' } });
+            assert.strictEqual(r.isError, true);
+            assert.strictEqual(r.content[0].text, 'No such database: hidden');
+            const r2 = await ann.callTool({ name: 'describe_table', arguments: { db: 'hidden', table: 'items' } });
+            assert.strictEqual(r2.content[0].text, 'No such database: hidden');
+            const ok2 = await ann.callTool({ name: 'list_tables', arguments: { db: 'lite' } });
+            assert.ok(JSON.parse(ok2.content[0].text).includes('items'));
+        } finally { await ann.close(); }
+        const root = await sdkClient((await oauthTokens(undefined, 'root@example.com')).tokens.access_token);
+        try {
+            assert.ok((await ids(root)).includes('hidden'));
+            const r = await root.callTool({ name: 'list_tables', arguments: { db: 'hidden' } });
+            assert.ok(JSON.parse(r.content[0].text).includes('items'), r.content[0].text);
+        } finally { await root.close(); }
+        const st = await sdkClient(STATIC);
+        try { assert.ok((await ids(st)).includes('hidden')); } finally { await st.close(); }
     });
 
     await ok('a tool call logs the user\'s email, never the token', () => {

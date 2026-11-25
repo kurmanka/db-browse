@@ -10,6 +10,7 @@ var bodyParser = require('body-parser');
 
 var pkg = require('./package.json');
 var mcp_db = require('./mcp_db.js');
+var access = require('./access.js');
 var mcpResourceUrl = require('./oauth_provider.js').mcpResourceUrl;   // loads no SDK
 
 // The SDK (and @hono/node-server under it) needs a newer Node than the rest of
@@ -80,15 +81,19 @@ function failure(err) {
     return { isError: true, content: [{ type: 'text', text: String((err && err.message) || err) }] };
 }
 
-// Registers a tool. fn(args) returns a JSON-serializable value, or throws /
+// Registers a tool. fn(args, who) returns a JSON-serializable value, or throws /
 // rejects; the latter becomes a tool error rather than an unhandled exception.
 function register(server, name, description, shape, fn) {
     server.registerTool(name, { description: description, inputSchema: shape }, async function (args, extra) {
-        var email = extra && extra.authInfo && extra.authInfo.extra && extra.authInfo.extra.email;
+        // the static token sets no authInfo: it may use every database
+        var info = extra && extra.authInfo;
+        var who = info ? { name: info.extra && info.extra.email, groups: info.extra && info.extra.groups }
+                       : access.ALL;
+        var email = info && info.extra && info.extra.email;
         console.log('mcp %s %s%s', name, JSON.stringify(args || {}).slice(0, 200),
                     typeof email === 'string' ? ' user=' + JSON.stringify(email) : '');
         try {
-            var value = await fn(args || {});
+            var value = await fn(args || {}, who);
             return { content: [{ type: 'text', text: JSON.stringify(value, jsonReplacer, 2) }] };
         } catch (e) {
             return failure(e);
@@ -99,8 +104,8 @@ function register(server, name, description, shape, fn) {
 
 // config.db[id], only for an id the config itself defines: the id is agent input,
 // and inherited names ('constructor', '__proto__') must not resolve to anything
-function dbEntry(config, id) {
-    if (!Object.prototype.hasOwnProperty.call(config.db, id)) {
+function dbEntry(config, id, who) {
+    if (!access.canUse(config, who, id)) {
         throw new Error('No such database: ' + id);
     }
     return config.db[id];
@@ -112,16 +117,16 @@ function dbEntry(config, id) {
 // cannot be used to run arbitrary expressions. sqlite and mysql quote properly.
 var PG_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)?$/;
 
-function checkIdentifiers(config, dbId, names) {
-    if (dbEntry(config, dbId).type !== 'postgres') { return; }
+function checkIdentifiers(config, dbId, names, who) {
+    if (dbEntry(config, dbId, who).type !== 'postgres') { return; }
     names.forEach(function (name) {
         if (!PG_IDENTIFIER.test(name)) { throw new Error('Invalid identifier: ' + name); }
     });
 }
 
 // calls fn(dbModule, connection, done) with a read-only connection for config.db[dbId]
-function withDb(config, dbId, fn) {
-    var c = dbEntry(config, dbId);
+function withDb(config, dbId, who, fn) {
+    var c = dbEntry(config, dbId, who);
     var mod = db_modules[c.type];
     if (!mod) { throw new Error("Unsupported database type '" + c.type + "'"); }
 
@@ -147,8 +152,8 @@ function buildServer(config) {
         'List the databases available through this server (id, type, comment). ' +
         'Use an id as the `db` argument of the other tools.',
         {},
-        async function () {
-            return Object.keys(config.db).map(function (id) {
+        async function (a, who) {
+            return Object.keys(access.visible(config, who)).map(function (id) {
                 var c = config.db[id];
                 return { id: id, type: c.type, comment: c.comment || null };
             });
@@ -157,18 +162,18 @@ function buildServer(config) {
     register(server, 'list_tables',
         'List the tables of a database.',
         { db: db },
-        function (a) {
-            return withDb(config, a.db, function (mod, conn, done) { mod.showAllTable(conn, done); });
+        function (a, who) {
+            return withDb(config, a.db, who, function (mod, conn, done) { mod.showAllTable(conn, done); });
         });
 
     register(server, 'describe_table',
         'Describe a table: columns, and, depending on the database type, indexes, ' +
         'create statement, foreign keys, triggers and other details.',
         { db: db, table: z.string() },
-        function (a) {
-            var type = dbEntry(config, a.db).type;
-            checkIdentifiers(config, a.db, [a.table]);
-            return withDb(config, a.db, function (mod, conn, done) {
+        function (a, who) {
+            var type = dbEntry(config, a.db, who).type;
+            checkIdentifiers(config, a.db, [a.table], who);
+            return withDb(config, a.db, who, function (mod, conn, done) {
                 mod.getTableDetails(conn, a.table, done);
             }).then(function (parts) {
                 var out = {};
@@ -180,9 +185,9 @@ function buildServer(config) {
     register(server, 'count_rows',
         'Count the rows in a table.',
         { db: db, table: z.string() },
-        function (a) {
-            checkIdentifiers(config, a.db, [a.table]);
-            return withDb(config, a.db, function (mod, conn, done) {
+        function (a, who) {
+            checkIdentifiers(config, a.db, [a.table], who);
+            return withDb(config, a.db, who, function (mod, conn, done) {
                 mod.rowsCounter(conn, a.table, done);
             }).then(function (n) { return { count: Number(n) }; });
         });
@@ -191,9 +196,9 @@ function buildServer(config) {
         'The most frequent values of a column with their row counts (GROUP BY, most frequent first).',
         { db: db, table: z.string(), column: z.string(),
           limit: z.number().int().min(1).max(maxRows).default(Math.min(50, maxRows)) },
-        function (a) {
-            checkIdentifiers(config, a.db, [a.table, a.column]);
-            return withDb(config, a.db, function (mod, conn, done) {
+        function (a, who) {
+            checkIdentifiers(config, a.db, [a.table, a.column], who);
+            return withDb(config, a.db, who, function (mod, conn, done) {
                 mod.showColumnRequest(conn, a.column, a.table, a.limit, done);
             });
         });
@@ -207,11 +212,11 @@ function buildServer(config) {
           limit: z.number().int().min(1).max(maxRows).default(Math.min(30, maxRows)),
           where: z.record(z.string(), z.string()).optional()
                   .describe('column -> required value; all must match') },
-        function (a) {
+        function (a, who) {
             checkIdentifiers(config, a.db,
-                [a.table, a.order_by].concat(Object.keys(a.where || {})));
+                [a.table, a.order_by].concat(Object.keys(a.where || {})), who);
             var order = { order_by: a.order_by, direction: a.direction, limit: a.limit };
-            return withDb(config, a.db, function (mod, conn, done) {
+            return withDb(config, a.db, who, function (mod, conn, done) {
                 mod.showValueRequest(conn, a.table, a.where || {}, order, done);
             }).then(function (rows) { return capRows(rows, maxRows); });
         });
@@ -221,8 +226,8 @@ function buildServer(config) {
             'Run read-only SQL (in the database\'s own dialect). Writes fail. ' +
             'At most ' + maxRows + ' rows are returned; `truncated` says if there were more.',
             { db: db, sql: z.string() },
-            function (a) {
-                return withDb(config, a.db, function (mod, conn, done) {
+            function (a, who) {
+                return withDb(config, a.db, who, function (mod, conn, done) {
                     mod.getSQL(conn, a.sql, done);
                 }).then(function (rows) { return capRows(rows, maxRows); });
             });
