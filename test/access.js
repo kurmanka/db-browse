@@ -76,5 +76,47 @@ ok('fromSession(undefined)', () => assert.deepStrictEqual(access.fromSession(und
 ok('fromSession reads user and groups', () => assert.deepStrictEqual(
     access.fromSession({ user: 'a', groups: ['g'] }), { name: 'a', groups: ['g'] }));
 
+const dconf = {
+    superusers: ['root@example.com'],
+    default_allow: ['group:staff'],
+    db: {
+        plain:  { type: 'sqlite' },
+        public: { type: 'sqlite', allow: ['*'] },
+        own:    { type: 'sqlite', allow: ['ann@example.com'] },
+    },
+};
+const dcan = (who, id) => access.canUse(dconf, who, id);
+
+ok('default_allow applies to entries without allow', () => {
+    assert.strictEqual(dcan({ name: 'bob@example.com' }, 'plain'), false);
+    assert.strictEqual(dcan({ name: 'bob@example.com', groups: ['staff'] }, 'plain'), true);
+    assert.strictEqual(dcan({ name: 'root@example.com' }, 'plain'), true);
+});
+ok('own allow overrides default_allow', () => {
+    assert.strictEqual(dcan({ name: 'ann@example.com' }, 'own'), true);
+    assert.strictEqual(dcan({ name: 'x', groups: ['staff'] }, 'own'), false);
+});
+ok("'*' is open to everyone, even anonymous", () => {
+    assert.strictEqual(dcan({ name: 'bob@example.com' }, 'public'), true);
+    assert.strictEqual(dcan({ name: undefined, groups: undefined }, 'public'), true);
+});
+ok("default_allow ['*'] is the same as none", () => {
+    const c = { default_allow: ['*'], db: { a: { type: 'sqlite' } } };
+    assert.strictEqual(access.canUse(c, {}, 'a'), true);
+});
+ok('default_allow [] is superusers only', () => {
+    const c = { superusers: ['ivan'], default_allow: [], db: { a: { type: 'sqlite' } } };
+    assert.strictEqual(access.canUse(c, { name: 'bob' }, 'a'), false);
+    assert.strictEqual(access.canUse(c, { name: 'ivan' }, 'a'), true);
+});
+ok('malformed default_allow fails closed and is reported', () => {
+    const c = { superusers: ['ivan'], default_allow: 'bob', db: { a: { type: 'sqlite' } } };
+    assert.strictEqual(access.canUse(c, { name: 'bob' }, 'a'), false);
+    assert.strictEqual(access.canUse(c, { name: 'ivan' }, 'a'), true);
+    const p = access.problems(c);
+    assert.strictEqual(p.length, 1);
+    assert.ok(/default_allow/.test(p[0]));
+});
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

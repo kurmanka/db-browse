@@ -1,6 +1,7 @@
 // Per-database access: which signed-in users may use which config.db entries.
-// A database without an `allow` key is open to every signed-in user;
-// `allow: []` is for superusers only. Malformed lists fail closed.
+// A database without an `allow` key uses `config.default_allow`; with neither
+// it is open to every signed-in user. `allow: ['*']` is open; `allow: []` is for
+// superusers only. Malformed lists fail closed.
 
 var has = Object.prototype.hasOwnProperty;
 
@@ -22,6 +23,7 @@ function matches(list, who) {
         : (typeof who.groups === 'string' ? [who.groups] : []);
     for (var i = 0; i < list.length; i++) {
         var e = list[i];
+        if (e === '*') { return true; }
         if (e.indexOf('group:') === 0) {
             if (groups.indexOf(e.slice(6)) >= 0) { return true; }
         } else if (name !== '' && lower(e) === name) {
@@ -42,9 +44,12 @@ exports.canUse = function (config, who, dbId) {
     var su = isStringArray(config.superusers) ? config.superusers : [];
     if (matches(su, who)) { return true; }
     var entry = config.db[dbId];
-    if (!entry || !has.call(entry, 'allow')) { return true; }
-    if (!isStringArray(entry.allow)) { return false; }
-    return matches(entry.allow, who);
+    var list;
+    if (entry && has.call(entry, 'allow')) { list = entry.allow; }
+    else if (config.default_allow !== undefined) { list = config.default_allow; }
+    else { return true; }
+    if (!isStringArray(list)) { return false; }
+    return matches(list, who);
 };
 
 exports.visible = function (config, who) {
@@ -60,6 +65,9 @@ exports.problems = function (config) {
     if (!config) { return out; }
     if (config.superusers !== undefined && !isStringArray(config.superusers)) {
         out.push('superusers must be an array of strings: ignored, so nobody is a superuser');
+    }
+    if (config.default_allow !== undefined && !isStringArray(config.default_allow)) {
+        out.push('default_allow must be an array of strings: databases without their own allow are for superusers only');
     }
     Object.keys(config.db || {}).forEach(function (id) {
         var entry = config.db[id];
