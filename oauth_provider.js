@@ -193,7 +193,7 @@ function create(config, store, oidc) {
             scopes: [],
             expiresAt: row.expires_at,
             resource: row.resource ? new URL(row.resource) : undefined,
-            extra: { email: row.email }
+            extra: { email: row.email, groups: row.groups }
         };
     }
 

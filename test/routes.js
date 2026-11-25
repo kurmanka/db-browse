@@ -268,9 +268,9 @@ async function runTests() {
                       'shows SQL history');
         });
 
-        await ok('GET /:sql/999 with auth → SQL detail page (200, even if missing)', async () => {
+        await ok('GET /:sql/999 with auth → 404 for a missing query', async () => {
             const r = await get('/:sql/999', { headers: { Cookie: cookie } });
-            assert.strictEqual(r.status, 200);
+            assert.strictEqual(r.status, 404);
         });
 
         // --- status semantics: absent things are 404, not 500 ---

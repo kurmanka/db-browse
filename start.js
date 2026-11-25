@@ -24,6 +24,7 @@ var util = require('./util.js');
 var mcp = require('./mcp.js');
 var auth_store = require('./auth_store.js');
 var allowlist = require('./allowlist.js');
+var access    = require('./access.js');
 var oidc_mod = require('./oidc.js');
 var oauth_provider = require('./oauth_provider.js');
 
@@ -66,6 +67,9 @@ if (config.mcp && config.mcp.oauth) {
     if (pub_problem) { startup_error('config.mcp.oauth.public_url ' + pub_problem); }
 }
 allowlist.problems(config).forEach(function (msg) {
+    console.log('Warning: ' + msg);
+});
+access.problems(config).forEach(function (msg) {
     console.log('Warning: ' + msg);
 });
 
@@ -186,6 +190,7 @@ app.post(/^\/([\w\d]+):sql\/*(\d*)/,
         console.dir(req.body);
 
         if (req.body.sql) {
+          requestHandlers.sqlRowAllowed(req, res, function () {
             if (req.body.run == 'Execute') {
                 requestHandlers.sqlRequest(req, res);
             }
@@ -198,6 +203,7 @@ app.post(/^\/([\w\d]+):sql\/*(\d*)/,
             else {
                 requestHandlers.sqlRequest(req, res);
             }
+          });
         } else {
             if (req.body.run) {
                 res.redirect('/:sql/' + req.params.sql_id);
@@ -405,8 +411,8 @@ function prepare_dbconnection( req, res, next ) {
     var dbId = req.params.db_id;
     req.dbconfig = config.db[dbId];
 
-    if (!req.dbconfig) {
-        // unknown id: not found, not a server error
+    if (!req.dbconfig || !access.canUse(config, access.fromSession(req.session), dbId)) {
+        // unknown or not permitted id (the same answer for both): not found, not a server error
         return requestHandlers.showError(req, res,
                                          "No such database: " + dbId + ".", null, 404);
     }

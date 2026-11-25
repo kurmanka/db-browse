@@ -306,9 +306,10 @@ async function webApp(store, make, opts) {
 // fetch with a cookie jar and no automatic redirects.
 function browser() {
     const jar = new Map();
-    return async function get(url) {
+    return async function get(url, init) {
         const cookie = Array.from(jar, ([k, v]) => k + '=' + v).join('; ');
-        const res = await fetch(url, { redirect: 'manual', headers: cookie ? { cookie } : {} });
+        const res = await fetch(url, Object.assign({ redirect: 'manual' }, init,
+            { headers: Object.assign({}, init && init.headers, cookie ? { cookie } : {}) }));
         for (const c of res.headers.getSetCookie()) {
             const kv = c.split(';')[0];
             const i = kv.indexOf('=');
@@ -754,7 +755,7 @@ async function providerSection() {
         assert.deepStrictEqual(info.scopes, []);
         assert.ok(Math.abs(info.expiresAt - (now() + 3600)) <= 2, 'expiresAt ' + info.expiresAt);
         assert.strictEqual(info.resource.href, RESOURCE);
-        assert.deepStrictEqual(info.extra, { email: 'ann@example.com' });
+        assert.deepStrictEqual(info.extra, { email: 'ann@example.com', groups: [] });
     });
 
     await ok('no state given → none in the redirect', async () => {
@@ -1028,10 +1029,12 @@ async function mcpSection() {
     const base = 'http://127.0.0.1:' + server.address().port;
     const STATIC = 'static-test-token-' + crypto.randomBytes(8).toString('hex');
     const config = {
-        db: { lite: { type: 'sqlite', database: dbFile, comment: 'fixture' } },
+        db: { lite: { type: 'sqlite', database: dbFile, comment: 'fixture' },
+              hidden: { type: 'sqlite', database: dbFile, allow: ['bob@example.com'] } },
+        superusers: ['root@example.com'],
         oidc: Object.assign(idp.config(), {
             redirect_uri: base + '/oidc/callback',
-            allow_emails: ['ann@example.com']
+            allow_emails: ['ann@example.com', 'root@example.com']
         }),
         mcp: { token: STATIC, oauth: { public_url: base } }
     };
@@ -1056,7 +1059,8 @@ async function mcpSection() {
 
     // register → /authorize (resource as given; null omits it) → IdP →
     // callback → /token. Returns {client, tokens}.
-    async function oauthTokens(resource) {
+    async function oauthTokens(resource, email) {
+        if (email) { idp.next({ email }); }
         const reg = await fetch(base + '/register', {
             method: 'POST', headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ redirect_uris: [CB], token_endpoint_auth_method: 'none', client_name: 't' })
@@ -1124,6 +1128,31 @@ async function mcpSection() {
         } finally {
             await client.close();
         }
+    });
+
+    await ok('per-database access over MCP: ann, root and the static token', async () => {
+        const ids = async (c) => JSON.parse((await c.callTool({ name: 'list_databases', arguments: {} }))
+                                              .content[0].text).map(d => d.id);
+        const ann = await sdkClient((await oauthTokens()).tokens.access_token);
+        try {
+            const list = await ids(ann);
+            assert.ok(list.includes('lite') && !list.includes('hidden'), list.join(','));
+            const r = await ann.callTool({ name: 'list_tables', arguments: { db: 'hidden' } });
+            assert.strictEqual(r.isError, true);
+            assert.strictEqual(r.content[0].text, 'No such database: hidden');
+            const r2 = await ann.callTool({ name: 'describe_table', arguments: { db: 'hidden', table: 'items' } });
+            assert.strictEqual(r2.content[0].text, 'No such database: hidden');
+            const ok2 = await ann.callTool({ name: 'list_tables', arguments: { db: 'lite' } });
+            assert.ok(JSON.parse(ok2.content[0].text).includes('items'));
+        } finally { await ann.close(); }
+        const root = await sdkClient((await oauthTokens(undefined, 'root@example.com')).tokens.access_token);
+        try {
+            assert.ok((await ids(root)).includes('hidden'));
+            const r = await root.callTool({ name: 'list_tables', arguments: { db: 'hidden' } });
+            assert.ok(JSON.parse(r.content[0].text).includes('items'), r.content[0].text);
+        } finally { await root.close(); }
+        const st = await sdkClient(STATIC);
+        try { assert.ok((await ids(st)).includes('hidden')); } finally { await st.close(); }
     });
 
     await ok('a tool call logs the user\'s email, never the token', () => {
@@ -1371,13 +1400,28 @@ async function wiringSection() {
     fixture.exec('CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)');
     fixture.close();
 
+    // SQL history for the spawned app (spawnApp points SQLITE_PATH here), with
+    // one row in a database ann may not use.
+    const hist = new Database(path.join(dir, 'usersRequests.sqlite'));
+    hist.exec('CREATE TABLE sql (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, sql TEXT NOT NULL, '
+        + 'name VARCHAR, comment TEXT, dbid VARCHAR NOT NULL, created_by VARCHAR NOT NULL, '
+        + 'created_at DATETIME NOT NULL, used_times INTEGER NOT NULL DEFAULT 0, last_used DATETIME NOT NULL)');
+    const hiddenRow = hist.prepare("INSERT INTO sql (sql, name, dbid, created_by, created_at, last_used) "
+        + "VALUES ('SELECT 1', 'secretq', 'hidden', 'bob', 'now', 'now')").run().lastInsertRowid;
+    hist.close();
+
     const idp  = await mock_oidc.start();
     const port = await freePort();
     const base = 'http://localhost:' + port;
     const STATIC = 'static-test-token-' + crypto.randomBytes(8).toString('hex');
     const config = {
         listen: { host: 'localhost', port },
-        db: { lite: { type: 'sqlite', database: dbFile } },
+        db: {
+            lite: { type: 'sqlite', database: dbFile },
+            annsdb: { type: 'sqlite', database: dbFile, allow: ['ann@example.com'] },
+            hidden: { type: 'sqlite', database: dbFile, allow: ['bob@example.com'] }
+        },
+        allow_clear_sql: true,
         session_config: { secret: 'wiring-test', resave: false, saveUninitialized: false },
         oidc: Object.assign(idp.config(), {
             redirect_uri: base + '/oidc/callback',
@@ -1460,6 +1504,51 @@ async function wiringSection() {
             const tables = await get(base + '/lite');
             assert.strictEqual(tables.status, 200);
             assert.ok(tables.text_.includes('items'), 'table list');
+        });
+
+        await ok('per-database access: ann sees annsdb, not hidden', async () => {
+            const get = browser();
+            const cb = await browserLogin(get, '/');
+            assert.strictEqual(cb.status, 302, cb.text_);
+            const home = await get(base + '/');
+            assert.ok(home.text_.includes('annsdb'), 'annsdb listed');
+            assert.ok(!home.text_.includes('>hidden<'), 'hidden listed');
+            assert.strictEqual((await get(base + '/annsdb')).status, 200);
+            for (const p of ['/hidden', '/hidden/items']) {
+                const r = await get(base + p);
+                assert.strictEqual(r.status, 404, p + ' ' + r.status);
+                assert.ok(r.text_.includes('No such database: hidden.'), p);
+            }
+            const hist = await get(base + '/:sql');
+            assert.ok(!hist.text_.includes('hidden'), 'history shows hidden');
+            assert.ok(!hist.text_.includes('secretq'), 'history shows hidden query');
+            assert.strictEqual((await get(base + '/:sql/' + hiddenRow)).status, 404);
+            const missing = await get(base + '/:sql/999999');
+            assert.strictEqual(missing.status, 404);
+            assert.ok(missing.text_.includes('No such query.'), 'missing id body');
+            assert.ok(!/access|superusers|\.allow/i.test(app.output().replace(/^.*(listening|Listening).*$/gm, '')),
+                'startup warning: ' + app.output());
+        });
+
+        await ok('per-database access: ann cannot Save or Remove a hidden history row', async () => {
+            const get = browser();
+            await browserLogin(get, '/');
+            for (const run of ['Remove', 'Save']) {
+                const r = await get(base + '/annsdb:sql/' + hiddenRow, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                    body: 'sql=' + encodeURIComponent('DROP ME') + '&run=' + run + '&name=hacked'
+                });
+                assert.strictEqual(r.status, 404, run + ' ' + r.status);
+                assert.ok(r.text_.includes('No such query.'), run);
+                const h = new Database(path.join(dir, 'usersRequests.sqlite'), { readonly: true });
+                const row = h.prepare('SELECT * FROM sql WHERE id=?').get(hiddenRow);
+                h.close();
+                assert.ok(row, run + ' removed the row');
+                assert.strictEqual(row.sql, 'SELECT 1', run + ' changed sql');
+                assert.strictEqual(row.name, 'secretq', run + ' changed name');
+                assert.strictEqual(row.dbid, 'hidden');
+            }
         });
 
         await ok('other@example.com gets 403 at the callback', async () => {
