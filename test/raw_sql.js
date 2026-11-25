@@ -7,11 +7,9 @@
 'use strict';
 const assert   = require('assert');
 const fs       = require('fs');
-const net      = require('net');
-const os       = require('os');
 const path     = require('path');
-const { spawn } = require('child_process');
 const Database = require('better-sqlite3');
+const { spawnApp } = require('./helpers/spawn_app.js');
 
 let passed = 0;
 let failed = 0;
@@ -28,65 +26,26 @@ async function ok(label, fn) {
     }
 }
 
-function freePort() {
-    return new Promise((resolve, reject) => {
-        const probe = net.createServer();
-        probe.on('error', reject);
-        probe.listen(0, 'localhost', () => {
-            const port = probe.address().port;
-            probe.close(() => resolve(port));
-        });
-    });
-}
-
-// Resolves once the server says it listens; rejects if it exits first.
-function spawnApp(dir, configFile, port) {
-    const child = spawn(process.execPath, ['start.js'], {
-        cwd: path.join(__dirname, '..'),
-        env: Object.assign({}, process.env, {
-            DBB_CONFIG: configFile, DBB_PORT: String(port), DBB_SESSION_MEMORY: '1',
-            SQLITE_PATH: path.join(dir, 'usersRequests.sqlite')
-        }),
-        stdio: ['ignore', 'pipe', 'pipe']
-    });
-    let out = '';
-    const ready = new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('start timed out: ' + out)), 10000);
-        const onData = (c) => {
-            out += c;
-            if (/Server has started/.test(out)) { clearTimeout(timer); resolve(); }
-        };
-        child.stdout.on('data', onData);
-        child.stderr.on('data', onData);
-        child.on('exit', (code) => { clearTimeout(timer); reject(new Error('server exited (' + code + '): ' + out)); });
-    });
-    return { child, ready };
-}
-
 async function run() {
     console.log('\nraw SQL');
 
-    const dir    = fs.mkdtempSync(path.join(os.tmpdir(), 'db-browse-rawsql-'));
-    const dbFile = path.join(dir, 'app.sqlite');
-    const seed = new Database(dbFile);
-    seed.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT); INSERT INTO items (name) VALUES ('a')");
-    seed.close();
-    fs.writeFileSync(path.join(dir, 'users.txt'), 'tester:testpass\n');
-    const configFile = path.join(dir, 'config.js');
-    fs.writeFileSync(configFile, 'module.exports = ' + JSON.stringify({
-        listen: { host: 'localhost', port: 0 },
-        db: { app: { type: 'sqlite', database: dbFile } },
-        allow_clear_sql: true,
-        session_config: { resave: false, saveUninitialized: false, secret: 'test' },
-        authenticate_userfile: path.join(dir, 'users.txt')
-    }, null, 2) + ';\n');
-
-    const port = await freePort();
-    const base = 'http://localhost:' + port;
-    const app  = spawnApp(dir, configFile, port);
-
+    let app;
     try {
-        await app.ready;
+        app = await spawnApp('db-browse-rawsql-', (dir) => {
+            const dbFile = path.join(dir, 'app.sqlite');
+            const seed = new Database(dbFile);
+            seed.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT); INSERT INTO items (name) VALUES ('a')");
+            seed.close();
+            fs.writeFileSync(path.join(dir, 'users.txt'), 'tester:testpass\n');
+            return {
+                listen: { host: 'localhost', port: 0 },
+                db: { app: { type: 'sqlite', database: dbFile } },
+                allow_clear_sql: true,
+                session_config: { resave: false, saveUninitialized: false, secret: 'test' },
+                authenticate_userfile: path.join(dir, 'users.txt')
+            };
+        });
+        const base = app.base, dir = app.dir;
 
         const login = await fetch(base + '/login', {
             method: 'POST', redirect: 'manual',
@@ -141,8 +100,7 @@ async function run() {
         console.log('  FAIL  setup: ' + e.message);
         failed++;
     } finally {
-        app.child.kill();
-        fs.rmSync(dir, { recursive: true, force: true });
+        if (app) { app.stop(); }
     }
 
     console.log('\n' + passed + ' passed, ' + failed + ' failed\n');

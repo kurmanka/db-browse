@@ -206,7 +206,7 @@ function create(config, store) {
 
         if (!(await allowed(r.claims))) { throw fail(403, 'identity not on the allowlist'); }
 
-        if (kind === 'mcp') { return await hooks.mcp(r.pending, r.claims, res); }
+        if (kind === 'mcp') { return await hooks.mcp(r.pending, r.claims, res, req); }
 
         // A fresh session id on login (no session fixation).
         await sessionCall(req.session, 'regenerate');

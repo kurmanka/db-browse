@@ -3,7 +3,7 @@
 //- must not extend page.pug.
 
 script.
-  $(document).ready(function() {
-      var title = $('h1').html();
-      $('h1').html( title + ' — #{rowsCounter} records' );
-  })
+  (function () {
+      var h = document.querySelector('h1');
+      if (h) { h.appendChild(document.createTextNode(' — #{rowsCounter} records')); }
+  })();

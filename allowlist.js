@@ -39,10 +39,12 @@ exports.isAllowed = function (config, claims, done) {
     var email  = claims && typeof claims.email === 'string' ? lower(claims.email) : '';
 
     var at = email.indexOf('@');
-    // Some providers send the claim as a string. Absent means trusted.
+    // Access is decided by email, so it must be one the provider vouches for:
+    // email_verified true (some providers send the string "true"). Absent is
+    // refused too: with some providers users can set their own email.
     var v = claims ? claims.email_verified : undefined;
-    var unverified = v === false || v === 'false';
-    if (at < 1 || at === email.length - 1 || unverified) {
+    var verified = v === true || v === 'true';
+    if (at < 1 || at === email.length - 1 || !verified) {
         return done(null, false);
     }
 

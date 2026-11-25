@@ -574,7 +574,8 @@ function searchObject(string, obType) {
 }
 
 function noSuchTable (req, res, next) {
-    res.status(404).send('No such table: ' + req.params.table);
+    // through the escaping template: the table name comes from the URL
+    showError(req, res, 'No such table: ' + req.params.table, null, 404);
 }
 
 // 

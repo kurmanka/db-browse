@@ -56,9 +56,10 @@ only those on an allowlist. Set `exports.oidc` (see config.js.example):
    (values of the `groups` claim, or of `groups_claim`), and/or
    `allow_global_userfile: true` to admit the emails listed as names in
    `authenticate_userfile` (their passwords are ignored). Any match admits.
-   With none of them set everyone is refused, and startup says so. A login
-   whose `email_verified` claim is false (`false` or the string `"false"`) is
-   refused; a provider that omits the claim is trusted.
+   With none of them set everyone is refused, and startup says so. Only a
+   login whose `email_verified` claim is true (`true` or the string `"true"`)
+   is admitted: false or a missing claim is refused, since access is decided
+   by email.
 
 With `oidc` set there is no password login: `POST /login` does not exist,
 `/login` redirects to the provider, and every page redirects there when the
@@ -95,16 +96,14 @@ path prefix of a proxy. It must be `https` unless it is `localhost` or
 minutes: 100 `/authorize`, 50 `/token`, 50 `/revoke`; 20 `/register` per hour)
 — behind a proxy set `trust_proxy`, or all clients share one limit.
 
-Known limitation: there is no consent screen. Anyone can register a client
-(`/register` is open) with a redirect URI of their own, and send an
-allowlisted user a crafted `/authorize` link. The user sees only the
-provider's real login page — or nothing at all, if already signed in there —
-and once they complete it, the attacker's client receives a code and then
-tokens for that user's identity. That is read access to every configured
-database (and the raw `query` tool when `allow_clear_sql` is on) for as long as
-the user stays on the allowlist: the refresh token (30 days) rotates on every
-use. If that matters, do not enable `mcp.oauth` until a consent step exists,
-and watch `auth.sqlite` for unexpected clients.
+Consent: anyone can register a client (`/register` is open) with a redirect
+URI of their own. So after the provider login the user gets a page naming the
+client and the address its code would go to, and only **Allow** issues the
+code (**Deny** sends the client `error=access_denied`). The answer is bound to
+the browser that did the login and is good for 10 minutes, once. An
+allowlisted user who allows a client they do not know still hands it read
+access for as long as they stay on the allowlist (the 30-day refresh token
+rotates), so watch `auth.sqlite` for unexpected clients.
 
 Revoking MCP access (the app has no UI for it): with the `sqlite3` CLI on the
 store (`auth_db`, default `auth.sqlite`),

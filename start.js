@@ -84,6 +84,20 @@ var provider = (oidc && config.mcp && config.mcp.oauth)
 var app = express();
 var server; // .listen() returns that
 
+// Response headers for every page: no framing by other sites (a click on a
+// page shown in their frame could be stolen), no content-type guessing, and
+// no full URLs (they hold table names and row values) in Referer headers to
+// other sites.
+app.use(function (req, res, next) {
+    res.set({
+        'X-Frame-Options':         'DENY',
+        'Content-Security-Policy': "frame-ancestors 'none'",
+        'X-Content-Type-Options':  'nosniff',
+        'Referrer-Policy':         'same-origin'
+    });
+    next();
+});
+
 // Behind a reverse proxy, req.ip (and so the per-client rate limits on the
 // OAuth endpoints) needs this; see the 'trust proxy' setting in the Express docs.
 if (config.trust_proxy !== undefined) {
@@ -137,13 +151,37 @@ try {
     startup_error(e.message);
 }
 
-// sessions
+// Cross-site request forgery. Everything below is the browser UI, where a
+// POST runs SQL or logs someone in, so a POST another site made the browser
+// send is refused. Browsers say where a request comes from in Sec-Fetch-Site:
+// 'same-origin', or 'none' when the user did it directly, is fine. A browser
+// that sends no such header is covered by the SameSite cookie below. (MCP and
+// the OAuth endpoints, mounted above, take tokens, not cookies.)
+app.use(function refuse_cross_site_posts(req, res, next) {
+    var site = req.get('sec-fetch-site');
+    if (req.method !== 'POST' || !site || site === 'same-origin' || site === 'none') {
+        return next();
+    }
+    res.status(403).type('text/plain').send('Cross-site request refused.');
+});
+
+// sessions. SameSite=Lax unless config.js says otherwise: a browser then
+// leaves the session cookie off POSTs from other sites.
+config.session_config.cookie = Object.assign({ sameSite: 'lax' }, config.session_config.cookie);
+if (config.session_config.secret === 'real sessions secret') {
+    console.log('Warning: session_config.secret is the example value from config.js.example; ' +
+                'set your own (for example: openssl rand -hex 32)');
+}
 app.use(express_session(config.session_config));
 
 // OIDC: GET /login, /oidc/login and /oidc/callback. After the session
 // middleware: a web login is bound to the browser's session.
 if (oidc) {
     oidc.mountWeb(app, { mcp: provider ? provider.complete : undefined });
+}
+// The MCP client consent page (oauth_provider.js complete()) posts here.
+if (provider) {
+    app.post(oauth_provider.CONSENT_PATH, provider.consent);
 }
 
 app.use( '/_/', serve_static('./static') );
@@ -237,12 +275,44 @@ if ( config.authenticate_userfile && !config.authenticate ) {
 }
 
 
+// Password guessing: after LOGIN_MAX_FAILURES failed logins for one user name
+// from one address within LOGIN_WINDOW_MS, further attempts are refused until
+// the window has passed. Behind a reverse proxy, set config.trust_proxy, or
+// every client has the proxy's address and the limit is per user name only.
+var LOGIN_MAX_FAILURES = 10;
+var LOGIN_WINDOW_MS    = 15 * 60 * 1000;
+var login_failures = new Map();     // 'ip|name' -> { count, since }
+
+function login_key(req) {
+    return req.ip + '|' + String(req.body.user || '').toLowerCase();
+}
+
+function login_blocked(key) {
+    var now = Date.now();
+    login_failures.forEach(function (f, k) {
+        if (now - f.since > LOGIN_WINDOW_MS) { login_failures.delete(k); }
+    });
+    var f = login_failures.get(key);
+    return !!(f && f.count >= LOGIN_MAX_FAILURES);
+}
+
+function login_failed(key) {
+    var f = login_failures.get(key);
+    if (f) { f.count++; } else { login_failures.set(key, { count: 1, since: Date.now() }); }
+}
+
 // Login form's action attribute now points to /login
 // while the 'to' parameter tells us, where to redirect to
 // in case of success.
 // With OIDC on there is no password login at all: the users.txt check must
 // not become a way around the allowlist.
 if (!oidc) app.post('/login', function(req, res) { //get and check users data
+
+    var key = login_key(req);
+    if (login_blocked(key)) {
+        res.status(429);
+        return requestHandlers.login(req, res, 'Too many failed logins. Try again later.');
+    }
 
     async.waterfall([
         function (done){
@@ -255,19 +325,22 @@ if (!oidc) app.post('/login', function(req, res) { //get and check users data
 
             if (result) {
                 console.log( 'authenticated successfully' );
-                req.session.authentication = true;
-                req.session.user = req.body.user;
+                login_failures.delete(key);
 
-                var to = req.param('to');
+                // a local path only (no other site), '/' for '/login' or none
+                var to = oidc_mod.safeLocal(req.body.to || req.query.to);
 
-                // if the 'to' var is '/login' or is empty, set it to '/'
-                if ( to == '/login' || !to ) {
-                    to = '/';
-                }
-                res.redirect( to );
-                console.log( 'redirecting to ', to );
+                // a fresh session id on login (no session fixation)
+                req.session.regenerate(function (err) {
+                    if (err) { return requestHandlers.showError(req, res, err); }
+                    req.session.authentication = true;
+                    req.session.user = req.body.user;
+                    res.redirect( to );
+                    console.log( 'redirecting to ', to );
+                });
 
             } else {
+                login_failed(key);
                 requestHandlers.login(req, res, loginError);
             }
         }
@@ -298,52 +371,6 @@ app.get('/logout', function(req, res){ //logout
     res.redirect('/');
 });
 
-// Action /_exit
-//
-// This action was supposed to stop the current server process,
-// to have it close all open database connections and re-read the 
-// configuration.
-//
-// It assumes that some other facility would start another copy of
-// the process if is needed. 
-//
-// For some reason on crunch server it doesn't really work for 
-// closing database connections. Maybe it is because of the forever.js,
-// which is responsible for server restart. 
-
-app.get('/_exit', loadUser, function (req,res) {
-    res.send('ok');
-    
-    // no exit gracefully, 
-    // http://stackoverflow.com/questions/5263716/graceful-shutdown-of-a-node-js-http-server
-    
-    // this check it to avoid circular exits. I'm not sure this is useful.
-    if (process.uptime() > 0.05) {
-        console.log( "close server...\n" );
-        server.close();
-    }
-});
-
-// Action /_reset
-//
-// call database_connection.end() for each connected database;
-// go through the database array elements, close connection on
-// each of them.
-
-app.get('/_reset', loadUser, function (req,res) {
-    for (var id in database) {
-        var db = database[id];
-        if (db) {
-            db.end();
-        }
-    }
-    database = {};
-    res.redirect('/'); 
-    res.send('reset done')
-});
-
-
-
 app.get('/:db_id/.schema', middleware, requestHandlers.show_db_schema); //show db schema. Run show_db_schema.
 
 app.get('/:db_id', middleware, requestHandlers.list_tables); // list tables
@@ -369,6 +396,17 @@ app.get('/:db_id/:table/:column/_:direction/:view?/:limit?', middleware, request
 //app.get('/:db_id/:table/:column/:value', middleware, requestHandlers.showValue); 
 app.get('/:db_id/:table/:column/:value/:view?/:limit?', middleware, requestHandlers.show_rows); 
 
+
+// Last: errors no route handled. Express's default handler would send the
+// stack trace (unless NODE_ENV=production); log it here and answer with the
+// status text only.
+app.use(function (err, req, res, next) {
+    console.log(err);
+    if (res.headersSent) { return next(err); }
+    var status = err.status || err.statusCode;
+    if (!(status >= 400 && status < 600)) { status = 500; }
+    res.status(status).type('text/plain').send(require('http').STATUS_CODES[status] || 'Error');
+});
 
 // DBB_PORT lets a caller (the test suite, or a second instance for a
 // comparison) listen somewhere other than the port in config.js.
@@ -566,7 +604,7 @@ function init_addons (app, config) {
                 if (s.isDirectory()) {
                     // make the directory available, but only to signed-in users
                     var prefix = '/ao/' + i + '/';
-                    // request authentication on the addon homepage.
+                    // every file in it, not just the addon homepage.
                     // The guard is built per addon: a closure made in the loop
                     // would see the last addon's prefix for every addon.
                     app.use( addon_static_guard(prefix) );
@@ -614,7 +652,8 @@ function init_addons (app, config) {
 // own prefix even though the loop that installs these shares a scope.
 function addon_static_guard (prefix) {
     return function (req, res, next) {
-        if (req.url == prefix) { loadUser(req, res, next); }
+        // case-insensitive, as Express's own path matching is
+        if (req.path.toLowerCase().indexOf(prefix.toLowerCase()) === 0) { loadUser(req, res, next); }
         else { next(); }
     };
 }
@@ -630,7 +669,10 @@ function addon_feature (req,res,next) {
     console.log( 'addon_feature: start');
 
     var feature = req.params.table;
-    if (req.app.addon_features[ feature ]) {
+    // own keys only: 'constructor' and friends are not features. And there is
+    // no feature map at all without config.addons.
+    var features = req.app.addon_features;
+    if (features && Object.prototype.hasOwnProperty.call(features, feature)) {
         //
         console.log( 'feature ' + feature );
         req.app.addon_features[ feature ](req,res);

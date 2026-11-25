@@ -167,8 +167,11 @@ async function storeSection() {
 async function allowlistSection() {
     console.log('allowlist');
     const allowlist = require('../allowlist.js');
+    // claims are verified unless a test says otherwise (email_verified: undefined
+    // for a provider that leaves the claim out)
     const check = (config, claims) => new Promise((resolve, reject) => {
-        allowlist.isAllowed(config, claims, (err, v) => err ? reject(err) : resolve(v));
+        const c = claims === undefined ? claims : Object.assign({ email_verified: true }, claims);
+        allowlist.isAllowed(config, c, (err, v) => err ? reject(err) : resolve(v));
     });
     const file = path.join(os.tmpdir(), 'db-browse-allow-test-' + Date.now() + '.txt');
     const oidc = o => ({ oidc: o });
@@ -180,16 +183,17 @@ async function allowlistSection() {
         assert.strictEqual(await check(c, { email: 'bob@example.com' }), false);
     });
 
-    await ok('email_verified false is refused, absent is accepted', async () => {
+    await ok('email_verified false or absent is refused, true is accepted', async () => {
         const c = oidc({ allow_emails: ['ann@example.com'] });
         assert.strictEqual(await check(c, { email: 'ann@example.com', email_verified: false }), false);
         assert.strictEqual(await check(c, { email: 'ann@example.com', email_verified: true }), true);
-        assert.strictEqual(await check(c, { email: 'ann@example.com' }), true);
+        assert.strictEqual(await check(c, { email: 'ann@example.com', email_verified: undefined }), false);
     });
 
-    await ok('email_verified "false" (a string) is refused too', async () => {
+    await ok('email_verified as a string: "true" accepted, "false" refused', async () => {
         const c = oidc({ allow_emails: ['ann@example.com'] });
         assert.strictEqual(await check(c, { email: 'ann@example.com', email_verified: 'false' }), false);
+        assert.strictEqual(await check(c, { email: 'ann@example.com', email_verified: 'true' }), true);
     });
 
     await ok('missing email is refused without throwing', async () => {
@@ -318,6 +322,19 @@ function browser() {
         res.text_ = await res.text();
         return res;
     };
+}
+
+// An MCP login's callback shows the consent page; answer it in the same
+// browser. Returns the answer's response (a redirect to the client).
+async function consented(get, cb, decision) {
+    assert.strictEqual(cb.status, 200, 'consent page ' + cb.status + ' ' + cb.text_);
+    const m = /name="consent" value="([^"]+)"/.exec(cb.text_);
+    assert.ok(m, 'no consent id in the page');
+    return get(new URL('/oauth/consent', cb.url).href, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ consent: m[1], decision: decision || 'allow' }).toString()
+    });
 }
 
 async function webLoginSection() {
@@ -646,6 +663,7 @@ async function providerSection() {
     }));
     app.use(session({ secret: 'test', resave: false, saveUninitialized: false }));
     oidc.mountWeb(app, { mcp: provider.complete });
+    app.post('/oauth/consent', provider.consent);
 
     const logged = [];
     const origLog = console.log;
@@ -683,15 +701,20 @@ async function providerSection() {
         if (o.resource !== null) { u.searchParams.set('resource', o.resource || RESOURCE); }
         return u.href;
     }
-    // /authorize → IdP → /oidc/callback; returns the callback response.
+    // /authorize → IdP → /oidc/callback → consent (o.decision, default allow,
+    // or 'none' to stop at the consent page); returns the last response.
     async function authorize(c, o) {
+        o = o || {};
         const get = browser();
         const a = await get(authorizeUrl(c, o));
         assert.strictEqual(a.status, 302, 'authorize ' + a.status + ' ' + a.text_);
         assert.ok(a.headers.get('location').startsWith(idp.issuer + '/authorize'), a.headers.get('location'));
         const z = await get(a.headers.get('location'));
         assert.strictEqual(z.status, 302, 'idp ' + z.status);
-        return get(z.headers.get('location'));
+        const cb = await get(z.headers.get('location'));
+        cb.get_ = get;
+        if (cb.status !== 200 || o.decision === 'none') { return cb; }
+        return consented(get, cb, o.decision);
     }
     // A fresh code for client c; returns {code, verifier, location}.
     async function code(c, state, resource) {
@@ -966,6 +989,64 @@ async function providerSection() {
         assert.strictEqual((await refresh(a, t.refresh_token)).status, 200, 'B killed A\'s refresh token');
     });
 
+    const codeCount = () => {
+        const raw = new Database(file, { readonly: true });
+        const n = raw.prepare('SELECT count(*) AS n FROM codes').get().n;
+        raw.close();
+        return n;
+    };
+
+    await ok('consent page: shown before any code, escaped, not frameable', async () => {
+        const reg = await fetch(base + '/register', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ redirect_uris: [CB], token_endpoint_auth_method: 'none',
+                                   client_name: '<b>Claude</b>' })
+        });
+        const c = await reg.json();
+        const before = codeCount();
+        const page = await authorize(c, { verifier: auth_store.randomToken(), decision: 'none' });
+        assert.strictEqual(page.status, 200, page.text_);
+        assert.strictEqual(codeCount(), before, 'a code was issued before consent');
+        assert.ok(page.text_.includes('&lt;b&gt;Claude&lt;/b&gt;'), 'client name escaped');
+        assert.ok(!page.text_.includes('<b>Claude</b>'), 'client name raw');
+        assert.ok(page.text_.includes('127.0.0.1:8765'), 'redirect host shown');
+        assert.ok(page.text_.includes('ann@example.com'), 'user shown');
+        assert.strictEqual(page.headers.get('x-frame-options'), 'DENY');
+    });
+
+    await ok('consent Deny → access_denied with state, no code', async () => {
+        const c = await client();
+        const before = codeCount();
+        const res = await authorize(c, { verifier: auth_store.randomToken(), state: 'st9', decision: 'deny' });
+        assert.strictEqual(res.status, 302, res.text_);
+        const loc = new URL(res.headers.get('location'));
+        assert.strictEqual(loc.origin + loc.pathname, CB);
+        assert.strictEqual(loc.searchParams.get('error'), 'access_denied');
+        assert.strictEqual(loc.searchParams.get('state'), 'st9');
+        assert.strictEqual(loc.searchParams.get('code'), null);
+        assert.strictEqual(codeCount(), before);
+    });
+
+    await ok('consent is single use, bound to the browser, and needs the page id', async () => {
+        const c = await client();
+        const page = await authorize(c, { verifier: auth_store.randomToken(), decision: 'none' });
+        const id = /name="consent" value="([^"]+)"/.exec(page.text_)[1];
+        const post = (get, consent) => get(base + '/oauth/consent', {
+            method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ consent, decision: 'allow' }).toString()
+        });
+        // another browser (no session) with the right id
+        assert.strictEqual((await post(browser(), id)).status, 403);
+        // the right browser with a wrong id: refused, and the request is gone
+        assert.strictEqual((await post(page.get_, id + 'x')).status, 403);
+        assert.strictEqual((await post(page.get_, id)).status, 403);
+        // a fresh one works once, then not again
+        const page2 = await authorize(c, { verifier: auth_store.randomToken(), decision: 'none' });
+        const id2 = /name="consent" value="([^"]+)"/.exec(page2.text_)[1];
+        assert.strictEqual((await post(page2.get_, id2)).status, 302);
+        assert.strictEqual((await post(page2.get_, id2)).status, 403);
+    });
+
     await ok('disallowed user never gets a code (403 at callback)', async () => {
         const c = await client();
         idp.next({ email: 'bob@example.com' });
@@ -1043,6 +1124,7 @@ async function mcpSection() {
     const mounted = mcp.mount(app, config, provider);
     app.use(session({ secret: 'test', resave: false, saveUninitialized: false }));
     oidc.mountWeb(app, { mcp: provider.complete });
+    app.post('/oauth/consent', provider.consent);
 
     const logged = [];
     const origLog = console.log;
@@ -1079,8 +1161,8 @@ async function mcpSection() {
         const a = await get(u.href);
         assert.strictEqual(a.status, 302, 'authorize ' + a.status + ' ' + a.text_);
         const z = await get(a.headers.get('location'));
-        const cb = await get(z.headers.get('location'));
-        assert.strictEqual(cb.status, 302, 'callback ' + cb.status + ' ' + cb.text_);
+        const cb = await consented(get, await get(z.headers.get('location')));
+        assert.strictEqual(cb.status, 302, 'consent ' + cb.status + ' ' + cb.text_);
         const code = new URL(cb.headers.get('location')).searchParams.get('code');
         assert.ok(code, 'no code');
         secrets.push(code);
@@ -1608,8 +1690,8 @@ async function wiringSection() {
             const a = await get(u.href);
             assert.strictEqual(a.status, 302, 'authorize ' + a.status + ' ' + a.text_);
             const z = await get(a.headers.get('location'));
-            const cb = await get(z.headers.get('location'));
-            assert.strictEqual(cb.status, 302, 'callback ' + cb.status + ' ' + cb.text_);
+            const cb = await consented(get, await get(z.headers.get('location')));
+            assert.strictEqual(cb.status, 302, 'consent ' + cb.status + ' ' + cb.text_);
             const back = new URL(cb.headers.get('location'));
             assert.strictEqual(back.origin + back.pathname, CB);
             assert.strictEqual(back.searchParams.get('state'), 'st');

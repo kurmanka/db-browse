@@ -3,7 +3,7 @@
 const { execFileSync } = require('child_process');
 const path = require('path');
 
-const scripts = ['sqlite.js', 'drivers.js', 'routes.js', 'mcp.js', 'oauth.js', 'access.js', 'raw_sql.js'];
+const scripts = ['sqlite.js', 'drivers.js', 'routes.js', 'mcp.js', 'oauth.js', 'access.js', 'raw_sql.js', 'web_security.js'];
 let anyFailed = false;
 
 for (const script of scripts) {

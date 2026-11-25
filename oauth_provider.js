@@ -13,6 +13,7 @@ var auth_store = require('./auth_store.js');
 var allowlist  = require('./allowlist.js');
 
 var CODE_TTL = 60;      // seconds
+var CONSENT_TTL = 600;  // seconds the consent page stays answerable
 
 // `name` is an SDK error class, or else an RFC error code.
 function oauthError(name, message) {
@@ -49,6 +50,52 @@ function mcpResourceUrl(config) {
     return pub ? new URL(String(pub).replace(/\/+$/, '') + '/mcp').href : null;
 }
 
+// Where the consent page posts the user's answer; start.js mounts consent() there.
+var CONSENT_PATH = '/oauth/consent';
+
+function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (ch) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+}
+
+function sameString(a, b) {
+    var x = Buffer.from(String(a)), y = Buffer.from(String(b));
+    return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
+// The consent page must not be shown inside another site's frame, where a
+// click on Allow could be stolen.
+function noFraming(res) {
+    res.set('X-Frame-Options', 'DENY');
+    res.set('Content-Security-Policy', "frame-ancestors 'none'");
+    res.set('Cache-Control', 'no-store');
+}
+
+// v: {id, email, client_name, redirect_uri}. Everything shown is escaped; the
+// client name is whatever the client registered with, so the page leads with
+// where the code goes, which is what the user has to judge.
+function consentPage(v) {
+    var host = new URL(v.redirect_uri).host;
+    return '<!doctype html><html><head><meta charset="utf-8">' +
+        '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+        '<title>Allow access?</title>' +
+        '<style>body{font-family:sans-serif;max-width:36em;margin:3em auto;padding:0 1em;line-height:1.4}' +
+        'code{word-break:break-all}button{font-size:1em;padding:.4em 1.2em;margin-right:1em}</style>' +
+        '</head><body>' +
+        '<h1>Allow database access?</h1>' +
+        '<p>An MCP client wants to read the databases you can use here, as <b>' + esc(v.email) + '</b>.</p>' +
+        '<p>Its access goes to <b>' + esc(host) + '</b>:<br><code>' + esc(v.redirect_uri) + '</code></p>' +
+        (v.client_name ? '<p>It calls itself <b>' + esc(v.client_name) + '</b>.</p>' : '') +
+        '<p>Allow only if you started this from an MCP client you use and trust. ' +
+        'Access lasts until the token is revoked or you lose access to db-browse.</p>' +
+        '<form method="post" action="' + CONSENT_PATH + '">' +
+        '<input type="hidden" name="consent" value="' + esc(v.id) + '">' +
+        '<button type="submit" name="decision" value="allow">Allow</button>' +
+        '<button type="submit" name="decision" value="deny">Deny</button>' +
+        '</form></body></html>';
+}
+
 function create(config, store, oidc) {
     var oc = (config && config.mcp && config.mcp.oauth) || {};
     var accessTtl  = oc.access_ttl  || 3600;
@@ -57,7 +104,9 @@ function create(config, store, oidc) {
 
     function allowed(email, groups) {
         return new Promise(function (resolve) {
-            allowlist.isAllowed(config, { email: email, groups: groups }, function (err, ok) {
+            // the email was verified when the grant was made (oidc.js)
+            allowlist.isAllowed(config, { email: email, email_verified: true, groups: groups },
+                                function (err, ok) {
                 if (err) { console.log('oauth: allowlist error: ' + err.message); }
                 resolve(!err && ok === true);
             });
@@ -120,22 +169,63 @@ function create(config, store, oidc) {
     }
 
     // hooks.mcp for oidc.mountWeb: runs only after the allowlist passed.
-    // Anything thrown here becomes a 500 in oidc.js's callback.
-    async function complete(pending, claims, res) {
+    // It does not issue a code yet: dynamic registration lets anyone register
+    // a client, so the user is shown which client is asking, and where the
+    // code would go, and must allow it. The request waits in the session of
+    // the browser that did the login, under an id only that page knows; the
+    // form posts to consent() below. Anything thrown here becomes a 500 in
+    // oidc.js's callback.
+    async function complete(pending, claims, res, req) {
         var d = (pending && pending.data) || {};
         if (typeof d.client_id !== 'string' || typeof d.redirect_uri !== 'string' ||
             typeof d.challenge !== 'string' || typeof claims.email !== 'string') {
             throw new Error('incomplete mcp authorization request');
         }
-        var code = auth_store.randomToken();
-        store.putCode({
-            code_hash: auth_store.hash(code), client_id: d.client_id,
-            email: claims.email, groups: claims.groups || [],
-            challenge: d.challenge, redirect_uri: d.redirect_uri, resource: d.resource || null,
-            expires_at: nowSec() + CODE_TTL
-        });
+        if (!req || !req.session) {
+            throw new Error('no session: mount oidc after the session middleware');
+        }
+        var client = store.getClient(d.client_id);
+        if (!client) { throw new Error('the client is no longer registered'); }
+
+        var id = auth_store.randomToken();
+        req.session.mcp_consent = {
+            id: id, data: d, email: claims.email, groups: claims.groups || [],
+            expires_at: nowSec() + CONSENT_TTL
+        };
+        noFraming(res);
+        res.status(200).type('html').send(consentPage({
+            id: id,
+            email: claims.email,
+            client_name: typeof client.client_name === 'string' ? client.client_name : '',
+            redirect_uri: d.redirect_uri
+        }));
+    }
+
+    // POST /oauth/consent (application/x-www-form-urlencoded): the user's
+    // answer. Only the browser session that saw the page, with that page's id,
+    // within CONSENT_TTL, and only once.
+    function consent(req, res) {
+        var c = req.session && req.session.mcp_consent;
+        if (req.session) { delete req.session.mcp_consent; }
+        var id = req.body && req.body.consent;
+        if (!c || typeof id !== 'string' || !sameString(id, c.id) || c.expires_at <= nowSec()) {
+            return res.status(403).type('text/plain').send(
+                'This authorization request is unknown, used or expired. Start again from your MCP client.');
+        }
+        var d = c.data;
         var to = new URL(d.redirect_uri);
-        to.searchParams.set('code', code);
+        if (req.body.decision !== 'allow') {
+            to.searchParams.set('error', 'access_denied');
+        } else {
+            var code = auth_store.randomToken();
+            store.putCode({
+                code_hash: auth_store.hash(code), client_id: d.client_id,
+                email: c.email, groups: c.groups,
+                challenge: d.challenge, redirect_uri: d.redirect_uri, resource: d.resource || null,
+                expires_at: nowSec() + CODE_TTL
+            });
+            to.searchParams.set('code', code);
+        }
         if (typeof d.state === 'string') { to.searchParams.set('state', d.state); }
         res.redirect(302, to.href);
     }
@@ -213,9 +303,13 @@ function create(config, store, oidc) {
         exchangeRefreshToken: exchangeRefreshToken,
         verifyAccessToken: verifyAccessToken,
         revokeToken: revokeToken,
-        complete: complete
+        complete: complete,
+        // for app.post('/oauth/consent', ...): its own body parser, as the
+        // OAuth routes are mounted before the app's
+        consent: [require('body-parser').urlencoded({ extended: false }), consent]
     };
 }
 
 exports.create = create;
 exports.mcpResourceUrl = mcpResourceUrl;
+exports.CONSENT_PATH = CONSENT_PATH;

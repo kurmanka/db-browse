@@ -7,11 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm install       # install dependencies
 node start.js     # start the server (requires config.js)
-node test/run.js  # all tests (sqlite, drivers, routes, mcp, oauth, access, raw_sql)
+node test/run.js  # all tests (sqlite, drivers, routes, mcp, oauth, access, raw_sql, web_security)
 ```
 
 `test/run.js` runs `sqlite.js`, `drivers.js`, `routes.js`, `mcp.js`,
-`oauth.js`, `access.js` and `raw_sql.js` in sequence. `routes.js` spawns its own server on a free port — the configured one
+`oauth.js`, `access.js`, `raw_sql.js` and `web_security.js` in sequence. `raw_sql.js` and
+`web_security.js` run `start.js` on a temp config via `test/helpers/spawn_app.js`. `routes.js` spawns its own server on a free port — the configured one
 when it is free, otherwise one the OS hands out — so the suite can run next to a
 live instance; it never tests a server it did not start (`DBB_TEST_PORT` pins a
 port). Postgres/MySQL MCP tests are skipped unless `DBB_TEST_PG_URL` /
@@ -44,6 +45,8 @@ prepare_req_params → loadUser → prepare_dbconnection → prepare_locals → 
 `prepare_dbconnection` resolves the DB connection from the `database` object (module-level cache). Pings with `SELECT NOW()` on reuse (`SELECT 1` for sqlite); reconnects on failure. Connection stored at `req.params.connect` and `req.dbconnection`.
 
 Raw SQL (`POST /<db>:sql`, Execute) does not run on that shared connection: `own_connection()` in `start.js` opens one for the request (`new_connection()`, the same per-type switch `db_connect()` uses) and closes it when the response closes, so a statement's session changes (`SET`, `PRAGMA`, temp tables, an open transaction) never reach other users' requests. `test/raw_sql.js` covers it against a spawned `start.js`.
+
+The first middleware in `start.js` sets `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin` on every response; the last one answers unhandled errors with the status text only (no stack trace). Pages load no third-party scripts. `test/web_security.js` covers these and the login, CSRF and addon-static protections.
 
 `prepare_locals` populates `res.locals` with everything templates need: `connection`, `dbType`, `table`, `column`, `value`, `dbId`, `sql`, `user`, breadcrumbs, etc.
 
@@ -93,15 +96,15 @@ Tools filter by caller identity via `access.js` (OAuth token email/groups; the s
 
 ### Authentication
 
-Without `config.oidc`: the `users.txt` / `config.authenticate` password login (`POST /login`, `loadUser` renders `login.pug`), unchanged. With `config.oidc`: OIDC only, and `POST /login` is not registered.
+Without `config.oidc`: the `users.txt` / `config.authenticate` password login (`POST /login`, `loadUser` renders `login.pug`). It redirects only to a local `to` (`oidc.safeLocal`), regenerates the session id, and refuses (429) a user name after 10 failures from one address in 15 minutes (in-memory; behind a proxy that needs `trust_proxy`). With `config.oidc`: OIDC only, and `POST /login` is not registered.
 
 - `auth_store.js` — SQLite store (`config.auth_db`, default `auth.sqlite`), opened at startup only when `config.oidc` is set. Tables: `clients` (dynamically registered MCP clients), `pending` (in-flight upstream logins: state, nonce, PKCE verifier, kind `web`/`mcp`, data), `codes` (our authorization codes, SHA-256 hashed, 60 s, single use), `tokens` (hashed access/refresh tokens with client, email, groups, resource, expiry). Expired rows are purged on every write. The file is created mode 0600.
-- `allowlist.js` — `isAllowed(config, claims, done)` (verified email in `allow_emails`, a group in `allow_groups`, or a name in `authenticate_userfile` with `allow_global_userfile`; nothing configured refuses all) and `problems(config)` (startup warnings).
+- `allowlist.js` — `isAllowed(config, claims, done)` (email with `email_verified` true — false or missing is refused — in `allow_emails`, a group in `allow_groups`, or a name in `authenticate_userfile` with `allow_global_userfile`; nothing configured refuses all) and `problems(config)` (startup warnings).
 - `oidc.js` — `create(config, store)` (null without `config.oidc`): upstream code flow + PKCE, ID token verified with `jose` (ESM, lazy `import()`). `mountWeb(app, hooks)` adds `GET /login`, `/oidc/login`, `/oidc/callback`; a web login is bound to `req.session.oidc_state`; an `mcp` login calls `hooks.mcp`.
-- `oauth_provider.js` — `create(config, store, oidc)`: the SDK `OAuthServerProvider` behind `mcpAuthRouter`; `/authorize` brokers to `oidc.begin('mcp', ...)`, `complete()` (the `hooks.mcp`) issues our code; tokens are bound to the resource `<public_url>/mcp`.
+- `oauth_provider.js` — `create(config, store, oidc)`: the SDK `OAuthServerProvider` behind `mcpAuthRouter`; `/authorize` brokers to `oidc.begin('mcp', ...)`; `complete()` (the `hooks.mcp`, called with `req`) does not issue a code but shows a consent page (client name, redirect URI, user) and keeps the request in `req.session.mcp_consent` under a random id; `consent` (`POST /oauth/consent`, mounted by `start.js`) issues the code on Allow, sends `error=access_denied` on Deny, and refuses an unknown/used/expired (10 min) id; tokens are bound to the resource `<public_url>/mcp`.
 - `mcp.js` — `mount(app, config, provider)` mounts the SDK's OAuth endpoints and metadata at the root and accepts the static `config.mcp.token` or a provider-issued access token.
 
-Request flow in `start.js`: config checks (exit if `mcp.oauth` lacks `oidc` or a bare-origin `public_url`; log `allowlist.problems`) → `trust proxy` from `config.trust_proxy` → body parsers, request logs (the `/oidc/callback` query is left out) → `mcp.mount` (OAuth endpoints + `/mcp`, no sessions) → `express_session` → `oidc.mountWeb` → app routes, where `loadUser`, when OIDC is on, accepts only sessions with `auth_via === 'oidc'` (set by the OIDC callback; a password-era session does not count) and redirects the rest to `/login?to=<encodeURIComponent(originalUrl)>`. Tests: `node test/oauth.js` (mock IdP in `test/helpers/mock_oidc.js`). Design: `docs/superpowers/specs/2026-10-15-oauth-oidc-design.md`.
+Request flow in `start.js`: config checks (exit if `mcp.oauth` lacks `oidc` or a bare-origin `public_url`; log `allowlist.problems`) → `trust proxy` from `config.trust_proxy` → body parsers, request logs (the `/oidc/callback` query is left out) → `mcp.mount` (OAuth endpoints + `/mcp`, no sessions) → refuse POSTs whose `Sec-Fetch-Site` is not `same-origin`/`none` (CSRF) → `express_session` (cookie `sameSite: 'lax'` unless `session_config.cookie` says otherwise) → `oidc.mountWeb` → `POST /oauth/consent` → app routes, where `loadUser`, when OIDC is on, accepts only sessions with `auth_via === 'oidc'` (set by the OIDC callback; a password-era session does not count) and redirects the rest to `/login?to=<encodeURIComponent(originalUrl)>`. Tests: `node test/oauth.js` (mock IdP in `test/helpers/mock_oidc.js`). Design: `docs/superpowers/specs/2026-10-15-oauth-oidc-design.md`.
 
 ### Per-user database access
 
@@ -119,7 +122,7 @@ Request flow in `start.js`: config checks (exit if `mcp.oauth` lacks `oidc` or a
 - `a.sqlt` — map of feature-name → sqlt definition (processed by `sqlt.js`)
 - `a.setup(app, config, path)` — arbitrary setup
 - `a.init(app, config, path)` — init hook
-- `addons/<name>/static/` — served at `/ao/<name>/`, auth-gated at root
+- `addons/<name>/static/` — served at `/ao/<name>/`, every file behind `loadUser`
 
 `sqlt.js` provides a SQL-template system for addons: templates use `{param}` placeholders, params are typed (`string`, `date`, `int`), queries are parameterized per-driver.
 
