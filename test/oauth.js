@@ -1371,13 +1371,28 @@ async function wiringSection() {
     fixture.exec('CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)');
     fixture.close();
 
+    // SQL history for the spawned app (spawnApp points SQLITE_PATH here), with
+    // one row in a database ann may not use.
+    const hist = new Database(path.join(dir, 'usersRequests.sqlite'));
+    hist.exec('CREATE TABLE sql (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, sql TEXT NOT NULL, '
+        + 'name VARCHAR, comment TEXT, dbid VARCHAR NOT NULL, created_by VARCHAR NOT NULL, '
+        + 'created_at DATETIME NOT NULL, used_times INTEGER NOT NULL DEFAULT 0, last_used DATETIME NOT NULL)');
+    const hiddenRow = hist.prepare("INSERT INTO sql (sql, name, dbid, created_by, created_at, last_used) "
+        + "VALUES ('SELECT 1', 'secretq', 'hidden', 'bob', 'now', 'now')").run().lastInsertRowid;
+    hist.close();
+
     const idp  = await mock_oidc.start();
     const port = await freePort();
     const base = 'http://localhost:' + port;
     const STATIC = 'static-test-token-' + crypto.randomBytes(8).toString('hex');
     const config = {
         listen: { host: 'localhost', port },
-        db: { lite: { type: 'sqlite', database: dbFile } },
+        db: {
+            lite: { type: 'sqlite', database: dbFile },
+            annsdb: { type: 'sqlite', database: dbFile, allow: ['ann@example.com'] },
+            hidden: { type: 'sqlite', database: dbFile, allow: ['bob@example.com'] }
+        },
+        allow_clear_sql: true,
         session_config: { secret: 'wiring-test', resave: false, saveUninitialized: false },
         oidc: Object.assign(idp.config(), {
             redirect_uri: base + '/oidc/callback',
@@ -1460,6 +1475,27 @@ async function wiringSection() {
             const tables = await get(base + '/lite');
             assert.strictEqual(tables.status, 200);
             assert.ok(tables.text_.includes('items'), 'table list');
+        });
+
+        await ok('per-database access: ann sees annsdb, not hidden', async () => {
+            const get = browser();
+            const cb = await browserLogin(get, '/');
+            assert.strictEqual(cb.status, 302, cb.text_);
+            const home = await get(base + '/');
+            assert.ok(home.text_.includes('annsdb'), 'annsdb listed');
+            assert.ok(!home.text_.includes('>hidden<'), 'hidden listed');
+            assert.strictEqual((await get(base + '/annsdb')).status, 200);
+            for (const p of ['/hidden', '/hidden/items']) {
+                const r = await get(base + p);
+                assert.strictEqual(r.status, 404, p + ' ' + r.status);
+                assert.ok(r.text_.includes('No such database: hidden.'), p);
+            }
+            const hist = await get(base + '/:sql');
+            assert.ok(!hist.text_.includes('hidden'), 'history shows hidden');
+            assert.ok(!hist.text_.includes('secretq'), 'history shows hidden query');
+            assert.strictEqual((await get(base + '/:sql/' + hiddenRow)).status, 404);
+            assert.ok(!/access|superusers|\.allow/i.test(app.output().replace(/^.*(listening|Listening).*$/gm, '')),
+                'startup warning: ' + app.output());
         });
 
         await ok('other@example.com gets 403 at the callback', async () => {

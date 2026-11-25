@@ -16,6 +16,7 @@ var postgres = require('./db_postgres.js');
 var db_sqlite = require('./db_sqlite.js');
 var sqlite   = require('./sqliteDB.js');
 var util     = require('./util.js');
+var access   = require('./access.js');
 
 var async    = require('async');
 var child_process = require('child_process');
@@ -42,7 +43,7 @@ function prepare_locals (req, res, next) {
     res.locals = {
         req:           req,
         authenticate:  authenticate,
-        databaseList:  config.db,
+        databaseList:  access.visible(config, access.fromSession(req.session)),
         path:          req.params.path,
         config:        config,
         connection:    req.params.connect,
@@ -983,7 +984,9 @@ function sqlHistory (req, res) {
     async.waterfall([
         sqlite.history,
         function (result, done){
-            l.values = result;
+            l.values = result.filter(function (row) {
+                return Object.prototype.hasOwnProperty.call(l.databaseList, row.dbid);
+            });
             done(null);
         },
     ], 
@@ -1000,6 +1003,9 @@ function sqlDetails (req, res) {
         },
 
         function (result, done){
+            if (result && !Object.prototype.hasOwnProperty.call(l.databaseList, result.dbid)) {
+                return showError(req, res, 'No such query.', null, 404);
+            }
             l.values = result;
             done(null);
         },
