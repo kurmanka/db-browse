@@ -1523,6 +1523,9 @@ async function wiringSection() {
             assert.ok(!hist.text_.includes('hidden'), 'history shows hidden');
             assert.ok(!hist.text_.includes('secretq'), 'history shows hidden query');
             assert.strictEqual((await get(base + '/:sql/' + hiddenRow)).status, 404);
+            const missing = await get(base + '/:sql/999999');
+            assert.strictEqual(missing.status, 404);
+            assert.ok(missing.text_.includes('No such query.'), 'missing id body');
             assert.ok(!/access|superusers|\.allow/i.test(app.output().replace(/^.*(listening|Listening).*$/gm, '')),
                 'startup warning: ' + app.output());
         });

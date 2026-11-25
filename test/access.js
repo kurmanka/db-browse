@@ -33,6 +33,7 @@ const can = (who, id) => access.canUse(config, who, id);
 ok('email matches case-insensitively', () => assert.strictEqual(can({ name: 'ann@example.com' }, 'sales'), true));
 ok('other email refused', () => assert.strictEqual(can({ name: 'bob@example.com' }, 'sales'), false));
 ok('group match', () => assert.strictEqual(can({ name: 'bob@example.com', groups: ['analysts'] }, 'sales'), true));
+ok('string groups claim counts as one group', () => assert.strictEqual(can({ name: 'bob@example.com', groups: 'analysts' }, 'sales'), true));
 ok('groups compared exactly', () => assert.strictEqual(can({ name: 'bob@example.com', groups: ['Analysts'] }, 'sales'), false));
 ok('no allow key is open', () => assert.strictEqual(can({ name: 'bob@example.com' }, 'open'), true));
 ok('anonymous who: open yes, sales no', () => {

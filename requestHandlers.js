@@ -1003,7 +1003,7 @@ function sqlDetails (req, res) {
         },
 
         function (result, done){
-            if (result && !Object.prototype.hasOwnProperty.call(l.databaseList, result.dbid)) {
+            if (!result || !Object.prototype.hasOwnProperty.call(l.databaseList, result.dbid)) {
                 return showError(req, res, 'No such query.', null, 404);
             }
             l.values = result;

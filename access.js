@@ -18,7 +18,8 @@ function lower(s) {
 // who matches an entry: an email/username (case-insensitive) or `group:<name>` (exact).
 function matches(list, who) {
     var name   = typeof who.name === 'string' ? lower(who.name) : '';
-    var groups = Array.isArray(who.groups) ? who.groups : [];
+    var groups = Array.isArray(who.groups) ? who.groups
+        : (typeof who.groups === 'string' ? [who.groups] : []);
     for (var i = 0; i < list.length; i++) {
         var e = list[i];
         if (e.indexOf('group:') === 0) {

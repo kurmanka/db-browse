@@ -24,6 +24,13 @@ exports.db = {
     // Without this key every signed-in user may use it; an empty list means
     // superusers only (see exports.superusers). Not an array of strings: treated
     // as superusers only.
+    // `allow` restricts this config entry, not the database server account: if
+    // two entries share a server and credentials, a user allowed one can reach
+    // the other (MySQL `otherdb.table` names, raw SQL with allow_clear_sql, SQLite
+    // ATTACH). Give databases that must stay hidden their own credentials/files.
+    // With no authentication configured nobody has an identity, so every entry
+    // with an `allow` key is invisible. Groups are captured at login / token
+    // issue: IdP group changes apply at the next login or token refresh.
         //allow: ['ann@example.com', 'group:analysts'],
 
     // optional free-text note, shown on the database list page
