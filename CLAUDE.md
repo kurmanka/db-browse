@@ -7,11 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm install       # install dependencies
 node start.js     # start the server (requires config.js)
-node test/run.js  # all tests (sqlite, drivers, routes, mcp, oauth)
+node test/run.js  # all tests (sqlite, drivers, routes, mcp, oauth, access, raw_sql)
 ```
 
-`test/run.js` runs `sqlite.js`, `drivers.js`, `routes.js`, `mcp.js` and
-`oauth.js` in sequence. `routes.js` spawns its own server on a free port — the configured one
+`test/run.js` runs `sqlite.js`, `drivers.js`, `routes.js`, `mcp.js`,
+`oauth.js`, `access.js` and `raw_sql.js` in sequence. `routes.js` spawns its own server on a free port — the configured one
 when it is free, otherwise one the OS hands out — so the suite can run next to a
 live instance; it never tests a server it did not start (`DBB_TEST_PORT` pins a
 port). Postgres/MySQL MCP tests are skipped unless `DBB_TEST_PG_URL` /
@@ -43,6 +43,8 @@ prepare_req_params → loadUser → prepare_dbconnection → prepare_locals → 
 
 `prepare_dbconnection` resolves the DB connection from the `database` object (module-level cache). Pings with `SELECT NOW()` on reuse (`SELECT 1` for sqlite); reconnects on failure. Connection stored at `req.params.connect` and `req.dbconnection`.
 
+Raw SQL (`POST /<db>:sql`, Execute) does not run on that shared connection: `own_connection()` in `start.js` opens one for the request (`new_connection()`, the same per-type switch `db_connect()` uses) and closes it when the response closes, so a statement's session changes (`SET`, `PRAGMA`, temp tables, an open transaction) never reach other users' requests. `test/raw_sql.js` covers it against a spawned `start.js`.
+
 `prepare_locals` populates `res.locals` with everything templates need: `connection`, `dbType`, `table`, `column`, `value`, `dbId`, `sql`, `user`, breadcrumbs, etc.
 
 ### DB abstraction
@@ -60,7 +62,7 @@ prepare_req_params → loadUser → prepare_dbconnection → prepare_locals → 
 
 `getDbType(dbType)` in `requestHandlers.js` selects the right module. MySQL uses `mysql.escapeId()` for identifiers; sqlite uses a local `escapeId()` that double-quotes identifiers; postgres exposes `ident()`, which validates an identifier (plain or strictly double-quoted, optionally schema-qualified) and refuses anything else, because `db_postgres.js` concatenates identifiers into SQL. `LIMIT` and the sort direction are built from a parsed number and an `ASC`/`DESC` whitelist in all three drivers.
 
-`db_sqlite.js` also exports `createConnection(cc)`, used by `start.js`'s `db_connect()` to wrap a `better-sqlite3` `Database` (sync API) behind the same `connect(done)` / `query(sql, [params], done)` shape `mysql2`/`pg` use — this is unrelated to `sqliteDB.js`, which is the app's own SQL-history store.
+`db_sqlite.js` also exports `createConnection(cc)`, used by `start.js`'s `db_connect()` to wrap a `better-sqlite3` `Database` (sync API) behind the same `connect(done)` / `query(sql, [params], done)` / `end(done)` shape `mysql2`/`pg` use — this is unrelated to `sqliteDB.js`, which is the app's own SQL-history store. A read-write connection (the web UI's) refuses `ATTACH` and `VACUUM INTO` (`opensOtherFile()`, which looks at the statement's first keyword), so the SQL box cannot read or create other SQLite files.
 
 ### Templates
 
@@ -103,7 +105,7 @@ Request flow in `start.js`: config checks (exit if `mcp.oauth` lacks `oidc` or a
 
 ### Per-user database access
 
-`access.js` decides which `config.db` entries a signed-in user may use. A database without an `allow` key is open to every signed-in user; `allow: []` is superusers only. `allow` and `exports.superusers` entries match an email/username case-insensitively, or a group written `group:<name>` (compared exactly, like `allowlist.js`). Malformed `allow` (not an array of strings) fails closed (superusers only); malformed `superusers` is an empty list; both show up in `access.problems(config)`. API: `canUse(config, who, dbId)`, `visible(config, who)`, `fromSession(session)`, and `access.ALL` (the static MCP token, may use everything); `who` is `{name, groups}`. Known gap: routes an addon registers itself in `a.setup()` bypass the check (addon features under `/:db_id/...` are covered). A string `groups` value counts as a one-element list. With no authentication configured nobody has an identity, so every database with an `allow` key is invisible; only entries without `allow` are usable. Groups are captured at login (web session) / token issue (MCP OAuth); a group change at the IdP takes effect at the next login or token refresh/expiry. Known gap: `allow` restricts a config entry, not the database server account. If two entries share a server and credentials, a user allowed one can reach the other: MySQL table names like `otherdb.items` (`escapeId` splits on dots) in web URLs and MCP tools, raw SQL with `allow_clear_sql`, and SQLite `ATTACH` (web SQL form; the MCP read-only connection can ATTACH before the post-call detach). Give databases that must stay hidden their own DB credentials, or SQLite files outside guessable paths. Tests: `node test/access.js`.
+`access.js` decides which `config.db` entries a signed-in user may use. A database without an `allow` key is open to every signed-in user; `allow: []` is superusers only. `allow` and `exports.superusers` entries match an email/username case-insensitively, or a group written `group:<name>` (compared exactly, like `allowlist.js`). Malformed `allow` (not an array of strings) fails closed (superusers only); malformed `superusers` is an empty list; both show up in `access.problems(config)`. API: `canUse(config, who, dbId)`, `visible(config, who)`, `fromSession(session)`, and `access.ALL` (the static MCP token, may use everything); `who` is `{name, groups}`. Known gap: routes an addon registers itself in `a.setup()` bypass the check (addon features under `/:db_id/...` are covered). A string `groups` value counts as a one-element list. With no authentication configured nobody has an identity, so every database with an `allow` key is invisible; only entries without `allow` are usable. Groups are captured at login (web session) / token issue (MCP OAuth); a group change at the IdP takes effect at the next login or token refresh/expiry. Known gap: `allow` restricts a config entry, not the database server account. If two entries share a server and credentials, a user allowed one can reach the other: MySQL table names like `otherdb.items` (`escapeId` splits on dots) in web URLs and MCP tools, and raw SQL with `allow_clear_sql`. SQLite `ATTACH` is refused on the web connection and detached after every MCP call. Give databases that must stay hidden their own DB credentials, or SQLite files outside guessable paths. Tests: `node test/access.js`.
 
 ### SQL history
 

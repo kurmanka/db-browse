@@ -26,8 +26,8 @@ exports.db = {
     // as superusers only.
     // `allow` restricts this config entry, not the database server account: if
     // two entries share a server and credentials, a user allowed one can reach
-    // the other (MySQL `otherdb.table` names, raw SQL with allow_clear_sql, SQLite
-    // ATTACH). Give databases that must stay hidden their own credentials/files.
+    // the other (MySQL `otherdb.table` names, raw SQL with allow_clear_sql).
+    // Give databases that must stay hidden their own credentials/files.
     // With no authentication configured nobody has an identity, so every entry
     // with an `allow` key is invisible. Groups are captured at login / token
     // issue: IdP group changes apply at the next login or token refresh.

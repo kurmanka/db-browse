@@ -135,6 +135,36 @@ async function run() {
         assert.deepStrictEqual(Object.keys(rows[0]), ['name']);
     });
 
+    // ---- statements that open or write another file (web connection) ----
+
+    const query = (c, sql) => new Promise((resolve, reject) =>
+        c.query(sql, (err, rows) => err ? reject(err) : resolve(rows)));
+    const otherFile = path.join(os.tmpdir(), 'db-browse-drivers-other-' + Date.now() + '.sqlite');
+
+    for (const sql of [
+        "ATTACH DATABASE '" + otherFile + "' AS o",
+        "attach '" + otherFile + "' as o",
+        "  -- comment\n /* block */ ATTACH '" + otherFile + "' AS o",
+        "VACUUM INTO '" + otherFile + "'",
+        "/* x */ vacuum main into '" + otherFile + "'",
+    ]) {
+        await ok('web connection refuses ' + JSON.stringify(sql.replace(otherFile, 'F')), async () => {
+            await assert.rejects(query(conn, sql), /another database file/);
+            assert.strictEqual(fs.existsSync(otherFile), false, 'no file was created');
+        });
+    }
+
+    await ok('web connection still runs VACUUM and text that mentions ATTACH', async () => {
+        await query(conn, 'VACUUM');
+        assert.deepStrictEqual(await query(conn, "SELECT 'ATTACH x' AS t"), [{ t: 'ATTACH x' }]);
+    });
+
+    await ok('end() closes a sqlite connection', async () => {
+        const c = await p.connect({ database: tmpDb });
+        await new Promise((resolve) => c.end(resolve));
+        await assert.rejects(query(c, 'SELECT 1'));
+    });
+
     // ---- postgres identifier validation (no server needed) ----
 
     console.log('\n  postgres identifiers');

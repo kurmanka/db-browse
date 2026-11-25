@@ -28,6 +28,11 @@ function createConnection(cc) {
                 return callback(out.err, out.rows);
             }
 
+            if (opensOtherFile(sql)) {
+                return callback(new Error(
+                    'ATTACH and VACUUM INTO are refused: they open or write another database file'));
+            }
+
             try {
                 var stmt = db.prepare(sql);
                 var rows;
@@ -41,8 +46,36 @@ function createConnection(cc) {
             } catch (err) {
                 callback(err);
             }
+        },
+
+        end: function (done) {
+            if (db) { db.close(); db = null; }
+            if (done) { done(); }
         }
     };
+}
+
+// The web connection (read-write) refuses ATTACH and VACUUM INTO: with them,
+// the raw SQL box could read or create any SQLite file the process can reach,
+// including another config.db entry's file. Both can only be the statement's
+// first keyword, after whitespace and comments (an EXPLAIN in front does not
+// run them), so looking there is enough. The MCP connection has its own,
+// stricter checks (readOnlyQuery below).
+function opensOtherFile(sql) {
+    var s = String(sql);
+    for (;;) {
+        s = s.replace(/^\s+/, '');
+        if (s.slice(0, 2) === '--') {
+            var nl = s.indexOf('\n');
+            s = (nl === -1) ? '' : s.slice(nl + 1);
+        } else if (s.slice(0, 2) === '/*') {
+            var end = s.indexOf('*/', 2);
+            s = (end === -1) ? '' : s.slice(end + 2);
+        } else {
+            break;
+        }
+    }
+    return /^ATTACH\b/i.test(s) || /^VACUUM\b[\s\S]*\bINTO\b/i.test(s);
 }
 
 // A connection opened with cc.readonly (the MCP interface; the web UI never sets

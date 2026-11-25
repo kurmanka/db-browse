@@ -191,17 +191,16 @@ app.post(/^\/([\w\d]+):sql\/*(\d*)/,
 
         if (req.body.sql) {
           requestHandlers.sqlRowAllowed(req, res, function () {
-            if (req.body.run == 'Execute') {
-                requestHandlers.sqlRequest(req, res);
-            }
-            else if (req.body.run == 'Save'){
+            if (req.body.run == 'Save'){
                 requestHandlers.sqlSave(req, res);
             }
             else if (req.body.run == 'Remove'){
                 requestHandlers.sqlRemove(req, res);
             }
-            else {
-                requestHandlers.sqlRequest(req, res);
+            else {  // 'Execute', or no button at all
+                own_connection(req, res, function () {
+                    requestHandlers.sqlRequest(req, res);
+                });
             }
           });
         } else {
@@ -464,6 +463,13 @@ function db_connect( req, dbId, done ) {
         return;
     }
 
+    console.log( 'connecting to database ' + dbId );
+    database[dbId] = new_connection(c);
+    database[dbId].connect(done);
+}
+
+// A new, not yet connected connection for a config.db entry.
+function new_connection( c ) {
     var cc = {
         host    : c.host,
         user    : c.user,
@@ -471,19 +477,44 @@ function db_connect( req, dbId, done ) {
         database: c.database,
         port    : c.port
     };
-    console.log( 'connecting to database ' + dbId );
 
     if (c.type == 'mysql') {
-        database[dbId] = mysql.createConnection(cc);
+        return mysql.createConnection(cc);
     } else if (c.type == 'postgres') {
-        database[dbId] = new pg.Client(cc);
+        return new pg.Client(cc);
     } else if (c.type == 'sqlite') {
-        database[dbId] = db_sqlite.createConnection(cc);
-    } else {
-        // unsupported db type
-        // XXX configuration error
+        return db_sqlite.createConnection(cc);
     }
-    database[dbId].connect(done);
+    // unsupported db type
+    // XXX configuration error
+}
+
+// Raw SQL runs on a connection of its own, closed once the response is done,
+// never on the shared one in `database`: whatever a statement changes in its
+// session (SET, PRAGMA, temporary tables, an open transaction) must not reach
+// other users' requests.
+function own_connection( req, res, next ) {
+    var conn = new_connection(req.dbconfig);
+    var closed = false;
+    function close() {
+        if (closed) { return; }
+        closed = true;
+        conn.end(function () {});
+    }
+    // an error event without a listener would end the process
+    if (conn.on) {
+        conn.on('error', function (err) { console.log('raw SQL connection: ' + err); });
+    }
+    conn.connect(function (err) {
+        if (err) {
+            close();
+            return requestHandlers.showError(req, res,
+                "Error connecting to the database '" + req.params.db_id + "'. " + err, null, 502);
+        }
+        res.locals.connection = req.params.connect = req.dbconnection = conn;
+        res.on('close', close);
+        next();
+    });
 }
 
 function loadUser(req, res, next) {
